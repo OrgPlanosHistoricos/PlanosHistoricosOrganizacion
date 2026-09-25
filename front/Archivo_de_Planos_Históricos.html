@@ -165,18 +165,12 @@ button.ghost:hover{border-color:var(--navy)}
 <script>
 (function(){
 "use strict";
-var AUTO={
-  nombres:["Bartolomé Uriarte","Elena Fittipaldi","Cooperativa Obrera del Puerto","Domingo Casal e Hijos","Amalia Ferro de Suárez","Sucesión Ibarguren"],
-  sellos:["Dirección de Catastro — Partido de La Plata","Oficina Técnica Municipal","Escribanía General de Gobierno","Colegio de Agrimensores de la Pcia. de Bs. As."],
-  inmueble:["Lote 14, Manzana 32, Circ. III","Chacra 28, Sección B","Solar 6, Manzana 110","Quinta 41, Circ. I"]
-};
-function rnd(a){return a[Math.floor(Math.random()*a.length)]}
-function randYear(){return String(1890+Math.floor(Math.random()*80))}
-function randSup(){return (80+Math.floor(Math.random()*400))+" m²"}
-function simulateAutoRead(){
-  if(Math.random()<0.25) return null;
-  return {nombres:rnd(AUTO.nombres),fecha:randYear(),superficie:randSup(),sellos:rnd(AUTO.sellos),inmueble:rnd(AUTO.inmueble)};
-}
+// Base de la API. nginx.conf reenvía /api/ al servicio "api" del docker-compose,
+// así que esta ruta relativa funciona sin problemas de CORS.
+var API_BASE='/api';
+// Formatos que procesa el backend (ver FORMATOS_VALIDOS en api/main.py). PDF no
+// se puede mandar a analizar automáticamente: preprocessing.py trabaja con Pillow.
+var FORMATOS_API=['image/jpeg','image/png'];
 function placeholderImg(label){
   var svg="<svg xmlns='http://www.w3.org/2000/svg' width='420' height='300'><rect width='420' height='300' fill='#EDE7D6'/><rect x='10' y='10' width='400' height='280' fill='none' stroke='#9C8B63' stroke-width='2'/><text x='210' y='150' font-family='Georgia,serif' font-size='15' fill='#5b5240' text-anchor='middle'>"+label+"</text></svg>";
   return 'data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svg)));
@@ -187,9 +181,9 @@ function nid(){return 'PL-'+String(seq++).padStart(3,'0')}
 var planos=[];
 function seed(){
   planos=[
-    {id:nid(),archNombre:'plano_calle47.jpg',archTipo:'image/svg+xml',archData:placeholderImg('Plano — Calle 47 N.º 620'),ubic:'Caja 4, Estantería A',exp:'Expte. 1122-1954',dirOrig:'Calle 47 N.º 620',estado:'validado',auto:{nombres:'Bartolomé Uriarte',fecha:'1954',superficie:'210 m²',sellos:'Oficina Técnica Municipal',inmueble:'Lote 9, Manzana 40'},parcela:'Calle 47 N.º 620 — Lote 9, Mz. 40',historial:[{fecha:'12/03/2024',motivo:'Carga inicial validada'}]},
-    {id:nid(),archNombre:'plano_diag80.png',archTipo:'image/svg+xml',archData:placeholderImg('Plano — Diagonal 80'),ubic:'Caja 9, Legajo 3',exp:'Expte. 3390-1971',dirOrig:'Diagonal 80 N.º 1450',estado:'sin_ubicacion',auto:{nombres:'Elena Fittipaldi',fecha:'1971',superficie:'175 m²',sellos:'Escribanía General de Gobierno',inmueble:'Solar 6, Manzana 110'},parcela:'',historial:[{fecha:'02/05/2024',motivo:'Catalogado sin ubicación exacta'}]},
-    {id:nid(),archNombre:'plano_expte4521.pdf',archTipo:'application/pdf',archData:placeholderImg('Plano — Expte. 4521'),ubic:'',exp:'Expte. 4521-1968',dirOrig:'',estado:'pendiente',auto:{nombres:'Domingo Casal e Hijos',fecha:'1968',superficie:'340 m²',sellos:'Colegio de Agrimensores de la Pcia. de Bs. As.',inmueble:'Chacra 28, Sección B'},parcela:'',historial:[]},
+    {id:nid(),archNombre:'plano_calle47.jpg',archTipo:'image/svg+xml',archData:placeholderImg('Plano — Calle 47 N.º 620'),ubic:'Caja 4, Estantería A',exp:'Expte. 1122-1954',dirOrig:'Calle 47 N.º 620',estado:'validado',auto:{arquitecto:'Bartolomé Uriarte',anio:1954,titulo:'Vivienda unifamiliar',ubicacion:'Calle 47 N.º 620, La Plata',escala:'1:100',tipo_de_plano:'planta',material_soporte:'papel tela',notas:'Sello de la Oficina Técnica Municipal'},parcela:'Calle 47 N.º 620 — Lote 9, Mz. 40',historial:[{fecha:'12/03/2024',motivo:'Carga inicial validada'}]},
+    {id:nid(),archNombre:'plano_diag80.png',archTipo:'image/svg+xml',archData:placeholderImg('Plano — Diagonal 80'),ubic:'Caja 9, Legajo 3',exp:'Expte. 3390-1971',dirOrig:'Diagonal 80 N.º 1450',estado:'sin_ubicacion',auto:{arquitecto:'Elena Fittipaldi',anio:1971,titulo:'Local comercial',ubicacion:'Diagonal 80 N.º 1450',escala:'1:50',tipo_de_plano:'fachada',material_soporte:'papel',notas:'Sello de la Escribanía General de Gobierno'},parcela:'',historial:[{fecha:'02/05/2024',motivo:'Catalogado sin ubicación exacta'}]},
+    {id:nid(),archNombre:'plano_expte4521.pdf',archTipo:'application/pdf',archData:placeholderImg('Plano — Expte. 4521'),ubic:'',exp:'Expte. 4521-1968',dirOrig:'',estado:'pendiente',auto:null,parcela:'',historial:[]},
     {id:nid(),archNombre:'plano_deteriorado.jpg',archTipo:'image/svg+xml',archData:placeholderImg('Plano deteriorado'),ubic:'Caja 15',exp:'',dirOrig:'',estado:'pendiente',auto:null,parcela:'',historial:[]}
   ];
 }
@@ -204,7 +198,7 @@ function load(){
 if(!load()) seed();
 
 function byId(id){return planos.find(function(p){return p.id===id})}
-function esc(s){return (s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function badge(estado){
   var map={pendiente:'Pendiente',validado:'Validado',sin_ubicacion:'Sin ubicación'};
   return '<span class="badge '+estado+'">'+map[estado]+'</span>';
@@ -243,14 +237,40 @@ document.getElementById('form-cargar').addEventListener('submit',function(e){
     msgs.innerHTML='<div class="confirm"><span class="pulse"></span>Plano guardado ('+p.id+'). Analizando contenido…'+(sinDatos?' No se ingresaron datos de origen; se registró únicamente el archivo.':'')+'</div>';
     document.getElementById('form-cargar').reset();
     renderRecientes();
-    setTimeout(function(){
-      p.auto=simulateAutoRead(); save();
-      msgs.innerHTML='<div class="confirm">"'+esc(p.archNombre)+'" quedó disponible para la etapa de revisión.</div>';
-      renderRecientes();
-    },900);
+    analizarPlano(p, file, msgs);
   };
   reader.readAsDataURL(file);
 });
+
+function analizarPlano(p, file, msgs){
+  if(FORMATOS_API.indexOf(file.type)===-1){
+    // El backend todavía no procesa PDF (preprocessing.py usa Pillow) - queda
+    // para completar a mano en "Validar y catalogar".
+    p.auto=null; save();
+    if(msgs) msgs.innerHTML='<div class="confirm">"'+esc(p.archNombre)+'" quedó disponible para la etapa de revisión. La lectura automática solo funciona con JPG/PNG; este archivo se completa a mano.</div>';
+    renderRecientes();
+    return;
+  }
+  var formData=new FormData();
+  formData.append('archivo', file);
+  fetch(API_BASE+'/procesar-plano', {method:'POST', body:formData})
+    .then(function(res){
+      if(res.ok) return res.json();
+      return res.json().catch(function(){return {};}).then(function(err){
+        throw new Error(err.detail || ('la API respondió con error '+res.status));
+      });
+    })
+    .then(function(datos){
+      p.auto=datos; save();
+      msgs.innerHTML='<div class="confirm">"'+esc(p.archNombre)+'" quedó disponible para la etapa de revisión.</div>';
+      renderRecientes();
+    })
+    .catch(function(err){
+      p.auto=null; save();
+      msgs.innerHTML='<div class="confirm">"'+esc(p.archNombre)+'" quedó disponible para la etapa de revisión, pero la lectura automática falló ('+esc(err.message)+'). Complétela a mano en "Validar y catalogar".</div>';
+      renderRecientes();
+    });
+}
 function renderRecientes(){
   var recientes=planos.slice(0,4);
   var html='<h3 style="font-size:13px;color:var(--ink-soft);font-weight:600;margin:0 0 10px">Cargas recientes</h3><div class="list">';
@@ -277,15 +297,16 @@ function renderValidarDetalle(){
   var box=document.getElementById('validar-detalle');
   var p=byId(selValidar);
   if(!p){ box.innerHTML='<div class="empty">Elija un plano pendiente de la lista para revisarlo.</div>'; return; }
-  var a=p.auto||{nombres:'',fecha:'',superficie:'',sellos:'',inmueble:''};
+  var a=p.auto||{arquitecto:'',anio:'',titulo:'',ubicacion:'',escala:'',tipo_de_plano:'',material_soporte:'',notas:''};
   var fallo=!p.auto;
   box.innerHTML='<div class="card">'+
     (p.archTipo==='application/pdf'?'<a class="doclink" href="'+p.archData+'" target="_blank">Abrir PDF: '+esc(p.archNombre)+'</a>':'<img class="thumb" src="'+p.archData+'" alt="Vista previa de '+esc(p.archNombre)+'">')+
-    (fallo?'<div class="hint">La lectura automática no pudo reconocer los datos por deterioro del plano. Complete los campos manualmente leyendo la imagen.</div>':'')+
+    (fallo?'<div class="hint">La lectura automática no completó los datos (formato no soportado o falla del servicio). Complete los campos manualmente leyendo la imagen.</div>':'')+
     '<div class="grid2">'+
-      field('v-nombres','Nombres',a.nombres)+field('v-fecha','Fecha',a.fecha)+
-      field('v-superficie','Superficie',a.superficie)+field('v-sellos','Sellos',a.sellos)+
-    '</div>'+field('v-inmueble','Datos del inmueble',a.inmueble)+
+      field('v-arquitecto','Arquitecto',a.arquitecto)+field('v-anio','Año',a.anio)+
+      field('v-titulo','Título / obra',a.titulo)+field('v-escala','Escala',a.escala)+
+      field('v-tipo','Tipo de plano',a.tipo_de_plano)+field('v-material','Material / soporte',a.material_soporte)+
+    '</div>'+field('v-ubicacion','Ubicación mencionada en el plano',a.ubicacion)+field('v-notas','Notas',a.notas)+
     '<div class="field"><label>Dirección o parcela vinculada <span class="optional">(si no se encuentra, se guarda como "sin ubicación asignada")</span></label><input type="text" id="v-parcela" value="'+esc(p.parcela)+'" placeholder="Calle y número — Lote, Manzana"></div>'+
     '<div id="validar-msgs"></div>'+
     '<div class="actions"><button class="primary" onclick="PH.confirmarValidacion()">Confirmar</button></div>'+
@@ -296,7 +317,7 @@ function field(id,label,val){
 }
 function confirmarValidacion(){
   var p=byId(selValidar); if(!p) return;
-  p.auto={nombres:val('v-nombres'),fecha:val('v-fecha'),superficie:val('v-superficie'),sellos:val('v-sellos'),inmueble:val('v-inmueble')};
+  p.auto={arquitecto:val('v-arquitecto'),anio:val('v-anio'),titulo:val('v-titulo'),ubicacion:val('v-ubicacion'),escala:val('v-escala'),tipo_de_plano:val('v-tipo'),material_soporte:val('v-material'),notas:val('v-notas')};
   var parcela=val('v-parcela').trim();
   p.parcela=parcela;
   p.estado=parcela?'validado':'sin_ubicacion';
@@ -324,12 +345,14 @@ function renderModificarDetalle(){
   var box=document.getElementById('modificar-detalle');
   var p=byId(selMod);
   if(!p){ box.innerHTML='<div class="empty">Elija un plano catalogado para modificarlo.</div>'; return; }
-  var a=p.auto||{nombres:'',fecha:'',superficie:'',sellos:'',inmueble:''};
+  var a=p.auto||{arquitecto:'',anio:'',titulo:'',ubicacion:'',escala:'',tipo_de_plano:'',material_soporte:'',notas:''};
   box.innerHTML='<div class="card">'+
     '<div class="grid2">'+
-      field('m-nombres','Nombres',a.nombres)+field('m-fecha','Fecha',a.fecha)+
-      field('m-superficie','Superficie',a.superficie)+field('m-sellos','Sellos',a.sellos)+
-    '</div>'+field('m-inmueble','Datos del inmueble',a.inmueble)+field('m-parcela','Dirección / parcela',p.parcela)+
+      field('m-arquitecto','Arquitecto',a.arquitecto)+field('m-anio','Año',a.anio)+
+      field('m-titulo','Título / obra',a.titulo)+field('m-escala','Escala',a.escala)+
+      field('m-tipo','Tipo de plano',a.tipo_de_plano)+field('m-material','Material / soporte',a.material_soporte)+
+    '</div>'+field('m-ubicacion','Ubicación mencionada en el plano',a.ubicacion)+field('m-notas','Notas',a.notas)+
+    field('m-parcela','Dirección / parcela',p.parcela)+
     '<div class="field"><label>Motivo del cambio <span class="optional">(obligatorio para guardar)</span></label><input type="text" id="m-motivo" placeholder="Ej: corrección de superficie tras nueva lectura"></div>'+
     '<div id="modificar-msgs"></div>'+
     '<div class="det-actions"><button class="primary" onclick="PH.guardarModificacion()">Guardar cambios</button><button class="ghost" onclick="PH.cancelarModificacion()">Cancelar</button></div>'+
@@ -342,7 +365,7 @@ function guardarModificacion(){
   var motivo=val('m-motivo').trim();
   var msg=document.getElementById('modificar-msgs');
   if(!motivo){ msg.innerHTML='<div class="error">Ingrese una breve aclaración sobre por qué se modifica el plano.</div>'; return; }
-  p.auto={nombres:val('m-nombres'),fecha:val('m-fecha'),superficie:val('m-superficie'),sellos:val('m-sellos'),inmueble:val('m-inmueble')};
+  p.auto={arquitecto:val('m-arquitecto'),anio:val('m-anio'),titulo:val('m-titulo'),ubicacion:val('m-ubicacion'),escala:val('m-escala'),tipo_de_plano:val('m-tipo'),material_soporte:val('m-material'),notas:val('m-notas')};
   p.parcela=val('m-parcela').trim();
   p.estado=p.parcela?'validado':'sin_ubicacion';
   p.historial.push({fecha:today(),motivo:motivo});
@@ -361,7 +384,7 @@ function renderConsultarLista(q){
   var disponibles=planos.filter(function(p){return p.estado!=='pendiente'});
   var query=(q||'').trim().toLowerCase();
   var res=query?disponibles.filter(function(p){
-    var hay=[p.dirOrig,p.parcela,p.exp,p.ubic,(p.auto&&p.auto.fecha)||'',(p.auto&&p.auto.inmueble)||''].join(' ').toLowerCase();
+    var hay=[p.dirOrig,p.parcela,p.exp,p.ubic,(p.auto&&p.auto.anio)||'',(p.auto&&p.auto.arquitecto)||'',(p.auto&&p.auto.titulo)||'',(p.auto&&p.auto.ubicacion)||''].join(' ').toLowerCase();
     return hay.indexOf(query)!==-1;
   }):disponibles;
   var el=document.getElementById('consultar-lista');
@@ -377,9 +400,10 @@ function verConsulta(id){
     (p.archTipo==='application/pdf'?'<a class="doclink" href="'+p.archData+'" target="_blank">Abrir / descargar PDF: '+esc(p.archNombre)+'</a>':'<img class="thumb" src="'+p.archData+'" alt="Plano '+esc(p.dirOrig)+'">'+'<a class="doclink" href="'+p.archData+'" download="'+esc(p.archNombre)+'">Descargar imagen</a>')+
     '<p><strong>Dirección / parcela:</strong> '+esc(p.parcela||p.dirOrig||'—')+' '+badge(p.estado)+'</p>'+
     '<p><strong>Expediente:</strong> '+esc(p.exp||'—')+' &nbsp; <strong>Ubicación física:</strong> '+esc(p.ubic||'—')+'</p>'+
-    '<p><strong>Nombres:</strong> '+esc(a.nombres||'—')+' &nbsp; <strong>Fecha:</strong> '+esc(a.fecha||'—')+'</p>'+
-    '<p><strong>Superficie:</strong> '+esc(a.superficie||'—')+' &nbsp; <strong>Sellos:</strong> '+esc(a.sellos||'—')+'</p>'+
-    '<p><strong>Datos del inmueble:</strong> '+esc(a.inmueble||'—')+'</p>'+
+    '<p><strong>Arquitecto:</strong> '+esc(a.arquitecto||'—')+' &nbsp; <strong>Año:</strong> '+esc(a.anio||'—')+'</p>'+
+    '<p><strong>Título / obra:</strong> '+esc(a.titulo||'—')+' &nbsp; <strong>Escala:</strong> '+esc(a.escala||'—')+'</p>'+
+    '<p><strong>Tipo de plano:</strong> '+esc(a.tipo_de_plano||'—')+' &nbsp; <strong>Material / soporte:</strong> '+esc(a.material_soporte||'—')+'</p>'+
+    (a.notas?'<p><strong>Notas:</strong> '+esc(a.notas)+'</p>':'')+
   '</div>';
 }
 document.getElementById('c-buscar').addEventListener('click',function(){renderConsultarLista(val('c-query'))});

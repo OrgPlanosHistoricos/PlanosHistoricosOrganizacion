@@ -1,4 +1,5 @@
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .preprocessing import preprocess_image
@@ -8,6 +9,15 @@ app = FastAPI(
     title="API de Reconocimiento de Planos Históricos",
     description="Sube un plano escaneado y recibí los datos extraídos en JSON.",
     version="1.0.0",
+)
+
+# El front se sirve en un origen distinto (nginx en :8080) a la API (:8000),
+# así que el navegador bloquea las llamadas sin estos headers.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 FORMATOS_VALIDOS = {"image/jpeg", "image/png", "image/webp", "image/tiff"}
