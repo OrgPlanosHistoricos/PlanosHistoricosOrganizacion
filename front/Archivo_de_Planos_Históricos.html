@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Archivo de Planos Históricos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EEEBE0; --paper-2:#E3DFCF; --card:#F7F5EC;
+  --ink:#20242C; --ink-soft:#5B5A4E; --border:#C7BFA3;
+  --navy:#1F2A44; --navy-2:#2C3A5E;
+  --brick:#8F3A2C; --brick-soft:#F1DDD4;
+  --ok:#3F6B47; --ok-soft:#DCE7DA;
+  --amber:#8A6A1F; --amber-soft:#EFE3C0;
+  --font-serif:'Source Serif 4',Georgia,serif; --font-sans:'Inter',-apple-system,Segoe UI,sans-serif;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  box-sizing:border-box;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --paper:#1B1B18; --paper-2:#242320; --card:#232220; --ink:#EDEAE0; --ink-soft:#B3AD9B;
+  --border:#4A473C; --navy:#8FA4D4; --navy-2:#A9BBE0; --brick:#E2897A; --brick-soft:#3A241E;
+  --ok:#8FC79A; --ok-soft:#20301F; --amber:#E0BE72; --amber-soft:#33290F;
+}}
+:root[data-theme="dark"]{
+  --paper:#1B1B18; --paper-2:#242320; --card:#232220; --ink:#EDEAE0; --ink-soft:#B3AD9B;
+  --border:#4A473C; --navy:#8FA4D4; --navy-2:#A9BBE0; --brick:#E2897A; --brick-soft:#3A241E;
+  --ok:#8FC79A; --ok-soft:#20301F; --amber:#E0BE72; --amber-soft:#33290F;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-sans);line-height:1.45}
+.app{display:flex;min-height:100vh}
+.nav{width:220px;flex:none;background:var(--paper-2);border-right:1px solid var(--border);padding:22px 14px;display:flex;flex-direction:column;gap:22px}
+.brand{font-family:var(--font-serif);font-size:19px;font-weight:600;display:flex;gap:10px;align-items:flex-start;line-height:1.2}
+.brand span{display:block}
+.brand small{display:block;font-family:var(--font-sans);font-weight:400;font-size:11px;color:var(--ink-soft);margin-top:3px}
+nav.tabs{display:flex;flex-direction:column;gap:2px}
+.tab{text-align:left;background:transparent;border:1px solid transparent;border-radius:3px;padding:10px 12px;font:inherit;font-size:14.5px;color:var(--ink-soft);cursor:pointer;font-family:var(--font-sans)}
+.tab:hover{color:var(--ink)}
+.tab.active{background:var(--card);border-color:var(--border);color:var(--navy);font-weight:600}
+main{flex:1;padding:32px 40px;max-width:980px}
+.view{display:none}
+.view.active{display:block}
+h1{font-family:var(--font-serif);font-size:26px;margin:0 0 4px}
+.lede{color:var(--ink-soft);margin:0 0 24px;max-width:60ch;font-size:14.5px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:4px;padding:20px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+label{display:block;font-size:12.5px;color:var(--ink-soft);margin:0 0 5px}
+input[type=text],input[type=search],textarea{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:3px;background:var(--paper);color:var(--ink);font:inherit;font-size:14px}
+input:focus,textarea:focus,button:focus,.row:focus-visible{outline:2px solid var(--navy);outline-offset:1px}
+.field{margin-bottom:14px}
+.optional{color:var(--ink-soft);font-weight:400}
+.filebox{border:1px dashed var(--border);border-radius:4px;padding:16px;text-align:center;background:var(--paper)}
+.filebox input{margin-top:8px}
+button.primary{background:var(--navy);color:#fff;border:none;border-radius:3px;padding:10px 18px;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+button.primary:hover{background:var(--navy-2)}
+button.ghost{background:transparent;border:1px solid var(--border);color:var(--ink);border-radius:3px;padding:9px 16px;font:inherit;font-size:14px;cursor:pointer}
+button.ghost:hover{border-color:var(--navy)}
+.error{background:var(--brick-soft);color:var(--brick);border:1px solid var(--brick);border-radius:3px;padding:9px 12px;font-size:13.5px;margin:12px 0}
+.hint{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber);border-radius:3px;padding:9px 12px;font-size:13.5px;margin:12px 0}
+.confirm{background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok);border-radius:3px;padding:9px 12px;font-size:13.5px;margin:12px 0}
+.badge{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:20px;font-weight:600}
+.badge.pendiente{background:var(--amber-soft);color:var(--amber)}
+.badge.validado{background:var(--ok-soft);color:var(--ok)}
+.badge.sin_ubicacion{background:var(--brick-soft);color:var(--brick)}
+.split{display:grid;grid-template-columns:260px 1fr;gap:20px;align-items:start}
+.list{display:flex;flex-direction:column;gap:6px;max-height:520px;overflow-y:auto}
+.row{text-align:left;width:100%;background:var(--card);border:1px solid var(--border);border-radius:3px;padding:10px 12px;cursor:pointer;font:inherit;color:var(--ink)}
+.row:hover{border-color:var(--navy)}
+.row.sel{border-color:var(--navy);background:var(--paper-2)}
+.row .t{font-weight:600;font-size:13.5px}
+.row .s{font-size:12px;color:var(--ink-soft);margin-top:2px}
+.empty{color:var(--ink-soft);font-size:14px;padding:14px;border:1px dashed var(--border);border-radius:4px}
+.thumb{width:100%;max-width:320px;border:1px solid var(--border);border-radius:3px;display:block;margin-bottom:14px}
+.doclink{display:inline-block;margin-bottom:14px;font-size:13.5px;color:var(--navy);border:1px solid var(--border);border-radius:3px;padding:8px 12px;text-decoration:none}
+.hist{margin-top:18px;border-top:1px solid var(--border);padding-top:12px}
+.hist h3{font-size:13px;color:var(--ink-soft);margin:0 0 8px;font-weight:600}
+.hist li{font-size:13px;margin-bottom:6px}
+.searchbar{display:flex;gap:8px;margin-bottom:18px}
+.searchbar input{flex:1}
+.actions{display:flex;gap:10px;margin-top:16px}
+.det-actions{display:flex;gap:10px;margin-top:16px}
+.pulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--amber);margin-right:6px;animation:pulse 1.1s infinite}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+@media (max-width:760px){
+  .app{flex-direction:column}
+  .nav{width:100%;flex-direction:row;align-items:center;gap:14px;padding:14px 16px;overflow-x:auto}
+  nav.tabs{flex-direction:row}
+  main{padding:22px 18px}
+  .split{grid-template-columns:1fr}
+  .grid2{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="nav">
+    <div class="brand">🗺️<span>Archivo de<br>Planos Históricos<small>Dirección de Catastro</small></span></div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="cargar">Cargar plano</button>
+      <button class="tab" data-tab="validar">Validar y catalogar</button>
+      <button class="tab" data-tab="modificar">Modificar catalogación</button>
+      <button class="tab" data-tab="consultar">Consultar</button>
+    </nav>
+  </aside>
+  <main>
+
+    <section id="view-cargar" class="view active">
+      <h1>Cargar plano histórico</h1>
+      <p class="lede">Suba el archivo digital del plano. Los datos de origen son opcionales, pero ayudan a ubicarlo más adelante.</p>
+      <div class="card">
+        <form id="form-cargar">
+          <div class="filebox">
+            <label for="f-archivo">Archivo del plano — JPG, PNG o PDF</label>
+            <input type="file" id="f-archivo" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf">
+          </div>
+          <div id="cargar-msgs"></div>
+          <div class="grid2" style="margin-top:16px">
+            <div class="field"><label>Ubicación física de guarda <span class="optional">(opcional)</span></label><input type="text" id="f-ubic" placeholder="Caja 12, Estantería B"></div>
+            <div class="field"><label>Expediente de origen <span class="optional">(opcional)</span></label><input type="text" id="f-exp" placeholder="Expte. 4521-1968"></div>
+          </div>
+          <div class="field"><label>Dirección o ubicación de referencia <span class="optional">(opcional)</span></label><input type="text" id="f-dir" placeholder="Calle 47 N.º 620"></div>
+          <button class="primary" type="submit">Guardar y analizar</button>
+        </form>
+      </div>
+      <div id="cargar-recientes" style="margin-top:22px"></div>
+    </section>
+
+    <section id="view-validar" class="view">
+      <h1>Validar y catalogar</h1>
+      <p class="lede">Revise los datos leídos automáticamente, corríjalos si hace falta y vincule el plano con su dirección o parcela.</p>
+      <div class="split">
+        <div><div id="validar-lista" class="list"></div></div>
+        <div id="validar-detalle"><div class="empty">Elija un plano pendiente de la lista para revisarlo.</div></div>
+      </div>
+    </section>
+
+    <section id="view-modificar" class="view">
+      <h1>Modificar catalogación</h1>
+      <p class="lede">Corrija los datos de un plano ya validado. Toda modificación requiere un motivo.</p>
+      <div class="split">
+        <div><div id="modificar-lista" class="list"></div></div>
+        <div id="modificar-detalle"><div class="empty">Elija un plano catalogado para modificarlo.</div></div>
+      </div>
+    </section>
+
+    <section id="view-consultar" class="view">
+      <h1>Consultar planos históricos</h1>
+      <p class="lede">Busque por calle, número, expediente, año o datos de la parcela.</p>
+      <div class="searchbar">
+        <input type="search" id="c-query" placeholder="Ej: Calle 47, Expte. 4521, 1968…">
+        <button class="primary" id="c-buscar">Buscar</button>
+      </div>
+      <div class="split">
+        <div><div id="consultar-lista" class="list"></div></div>
+        <div id="consultar-detalle"><div class="empty">Los resultados de su búsqueda aparecerán acá.</div></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+(function(){
+"use strict";
+var AUTO={
+  nombres:["Bartolomé Uriarte","Elena Fittipaldi","Cooperativa Obrera del Puerto","Domingo Casal e Hijos","Amalia Ferro de Suárez","Sucesión Ibarguren"],
+  sellos:["Dirección de Catastro — Partido de La Plata","Oficina Técnica Municipal","Escribanía General de Gobierno","Colegio de Agrimensores de la Pcia. de Bs. As."],
+  inmueble:["Lote 14, Manzana 32, Circ. III","Chacra 28, Sección B","Solar 6, Manzana 110","Quinta 41, Circ. I"]
+};
+function rnd(a){return a[Math.floor(Math.random()*a.length)]}
+function randYear(){return String(1890+Math.floor(Math.random()*80))}
+function randSup(){return (80+Math.floor(Math.random()*400))+" m²"}
+function simulateAutoRead(){
+  if(Math.random()<0.25) return null;
+  return {nombres:rnd(AUTO.nombres),fecha:randYear(),superficie:randSup(),sellos:rnd(AUTO.sellos),inmueble:rnd(AUTO.inmueble)};
+}
+function placeholderImg(label){
+  var svg="<svg xmlns='http://www.w3.org/2000/svg' width='420' height='300'><rect width='420' height='300' fill='#EDE7D6'/><rect x='10' y='10' width='400' height='280' fill='none' stroke='#9C8B63' stroke-width='2'/><text x='210' y='150' font-family='Georgia,serif' font-size='15' fill='#5b5240' text-anchor='middle'>"+label+"</text></svg>";
+  return 'data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svg)));
+}
+var seq=1;
+function nid(){return 'PL-'+String(seq++).padStart(3,'0')}
+
+var planos=[];
+function seed(){
+  planos=[
+    {id:nid(),archNombre:'plano_calle47.jpg',archTipo:'image/svg+xml',archData:placeholderImg('Plano — Calle 47 N.º 620'),ubic:'Caja 4, Estantería A',exp:'Expte. 1122-1954',dirOrig:'Calle 47 N.º 620',estado:'validado',auto:{nombres:'Bartolomé Uriarte',fecha:'1954',superficie:'210 m²',sellos:'Oficina Técnica Municipal',inmueble:'Lote 9, Manzana 40'},parcela:'Calle 47 N.º 620 — Lote 9, Mz. 40',historial:[{fecha:'12/03/2024',motivo:'Carga inicial validada'}]},
+    {id:nid(),archNombre:'plano_diag80.png',archTipo:'image/svg+xml',archData:placeholderImg('Plano — Diagonal 80'),ubic:'Caja 9, Legajo 3',exp:'Expte. 3390-1971',dirOrig:'Diagonal 80 N.º 1450',estado:'sin_ubicacion',auto:{nombres:'Elena Fittipaldi',fecha:'1971',superficie:'175 m²',sellos:'Escribanía General de Gobierno',inmueble:'Solar 6, Manzana 110'},parcela:'',historial:[{fecha:'02/05/2024',motivo:'Catalogado sin ubicación exacta'}]},
+    {id:nid(),archNombre:'plano_expte4521.pdf',archTipo:'application/pdf',archData:placeholderImg('Plano — Expte. 4521'),ubic:'',exp:'Expte. 4521-1968',dirOrig:'',estado:'pendiente',auto:{nombres:'Domingo Casal e Hijos',fecha:'1968',superficie:'340 m²',sellos:'Colegio de Agrimensores de la Pcia. de Bs. As.',inmueble:'Chacra 28, Sección B'},parcela:'',historial:[]},
+    {id:nid(),archNombre:'plano_deteriorado.jpg',archTipo:'image/svg+xml',archData:placeholderImg('Plano deteriorado'),ubic:'Caja 15',exp:'',dirOrig:'',estado:'pendiente',auto:null,parcela:'',historial:[]}
+  ];
+}
+function save(){try{localStorage.setItem('ph_planos',JSON.stringify(planos));localStorage.setItem('ph_seq',String(seq));}catch(e){}}
+function load(){
+  try{
+    var raw=localStorage.getItem('ph_planos');
+    if(raw){planos=JSON.parse(raw);seq=parseInt(localStorage.getItem('ph_seq')||'1',10);return true;}
+  }catch(e){}
+  return false;
+}
+if(!load()) seed();
+
+function byId(id){return planos.find(function(p){return p.id===id})}
+function esc(s){return (s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function badge(estado){
+  var map={pendiente:'Pendiente',validado:'Validado',sin_ubicacion:'Sin ubicación'};
+  return '<span class="badge '+estado+'">'+map[estado]+'</span>';
+}
+
+// ---- Navegación ----
+document.querySelectorAll('.tab').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('active')});
+    document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active')});
+    btn.classList.add('active');
+    document.getElementById('view-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab==='validar') renderValidarLista();
+    if(btn.dataset.tab==='modificar') renderModificarLista();
+    if(btn.dataset.tab==='consultar') renderConsultarLista('');
+  });
+});
+function goTab(tab){document.querySelector('.tab[data-tab="'+tab+'"]').click();}
+
+// ---- CU-01: Cargar ----
+document.getElementById('form-cargar').addEventListener('submit',function(e){
+  e.preventDefault();
+  var msgs=document.getElementById('cargar-msgs'); msgs.innerHTML='';
+  var fileInput=document.getElementById('f-archivo');
+  var file=fileInput.files[0];
+  if(!file){ msgs.innerHTML='<div class="error">El archivo del plano es indispensable para continuar.</div>'; return; }
+  var validTypes=['image/jpeg','image/png','application/pdf'];
+  if(validTypes.indexOf(file.type)===-1){ msgs.innerHTML='<div class="error">El formato no es válido o el archivo está dañado. Use JPG, PNG o PDF.</div>'; return; }
+  var reader=new FileReader();
+  reader.onload=function(){
+    var p={id:nid(),archNombre:file.name,archTipo:file.type,archData:reader.result,
+      ubic:document.getElementById('f-ubic').value.trim(),exp:document.getElementById('f-exp').value.trim(),
+      dirOrig:document.getElementById('f-dir').value.trim(),estado:'pendiente',auto:null,parcela:'',historial:[]};
+    planos.unshift(p); save();
+    var sinDatos=!p.ubic&&!p.exp&&!p.dirOrig;
+    msgs.innerHTML='<div class="confirm"><span class="pulse"></span>Plano guardado ('+p.id+'). Analizando contenido…'+(sinDatos?' No se ingresaron datos de origen; se registró únicamente el archivo.':'')+'</div>';
+    document.getElementById('form-cargar').reset();
+    renderRecientes();
+    setTimeout(function(){
+      p.auto=simulateAutoRead(); save();
+      msgs.innerHTML='<div class="confirm">"'+esc(p.archNombre)+'" quedó disponible para la etapa de revisión.</div>';
+      renderRecientes();
+    },900);
+  };
+  reader.readAsDataURL(file);
+});
+function renderRecientes(){
+  var recientes=planos.slice(0,4);
+  var html='<h3 style="font-size:13px;color:var(--ink-soft);font-weight:600;margin:0 0 10px">Cargas recientes</h3><div class="list">';
+  recientes.forEach(function(p){
+    html+='<div class="row" style="cursor:default"><div class="t">'+esc(p.archNombre)+' '+badge(p.estado)+'</div>'+
+      '<div class="s">'+(p.exp?esc(p.exp):'Sin expediente')+' · '+p.id+'</div></div>';
+  });
+  html+='</div>';
+  document.getElementById('cargar-recientes').innerHTML=recientes.length?html:'';
+}
+renderRecientes();
+
+// ---- CU-02: Validar ----
+var selValidar=null;
+function renderValidarLista(){
+  var pend=planos.filter(function(p){return p.estado==='pendiente'});
+  var el=document.getElementById('validar-lista');
+  if(!pend.length){ el.innerHTML='<div class="empty">No hay planos pendientes de revisión.</div>'; return; }
+  el.innerHTML=pend.map(function(p){
+    return '<button class="row'+(p.id===selValidar?' sel':'')+'" onclick="PH.selValidar(\''+p.id+'\')"><div class="t">'+esc(p.archNombre)+'</div><div class="s">'+(p.exp||'Sin expediente')+' · '+p.id+'</div></button>';
+  }).join('');
+}
+function renderValidarDetalle(){
+  var box=document.getElementById('validar-detalle');
+  var p=byId(selValidar);
+  if(!p){ box.innerHTML='<div class="empty">Elija un plano pendiente de la lista para revisarlo.</div>'; return; }
+  var a=p.auto||{nombres:'',fecha:'',superficie:'',sellos:'',inmueble:''};
+  var fallo=!p.auto;
+  box.innerHTML='<div class="card">'+
+    (p.archTipo==='application/pdf'?'<a class="doclink" href="'+p.archData+'" target="_blank">Abrir PDF: '+esc(p.archNombre)+'</a>':'<img class="thumb" src="'+p.archData+'" alt="Vista previa de '+esc(p.archNombre)+'">')+
+    (fallo?'<div class="hint">La lectura automática no pudo reconocer los datos por deterioro del plano. Complete los campos manualmente leyendo la imagen.</div>':'')+
+    '<div class="grid2">'+
+      field('v-nombres','Nombres',a.nombres)+field('v-fecha','Fecha',a.fecha)+
+      field('v-superficie','Superficie',a.superficie)+field('v-sellos','Sellos',a.sellos)+
+    '</div>'+field('v-inmueble','Datos del inmueble',a.inmueble)+
+    '<div class="field"><label>Dirección o parcela vinculada <span class="optional">(si no se encuentra, se guarda como "sin ubicación asignada")</span></label><input type="text" id="v-parcela" value="'+esc(p.parcela)+'" placeholder="Calle y número — Lote, Manzana"></div>'+
+    '<div id="validar-msgs"></div>'+
+    '<div class="actions"><button class="primary" onclick="PH.confirmarValidacion()">Confirmar</button></div>'+
+  '</div>';
+}
+function field(id,label,val){
+  return '<div class="field"><label>'+label+'</label><input type="text" id="'+id+'" value="'+esc(val)+'"></div>';
+}
+function confirmarValidacion(){
+  var p=byId(selValidar); if(!p) return;
+  p.auto={nombres:val('v-nombres'),fecha:val('v-fecha'),superficie:val('v-superficie'),sellos:val('v-sellos'),inmueble:val('v-inmueble')};
+  var parcela=val('v-parcela').trim();
+  p.parcela=parcela;
+  p.estado=parcela?'validado':'sin_ubicacion';
+  p.historial.push({fecha:today(),motivo:'Validación inicial'});
+  save();
+  var msg=document.getElementById('validar-msgs');
+  msg.innerHTML='<div class="confirm">Plano '+(parcela?'validado y disponible para la búsqueda general.':'guardado como "sin ubicación asignada" y disponible para la búsqueda general.')+'</div>';
+  selValidar=null;
+  setTimeout(function(){ renderValidarLista(); renderValidarDetalle(); },700);
+}
+function val(id){return document.getElementById(id).value}
+function today(){var d=new Date();return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();}
+
+// ---- CU-03: Modificar ----
+var selMod=null, modBackup=null;
+function renderModificarLista(){
+  var cat=planos.filter(function(p){return p.estado==='validado'||p.estado==='sin_ubicacion'});
+  var el=document.getElementById('modificar-lista');
+  if(!cat.length){ el.innerHTML='<div class="empty">Todavía no hay planos catalogados.</div>'; return; }
+  el.innerHTML=cat.map(function(p){
+    return '<button class="row'+(p.id===selMod?' sel':'')+'" onclick="PH.selModificar(\''+p.id+'\')"><div class="t">'+esc(p.dirOrig||p.archNombre)+' '+badge(p.estado)+'</div><div class="s">'+(p.exp||'Sin expediente')+' · '+p.id+'</div></button>';
+  }).join('');
+}
+function renderModificarDetalle(){
+  var box=document.getElementById('modificar-detalle');
+  var p=byId(selMod);
+  if(!p){ box.innerHTML='<div class="empty">Elija un plano catalogado para modificarlo.</div>'; return; }
+  var a=p.auto||{nombres:'',fecha:'',superficie:'',sellos:'',inmueble:''};
+  box.innerHTML='<div class="card">'+
+    '<div class="grid2">'+
+      field('m-nombres','Nombres',a.nombres)+field('m-fecha','Fecha',a.fecha)+
+      field('m-superficie','Superficie',a.superficie)+field('m-sellos','Sellos',a.sellos)+
+    '</div>'+field('m-inmueble','Datos del inmueble',a.inmueble)+field('m-parcela','Dirección / parcela',p.parcela)+
+    '<div class="field"><label>Motivo del cambio <span class="optional">(obligatorio para guardar)</span></label><input type="text" id="m-motivo" placeholder="Ej: corrección de superficie tras nueva lectura"></div>'+
+    '<div id="modificar-msgs"></div>'+
+    '<div class="det-actions"><button class="primary" onclick="PH.guardarModificacion()">Guardar cambios</button><button class="ghost" onclick="PH.cancelarModificacion()">Cancelar</button></div>'+
+    (p.historial.length?'<div class="hist"><h3>Historial de modificaciones</h3><ul>'+p.historial.slice().reverse().map(function(h){return '<li>'+h.fecha+' — '+esc(h.motivo)+'</li>'}).join('')+'</ul></div>':'')+
+  '</div>';
+  modBackup=JSON.parse(JSON.stringify(p));
+}
+function guardarModificacion(){
+  var p=byId(selMod); if(!p) return;
+  var motivo=val('m-motivo').trim();
+  var msg=document.getElementById('modificar-msgs');
+  if(!motivo){ msg.innerHTML='<div class="error">Ingrese una breve aclaración sobre por qué se modifica el plano.</div>'; return; }
+  p.auto={nombres:val('m-nombres'),fecha:val('m-fecha'),superficie:val('m-superficie'),sellos:val('m-sellos'),inmueble:val('m-inmueble')};
+  p.parcela=val('m-parcela').trim();
+  p.estado=p.parcela?'validado':'sin_ubicacion';
+  p.historial.push({fecha:today(),motivo:motivo});
+  save();
+  msg.innerHTML='<div class="confirm">Los datos del plano quedaron actualizados.</div>';
+  renderModificarLista();
+  setTimeout(renderModificarDetalle,600);
+}
+function cancelarModificacion(){
+  if(modBackup){ var i=planos.findIndex(function(p){return p.id===modBackup.id}); if(i>-1) planos[i]=modBackup; }
+  renderModificarDetalle();
+}
+
+// ---- CU-04: Consultar ----
+function renderConsultarLista(q){
+  var disponibles=planos.filter(function(p){return p.estado!=='pendiente'});
+  var query=(q||'').trim().toLowerCase();
+  var res=query?disponibles.filter(function(p){
+    var hay=[p.dirOrig,p.parcela,p.exp,p.ubic,(p.auto&&p.auto.fecha)||'',(p.auto&&p.auto.inmueble)||''].join(' ').toLowerCase();
+    return hay.indexOf(query)!==-1;
+  }):disponibles;
+  var el=document.getElementById('consultar-lista');
+  if(!res.length){ el.innerHTML='<div class="empty">No se encontraron planos con esos datos.</div>'; document.getElementById('consultar-detalle').innerHTML='<div class="empty">Cambie los términos de búsqueda e intente de nuevo.</div>'; return; }
+  el.innerHTML=res.map(function(p){
+    return '<button class="row" onclick="PH.verConsulta(\''+p.id+'\')"><div class="t">'+esc(p.dirOrig||p.parcela||p.archNombre)+' '+badge(p.estado)+'</div><div class="s">'+(p.exp||'Sin expediente')+' · '+p.id+'</div></button>';
+  }).join('');
+}
+function verConsulta(id){
+  var p=byId(id); if(!p) return;
+  var a=p.auto||{};
+  document.getElementById('consultar-detalle').innerHTML='<div class="card">'+
+    (p.archTipo==='application/pdf'?'<a class="doclink" href="'+p.archData+'" target="_blank">Abrir / descargar PDF: '+esc(p.archNombre)+'</a>':'<img class="thumb" src="'+p.archData+'" alt="Plano '+esc(p.dirOrig)+'">'+'<a class="doclink" href="'+p.archData+'" download="'+esc(p.archNombre)+'">Descargar imagen</a>')+
+    '<p><strong>Dirección / parcela:</strong> '+esc(p.parcela||p.dirOrig||'—')+' '+badge(p.estado)+'</p>'+
+    '<p><strong>Expediente:</strong> '+esc(p.exp||'—')+' &nbsp; <strong>Ubicación física:</strong> '+esc(p.ubic||'—')+'</p>'+
+    '<p><strong>Nombres:</strong> '+esc(a.nombres||'—')+' &nbsp; <strong>Fecha:</strong> '+esc(a.fecha||'—')+'</p>'+
+    '<p><strong>Superficie:</strong> '+esc(a.superficie||'—')+' &nbsp; <strong>Sellos:</strong> '+esc(a.sellos||'—')+'</p>'+
+    '<p><strong>Datos del inmueble:</strong> '+esc(a.inmueble||'—')+'</p>'+
+  '</div>';
+}
+document.getElementById('c-buscar').addEventListener('click',function(){renderConsultarLista(val('c-query'))});
+document.getElementById('c-query').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();renderConsultarLista(val('c-query'));}});
+
+window.PH={
+  selValidar:function(id){selValidar=id;renderValidarLista();renderValidarDetalle();},
+  confirmarValidacion:confirmarValidacion,
+  selModificar:function(id){selMod=id;renderModificarLista();renderModificarDetalle();},
+  guardarModificacion:guardarModificacion,
+  cancelarModificacion:cancelarModificacion,
+  verConsulta:verConsulta
+};
+renderValidarLista(); renderModificarLista(); renderConsultarLista('');
+})();
+</script>
+</body>
+</html>
