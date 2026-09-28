@@ -53,3 +53,17 @@ Respuesta esperada:
 # planosHistoricos
 # planosHistoricos
 # planosHistoricos
+
+IMPORTANTE
+Se debe desacargar un modelo en ollama (configurado actualmente qwen2.5vl:3b que pesa aprox 3.2 gb) se peude consultar el estado de la descarga en cualquier momento con:
+
+```bash
+docker exec -it ollama ollama list
+```
+
+el ingreso a la app debe hacerse desde http://localhost:8080 en el navegador. Sino se bloquea el uso de la API de reconocimiento de imagenes.
+Los formatos admitidos actualmente son solamente JPEG, PNG .... NO PDF!!!
+
+El procesamiento por CPU tarda de 60 a 90 segundos.
+
+.
