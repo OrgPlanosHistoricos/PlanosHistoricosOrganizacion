@@ -58,6 +58,8 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin123}
       - MINIO_BUCKET=planos
       - MINIO_SECURE=false
+    volumes:
+      - ./api:/app/api
     ports:
       - "8000:8000"
 
