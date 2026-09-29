@@ -113,8 +113,8 @@ button.ghost:hover{border-color:var(--navy)}
       <div class="card">
         <form id="form-cargar">
           <div class="filebox">
-            <label for="f-archivo">Archivo del plano — JPG, PNG o PDF</label>
-            <input type="file" id="f-archivo" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf">
+            <label for="f-archivo">Archivo del plano — JPG, PNG, WEBP o PDF</label>
+            <input type="file" id="f-archivo" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf">
           </div>
           <div id="cargar-msgs"></div>
           <div class="grid2" style="margin-top:16px">
@@ -168,9 +168,9 @@ button.ghost:hover{border-color:var(--navy)}
 // Base de la API. nginx.conf reenvía /api/ al servicio "api" del docker-compose,
 // así que esta ruta relativa funciona sin problemas de CORS.
 var API_BASE='/api';
-// Formatos que procesa el backend (ver FORMATOS_VALIDOS en api/main.py). PDF no
-// se puede mandar a analizar automáticamente: preprocessing.py trabaja con Pillow.
-var FORMATOS_API=['image/jpeg','image/png'];
+// Formatos que procesa el backend con IA (ver FORMATOS_VALIDOS en api/main.py).
+var FORMATOS_API=['image/jpeg','image/png','image/webp','image/tiff'];
+
 function placeholderImg(label){
   var svg="<svg xmlns='http://www.w3.org/2000/svg' width='420' height='300'><rect width='420' height='300' fill='#EDE7D6'/><rect x='10' y='10' width='400' height='280' fill='none' stroke='#9C8B63' stroke-width='2'/><text x='210' y='150' font-family='Georgia,serif' font-size='15' fill='#5b5240' text-anchor='middle'>"+label+"</text></svg>";
   return 'data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svg)));
@@ -181,17 +181,32 @@ function nid(){return 'PL-'+String(seq++).padStart(3,'0')}
 var planos=[];
 function seed(){
   planos=[
-    {id:nid(),archNombre:'plano_calle47.jpg',archTipo:'image/svg+xml',archData:placeholderImg('Plano — Calle 47 N.º 620'),ubic:'Caja 4, Estantería A',exp:'Expte. 1122-1954',dirOrig:'Calle 47 N.º 620',estado:'validado',auto:{arquitecto:'Bartolomé Uriarte',anio:1954,titulo:'Vivienda unifamiliar',ubicacion:'Calle 47 N.º 620, La Plata',escala:'1:100',tipo_de_plano:'planta',material_soporte:'papel tela',notas:'Sello de la Oficina Técnica Municipal'},parcela:'Calle 47 N.º 620 — Lote 9, Mz. 40',historial:[{fecha:'12/03/2024',motivo:'Carga inicial validada'}]},
-    {id:nid(),archNombre:'plano_diag80.png',archTipo:'image/svg+xml',archData:placeholderImg('Plano — Diagonal 80'),ubic:'Caja 9, Legajo 3',exp:'Expte. 3390-1971',dirOrig:'Diagonal 80 N.º 1450',estado:'sin_ubicacion',auto:{arquitecto:'Elena Fittipaldi',anio:1971,titulo:'Local comercial',ubicacion:'Diagonal 80 N.º 1450',escala:'1:50',tipo_de_plano:'fachada',material_soporte:'papel',notas:'Sello de la Escribanía General de Gobierno'},parcela:'',historial:[{fecha:'02/05/2024',motivo:'Catalogado sin ubicación exacta'}]},
-    {id:nid(),archNombre:'plano_expte4521.pdf',archTipo:'application/pdf',archData:placeholderImg('Plano — Expte. 4521'),ubic:'',exp:'Expte. 4521-1968',dirOrig:'',estado:'pendiente',auto:null,parcela:'',historial:[]},
-    {id:nid(),archNombre:'plano_deteriorado.jpg',archTipo:'image/svg+xml',archData:placeholderImg('Plano deteriorado'),ubic:'Caja 15',exp:'',dirOrig:'',estado:'pendiente',auto:null,parcela:'',historial:[]}
+    {id:nid(),archNombre:'plano_calle47.jpg',archTipo:'image/svg+xml',archData:placeholderImg('Plano — Calle 47 N.º 620'),ubic:'Caja 4, Estantería A',exp:'Expte. 1122-1954',dirOrig:'Calle 47 N.º 620',estado:'validado',iaEstado:'completado',iaError:null,tareaId:null,auto:{arquitecto:'Bartolomé Uriarte',anio:1954,titulo:'Vivienda unifamiliar',ubicacion:'Calle 47 N.º 620, La Plata',escala:'1:100',tipo_de_plano:'planta',material_soporte:'papel tela',notas:'Sello de la Oficina Técnica Municipal'},parcela:'Calle 47 N.º 620 — Lote 9, Mz. 40',historial:[{fecha:'12/03/2024',motivo:'Carga inicial validada'}]},
+    {id:nid(),archNombre:'plano_diag80.png',archTipo:'image/svg+xml',archData:placeholderImg('Plano — Diagonal 80'),ubic:'Caja 9, Legajo 3',exp:'Expte. 3390-1971',dirOrig:'Diagonal 80 N.º 1450',estado:'sin_ubicacion',iaEstado:'completado',iaError:null,tareaId:null,auto:{arquitecto:'Elena Fittipaldi',anio:1971,titulo:'Local comercial',ubicacion:'Diagonal 80 N.º 1450',escala:'1:50',tipo_de_plano:'fachada',material_soporte:'papel',notas:'Sello de la Escribanía General de Gobierno'},parcela:'',historial:[{fecha:'02/05/2024',motivo:'Catalogado sin ubicación exacta'}]},
+    {id:nid(),archNombre:'plano_expte4521.pdf',archTipo:'application/pdf',archData:placeholderImg('Plano — Expte. 4521'),ubic:'',exp:'Expte. 4521-1968',dirOrig:'',estado:'pendiente',iaEstado:'no_aplica',iaError:null,tareaId:null,auto:null,parcela:'',historial:[]},
+    {id:nid(),archNombre:'plano_deteriorado.jpg',archTipo:'image/svg+xml',archData:placeholderImg('Plano deteriorado'),ubic:'Caja 15',exp:'',dirOrig:'',estado:'pendiente',iaEstado:'error',iaError:'Texto ilegible por deterioro físico',tareaId:null,auto:null,parcela:'',historial:[]}
   ];
 }
 function save(){try{localStorage.setItem('ph_planos',JSON.stringify(planos));localStorage.setItem('ph_seq',String(seq));}catch(e){}}
 function load(){
   try{
     var raw=localStorage.getItem('ph_planos');
-    if(raw){planos=JSON.parse(raw);seq=parseInt(localStorage.getItem('ph_seq')||'1',10);return true;}
+    if(raw){
+      planos=JSON.parse(raw);
+      seq=parseInt(localStorage.getItem('ph_seq')||'1',10);
+      // Migración y reactivación de tareas
+      planos.forEach(function(p){
+        if(!p.iaEstado){
+          if(p.auto) p.iaEstado='completado';
+          else if(p.archTipo==='application/pdf') p.iaEstado='no_aplica';
+          else p.iaEstado=p.estado==='pendiente'?'no_aplica':'completado';
+        }
+        if(p.iaEstado==='procesando' && p.tareaId){
+          iniciarPollingTarea(p.id, p.tareaId);
+        }
+      });
+      return true;
+    }
   }catch(e){}
   return false;
 }
@@ -203,6 +218,23 @@ function badge(estado){
   var map={pendiente:'Pendiente',validado:'Validado',sin_ubicacion:'Sin ubicación'};
   return '<span class="badge '+estado+'">'+map[estado]+'</span>';
 }
+function iaBadge(p){
+  if(p.iaEstado==='procesando') return ' <span class="badge" style="background:var(--amber-soft);color:var(--amber)"><span class="pulse"></span> IA analizando…</span>';
+  if(p.iaEstado==='completado') return ' <span class="badge" style="background:var(--ok-soft);color:var(--ok)">✓ IA lista</span>';
+  if(p.iaEstado==='error') return ' <span class="badge" style="background:var(--brick-soft);color:var(--brick)">⚠ IA error</span>';
+  return '';
+}
+
+// Reactivar polling cuando el usuario regresa a la pestaña del navegador
+document.addEventListener('visibilitychange', function(){
+  if(!document.hidden){
+    planos.forEach(function(p){
+      if(p.iaEstado==='procesando' && p.tareaId){
+        iniciarPollingTarea(p.id, p.tareaId);
+      }
+    });
+  }
+});
 
 // ---- Navegación ----
 document.querySelectorAll('.tab').forEach(function(btn){
@@ -211,75 +243,210 @@ document.querySelectorAll('.tab').forEach(function(btn){
     document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active')});
     btn.classList.add('active');
     document.getElementById('view-'+btn.dataset.tab).classList.add('active');
-    if(btn.dataset.tab==='validar') renderValidarLista();
-    if(btn.dataset.tab==='modificar') renderModificarLista();
-    if(btn.dataset.tab==='consultar') renderConsultarLista('');
+    if(btn.dataset.tab==='cargar') renderRecientes();
+    if(btn.dataset.tab==='validar') { renderValidarLista(); renderValidarDetalle(); }
+    if(btn.dataset.tab==='modificar') { renderModificarLista(); renderModificarDetalle(); }
+    if(btn.dataset.tab==='consultar') { renderConsultarLista(''); }
   });
 });
 function goTab(tab){document.querySelector('.tab[data-tab="'+tab+'"]').click();}
 
 // ---- CU-01: Cargar ----
+function mostrarMensajeCarga(tipo, html){
+  var el=document.getElementById('cargar-msgs');
+  if(el) el.innerHTML='<div class="'+tipo+'">'+html+'</div>';
+}
+
 document.getElementById('form-cargar').addEventListener('submit',function(e){
   e.preventDefault();
-  var msgs=document.getElementById('cargar-msgs'); msgs.innerHTML='';
+  mostrarMensajeCarga('', '');
   var fileInput=document.getElementById('f-archivo');
   var file=fileInput.files[0];
-  if(!file){ msgs.innerHTML='<div class="error">El archivo del plano es indispensable para continuar.</div>'; return; }
-  var validTypes=['image/jpeg','image/png','application/pdf'];
-  if(validTypes.indexOf(file.type)===-1){ msgs.innerHTML='<div class="error">El formato no es válido o el archivo está dañado. Use JPG, PNG o PDF.</div>'; return; }
+  if(!file){ mostrarMensajeCarga('error', 'El archivo del plano es indispensable para continuar.'); return; }
+  var validTypes=['image/jpeg','image/png','image/webp','image/tiff','application/pdf'];
+  if(validTypes.indexOf(file.type)===-1){
+    mostrarMensajeCarga('error', 'El formato no es válido o el archivo está dañado. Use JPG, PNG, WEBP o PDF.');
+    return;
+  }
   var reader=new FileReader();
   reader.onload=function(){
-    var p={id:nid(),archNombre:file.name,archTipo:file.type,archData:reader.result,
-      ubic:document.getElementById('f-ubic').value.trim(),exp:document.getElementById('f-exp').value.trim(),
-      dirOrig:document.getElementById('f-dir').value.trim(),estado:'pendiente',auto:null,parcela:'',historial:[]};
-    planos.unshift(p); save();
+    var esAnalizable = FORMATOS_API.indexOf(file.type)!==-1;
+    var p={
+      id: nid(),
+      archNombre: file.name,
+      archTipo: file.type,
+      archData: reader.result,
+      ubic: document.getElementById('f-ubic').value.trim(),
+      exp: document.getElementById('f-exp').value.trim(),
+      dirOrig: document.getElementById('f-dir').value.trim(),
+      estado: 'pendiente',
+      iaEstado: esAnalizable ? 'procesando' : 'no_aplica',
+      iaError: null,
+      tareaId: null,
+      auto: null,
+      parcela: '',
+      historial: []
+    };
+    planos.unshift(p);
+    save();
     var sinDatos=!p.ubic&&!p.exp&&!p.dirOrig;
-    msgs.innerHTML='<div class="confirm"><span class="pulse"></span>Plano guardado ('+p.id+'). Analizando contenido…'+(sinDatos?' No se ingresaron datos de origen; se registró únicamente el archivo.':'')+'</div>';
     document.getElementById('form-cargar').reset();
     renderRecientes();
-    analizarPlano(p, file, msgs);
+
+    if(esAnalizable){
+      mostrarMensajeCarga('confirm', '<span class="pulse"></span> <strong>Plano guardado ('+p.id+').</strong> Enviando a la IA en segundo plano… Podés continuar cargando otros planos o cambiar de pestaña libremente.'+(sinDatos?' <span class="optional">(Sin datos de origen adicionales).</span>':''));
+      analizarPlano(p, file);
+    } else {
+      mostrarMensajeCarga('confirm', '<strong>Plano guardado ('+p.id+').</strong> El archivo PDF quedó listo para revisión manual en "Validar y catalogar".');
+    }
   };
   reader.readAsDataURL(file);
 });
 
-function analizarPlano(p, file, msgs){
-  if(FORMATOS_API.indexOf(file.type)===-1){
-    // El backend todavía no procesa PDF (preprocessing.py usa Pillow) - queda
-    // para completar a mano en "Validar y catalogar".
-    p.auto=null; save();
-    if(msgs) msgs.innerHTML='<div class="confirm">"'+esc(p.archNombre)+'" quedó disponible para la etapa de revisión. La lectura automática solo funciona con JPG/PNG; este archivo se completa a mano.</div>';
-    renderRecientes();
-    return;
-  }
+function analizarPlano(p, file){
   var formData=new FormData();
   formData.append('archivo', file);
+
+  // La petición al backend ahora es asíncrona: responde de inmediato con HTTP 202 y el ID de tarea
   fetch(API_BASE+'/procesar-plano', {method:'POST', body:formData})
     .then(function(res){
       if(res.ok) return res.json();
       return res.json().catch(function(){return {};}).then(function(err){
-        throw new Error(err.detail || ('la API respondió con error '+res.status));
+        throw new Error(err.detail || ('La API respondió con error '+res.status));
       });
     })
     .then(function(datos){
-      p.auto=datos; save();
-      msgs.innerHTML='<div class="confirm">"'+esc(p.archNombre)+'" quedó disponible para la etapa de revisión.</div>';
+      var actual=byId(p.id);
+      if(!actual) actual=p;
+      actual.tareaId=datos.task_id;
+      actual.iaEstado='procesando';
+      save();
       renderRecientes();
+      renderValidarLista();
+      iniciarPollingTarea(actual.id, datos.task_id);
     })
     .catch(function(err){
-      p.auto=null; save();
-      msgs.innerHTML='<div class="confirm">"'+esc(p.archNombre)+'" quedó disponible para la etapa de revisión, pero la lectura automática falló ('+esc(err.message)+'). Complétela a mano en "Validar y catalogar".</div>';
+      var actual=byId(p.id);
+      if(!actual) actual=p;
+      actual.iaEstado='error';
+      actual.iaError=err.message;
+      save();
+      mostrarMensajeCarga('hint', 'Plano '+actual.id+' guardado, pero no se pudo iniciar el análisis automático ('+esc(err.message)+'). Podés completarlo a mano en "Validar y catalogar".');
       renderRecientes();
+      renderValidarLista();
     });
 }
+
+var pollingActivos = {};
+
+function iniciarPollingTarea(planoId, taskId){
+  if(!taskId || pollingActivos[planoId]) return;
+  pollingActivos[planoId] = true;
+
+  var intervalo = 2500;
+  var intentos = 0;
+  var maxIntentos = 180; // ~7 minutos de margen
+
+  function verificar(){
+    var p = byId(planoId);
+    if(!p){
+      delete pollingActivos[planoId];
+      return;
+    }
+    // Si ya fue validado por el usuario y se completó, dejamos de consultar
+    if(p.estado !== 'pendiente' && p.iaEstado === 'completado'){
+      delete pollingActivos[planoId];
+      return;
+    }
+
+    fetch(API_BASE + '/tareas/' + encodeURIComponent(taskId))
+      .then(function(res){
+        if(!res.ok){
+          if(res.status === 404) throw new Error('Tarea no encontrada en el servidor');
+          throw new Error('Error al consultar tarea: ' + res.status);
+        }
+        return res.json();
+      })
+      .then(function(info){
+        p = byId(planoId);
+        if(!p){
+          delete pollingActivos[planoId];
+          return;
+        }
+
+        if(info.status === 'completed'){
+          delete pollingActivos[planoId];
+          p.auto = info.resultado;
+          p.iaEstado = 'completado';
+          p.iaError = null;
+          save();
+          onPlanoIACompletado(p);
+        } else if(info.status === 'error'){
+          delete pollingActivos[planoId];
+          p.iaEstado = 'error';
+          p.iaError = info.error || 'Error durante la extracción';
+          save();
+          onPlanoIAError(p);
+        } else {
+          // 'pending' o 'processing'
+          intentos++;
+          if(intentos >= maxIntentos){
+            delete pollingActivos[planoId];
+            p.iaEstado = 'error';
+            p.iaError = 'Tiempo de espera agotado';
+            save();
+            onPlanoIAError(p);
+          } else {
+            setTimeout(verificar, intervalo);
+          }
+        }
+      })
+      .catch(function(err){
+        intentos++;
+        if(intentos >= maxIntentos){
+          delete pollingActivos[planoId];
+          p = byId(planoId);
+          if(p){
+            p.iaEstado = 'error';
+            p.iaError = err.message;
+            save();
+            onPlanoIAError(p);
+          }
+        } else {
+          setTimeout(verificar, 4000);
+        }
+      });
+  }
+
+  setTimeout(verificar, 1500);
+}
+
+function onPlanoIACompletado(p){
+  renderRecientes();
+  renderValidarLista();
+  if(selValidar === p.id){
+    renderValidarDetalle();
+  }
+}
+
+function onPlanoIAError(p){
+  renderRecientes();
+  renderValidarLista();
+  if(selValidar === p.id){
+    renderValidarDetalle();
+  }
+}
+
 function renderRecientes(){
   var recientes=planos.slice(0,4);
   var html='<h3 style="font-size:13px;color:var(--ink-soft);font-weight:600;margin:0 0 10px">Cargas recientes</h3><div class="list">';
   recientes.forEach(function(p){
-    html+='<div class="row" style="cursor:default"><div class="t">'+esc(p.archNombre)+' '+badge(p.estado)+'</div>'+
+    html+='<div class="row" style="cursor:default"><div class="t">'+esc(p.archNombre)+' '+badge(p.estado)+iaBadge(p)+'</div>'+
       '<div class="s">'+(p.exp?esc(p.exp):'Sin expediente')+' · '+p.id+'</div></div>';
   });
   html+='</div>';
-  document.getElementById('cargar-recientes').innerHTML=recientes.length?html:'';
+  var cont = document.getElementById('cargar-recientes');
+  if(cont) cont.innerHTML=recientes.length?html:'';
 }
 renderRecientes();
 
@@ -288,20 +455,45 @@ var selValidar=null;
 function renderValidarLista(){
   var pend=planos.filter(function(p){return p.estado==='pendiente'});
   var el=document.getElementById('validar-lista');
+  if(!el) return;
   if(!pend.length){ el.innerHTML='<div class="empty">No hay planos pendientes de revisión.</div>'; return; }
   el.innerHTML=pend.map(function(p){
-    return '<button class="row'+(p.id===selValidar?' sel':'')+'" onclick="PH.selValidar(\''+p.id+'\')"><div class="t">'+esc(p.archNombre)+'</div><div class="s">'+(p.exp||'Sin expediente')+' · '+p.id+'</div></button>';
+    return '<button class="row'+(p.id===selValidar?' sel':'')+'" onclick="PH.selValidar(\''+p.id+'\')">'+
+      '<div class="t">'+esc(p.archNombre)+iaBadge(p)+'</div>'+
+      '<div class="s">'+(p.exp||'Sin expediente')+' · '+p.id+'</div></button>';
   }).join('');
 }
+
 function renderValidarDetalle(){
   var box=document.getElementById('validar-detalle');
+  if(!box) return;
   var p=byId(selValidar);
   if(!p){ box.innerHTML='<div class="empty">Elija un plano pendiente de la lista para revisarlo.</div>'; return; }
   var a=p.auto||{arquitecto:'',anio:'',titulo:'',ubicacion:'',escala:'',tipo_de_plano:'',material_soporte:'',notas:''};
-  var fallo=!p.auto;
+
+  var bannerHtml='';
+  if(p.iaEstado === 'procesando'){
+    bannerHtml='<div class="hint" style="display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;">'+
+      '<span class="pulse" style="margin-top:5px;flex:none;"></span>'+
+      '<div><strong>La IA está analizando este plano en segundo plano…</strong>'+
+      '<div style="font-size:12.5px;color:var(--ink-soft);margin-top:3px;">'+
+      'El modelo de visión está procesando la imagen. Podés esperar acá, cambiar de pestaña o ir completando los datos manualmente. Los campos se completarán automáticamente en cuanto termine la lectura.'+
+      '</div></div></div>';
+  } else if(p.iaEstado === 'error'){
+    bannerHtml='<div class="error" style="margin-bottom:16px;">'+
+      '<strong>La lectura automática no pudo completarse:</strong> '+esc(p.iaError || 'Error al procesar la imagen.')+
+      '<div style="font-size:12.5px;margin-top:3px;">Podés completar los campos manualmente a partir de la imagen.</div></div>';
+  } else if(p.iaEstado === 'completado'){
+    bannerHtml='<div class="confirm" style="margin-bottom:16px;font-size:13.5px;">'+
+      '✓ <strong>Lectura de IA completada:</strong> Revisá los datos detectados antes de confirmar la catalogación.</div>';
+  } else if(p.archTipo === 'application/pdf'){
+    bannerHtml='<div class="hint" style="margin-bottom:16px;font-size:13.5px;">'+
+      'Los archivos PDF se catalogan manualmente. Abrí el archivo y completá los campos visibles.</div>';
+  }
+
   box.innerHTML='<div class="card">'+
     (p.archTipo==='application/pdf'?'<a class="doclink" href="'+p.archData+'" target="_blank">Abrir PDF: '+esc(p.archNombre)+'</a>':'<img class="thumb" src="'+p.archData+'" alt="Vista previa de '+esc(p.archNombre)+'">')+
-    (fallo?'<div class="hint">La lectura automática no completó los datos (formato no soportado o falla del servicio). Complete los campos manualmente leyendo la imagen.</div>':'')+
+    bannerHtml+
     '<div class="grid2">'+
       field('v-arquitecto','Arquitecto',a.arquitecto)+field('v-anio','Año',a.anio)+
       field('v-titulo','Título / obra',a.titulo)+field('v-escala','Escala',a.escala)+
@@ -309,26 +501,39 @@ function renderValidarDetalle(){
     '</div>'+field('v-ubicacion','Ubicación mencionada en el plano',a.ubicacion)+field('v-notas','Notas',a.notas)+
     '<div class="field"><label>Dirección o parcela vinculada <span class="optional">(si no se encuentra, se guarda como "sin ubicación asignada")</span></label><input type="text" id="v-parcela" value="'+esc(p.parcela)+'" placeholder="Calle y número — Lote, Manzana"></div>'+
     '<div id="validar-msgs"></div>'+
-    '<div class="actions"><button class="primary" onclick="PH.confirmarValidacion()">Confirmar</button></div>'+
+    '<div class="actions"><button class="primary" onclick="PH.confirmarValidacion()">Confirmar catalogación</button></div>'+
   '</div>';
 }
+
 function field(id,label,val){
   return '<div class="field"><label>'+label+'</label><input type="text" id="'+id+'" value="'+esc(val)+'"></div>';
 }
+
 function confirmarValidacion(){
   var p=byId(selValidar); if(!p) return;
-  p.auto={arquitecto:val('v-arquitecto'),anio:val('v-anio'),titulo:val('v-titulo'),ubicacion:val('v-ubicacion'),escala:val('v-escala'),tipo_de_plano:val('v-tipo'),material_soporte:val('v-material'),notas:val('v-notas')};
+  p.auto={
+    arquitecto:val('v-arquitecto'),anio:val('v-anio'),titulo:val('v-titulo'),
+    ubicacion:val('v-ubicacion'),escala:val('v-escala'),tipo_de_plano:val('v-tipo'),
+    material_soporte:val('v-material'),notas:val('v-notas')
+  };
   var parcela=val('v-parcela').trim();
   p.parcela=parcela;
   p.estado=parcela?'validado':'sin_ubicacion';
+  if(p.iaEstado==='procesando') p.iaEstado='completado';
   p.historial.push({fecha:today(),motivo:'Validación inicial'});
   save();
   var msg=document.getElementById('validar-msgs');
-  msg.innerHTML='<div class="confirm">Plano '+(parcela?'validado y disponible para la búsqueda general.':'guardado como "sin ubicación asignada" y disponible para la búsqueda general.')+'</div>';
+  if(msg){
+    msg.innerHTML='<div class="confirm">Plano '+(parcela?'validado y disponible para la búsqueda general.':'guardado como "sin ubicación asignada" y disponible para la búsqueda general.')+'</div>';
+  }
   selValidar=null;
   setTimeout(function(){ renderValidarLista(); renderValidarDetalle(); },700);
 }
-function val(id){return document.getElementById(id).value}
+
+function val(id){
+  var el=document.getElementById(id);
+  return el ? el.value : '';
+}
 function today(){var d=new Date();return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();}
 
 // ---- CU-03: Modificar ----
@@ -336,6 +541,7 @@ var selMod=null, modBackup=null;
 function renderModificarLista(){
   var cat=planos.filter(function(p){return p.estado==='validado'||p.estado==='sin_ubicacion'});
   var el=document.getElementById('modificar-lista');
+  if(!el) return;
   if(!cat.length){ el.innerHTML='<div class="empty">Todavía no hay planos catalogados.</div>'; return; }
   el.innerHTML=cat.map(function(p){
     return '<button class="row'+(p.id===selMod?' sel':'')+'" onclick="PH.selModificar(\''+p.id+'\')"><div class="t">'+esc(p.dirOrig||p.archNombre)+' '+badge(p.estado)+'</div><div class="s">'+(p.exp||'Sin expediente')+' · '+p.id+'</div></button>';
@@ -343,6 +549,7 @@ function renderModificarLista(){
 }
 function renderModificarDetalle(){
   var box=document.getElementById('modificar-detalle');
+  if(!box) return;
   var p=byId(selMod);
   if(!p){ box.innerHTML='<div class="empty">Elija un plano catalogado para modificarlo.</div>'; return; }
   var a=p.auto||{arquitecto:'',anio:'',titulo:'',ubicacion:'',escala:'',tipo_de_plano:'',material_soporte:'',notas:''};
@@ -364,13 +571,13 @@ function guardarModificacion(){
   var p=byId(selMod); if(!p) return;
   var motivo=val('m-motivo').trim();
   var msg=document.getElementById('modificar-msgs');
-  if(!motivo){ msg.innerHTML='<div class="error">Ingrese una breve aclaración sobre por qué se modifica el plano.</div>'; return; }
+  if(!motivo){ if(msg) msg.innerHTML='<div class="error">Ingrese una breve aclaración sobre por qué se modifica el plano.</div>'; return; }
   p.auto={arquitecto:val('m-arquitecto'),anio:val('m-anio'),titulo:val('m-titulo'),ubicacion:val('m-ubicacion'),escala:val('m-escala'),tipo_de_plano:val('m-tipo'),material_soporte:val('m-material'),notas:val('m-notas')};
   p.parcela=val('m-parcela').trim();
   p.estado=p.parcela?'validado':'sin_ubicacion';
   p.historial.push({fecha:today(),motivo:motivo});
   save();
-  msg.innerHTML='<div class="confirm">Los datos del plano quedaron actualizados.</div>';
+  if(msg) msg.innerHTML='<div class="confirm">Los datos del plano quedaron actualizados.</div>';
   renderModificarLista();
   setTimeout(renderModificarDetalle,600);
 }
@@ -388,6 +595,7 @@ function renderConsultarLista(q){
     return hay.indexOf(query)!==-1;
   }):disponibles;
   var el=document.getElementById('consultar-lista');
+  if(!el) return;
   if(!res.length){ el.innerHTML='<div class="empty">No se encontraron planos con esos datos.</div>'; document.getElementById('consultar-detalle').innerHTML='<div class="empty">Cambie los términos de búsqueda e intente de nuevo.</div>'; return; }
   el.innerHTML=res.map(function(p){
     return '<button class="row" onclick="PH.verConsulta(\''+p.id+'\')"><div class="t">'+esc(p.dirOrig||p.parcela||p.archNombre)+' '+badge(p.estado)+'</div><div class="s">'+(p.exp||'Sin expediente')+' · '+p.id+'</div></button>';

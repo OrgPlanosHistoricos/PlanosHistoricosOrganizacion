@@ -20,24 +20,50 @@ docker compose logs -f ollama-pull
 
 Una vez levantado todo:
 
+### Modo asíncrono (predeterminado y recomendado para la app web):
 ```bash
 curl -X POST http://localhost:8000/procesar-plano \
   -F "archivo=@/ruta/a/tu/plano.jpg"
 ```
 
-Respuesta esperada:
-
+Respuesta inmediata (HTTP 202 Accepted):
 ```json
 {
-  "arquitecto": "Francisco Salamone",
-  "anio": 1936,
-  "titulo": "Palacio Municipal de Azul",
-  "ubicacion": "Azul, Buenos Aires",
-  "escala": "1:50",
-  "tipo_de_plano": "fachada principal",
-  "material_soporte": "papel tela",
-  "notas": null
+  "task_id": "e1c97abb-85b4-4ab3-ba57-86858af023da",
+  "status": "pending",
+  "mensaje": "Plano recibido. El procesamiento con IA se está ejecutando en segundo plano."
 }
+```
+
+Consultar estado y resultado de la tarea:
+```bash
+curl http://localhost:8000/tareas/e1c97abb-85b4-4ab3-ba57-86858af023da
+```
+
+Respuesta cuando finaliza (`status: "completed"`):
+```json
+{
+  "task_id": "e1c97abb-85b4-4ab3-ba57-86858af023da",
+  "status": "completed",
+  "filename": "plano.jpg",
+  "resultado": {
+    "arquitecto": "Francisco Salamone",
+    "anio": 1936,
+    "titulo": "Palacio Municipal de Azul",
+    "ubicacion": "Azul, Buenos Aires",
+    "escala": "1:50",
+    "tipo_de_plano": "fachada principal",
+    "material_soporte": "papel tela",
+    "notas": null
+  },
+  "error": null
+}
+```
+
+### Modo síncrono (espera la respuesta en la misma petición):
+```bash
+curl -X POST "http://localhost:8000/procesar-plano?sync=true" \
+  -F "archivo=@/ruta/a/tu/plano.jpg"
 ```
 
 ## Notas
