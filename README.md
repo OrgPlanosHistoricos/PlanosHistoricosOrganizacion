@@ -20,21 +20,33 @@ docker compose logs -f ollama-pull
 
 Una vez levantado todo:
 
+### Modo asíncrono (predeterminado y recomendado para la app web):
 ```bash
 curl -X POST http://localhost:8000/procesar-plano \
   -F "archivo=@/ruta/a/tu/plano.jpg"
 ```
 
-Respuesta esperada:
-
+Respuesta inmediata (HTTP 202 Accepted):
 ```json
 {
-  "fecha_procesamiento": "2026-09-29T20:14:03.512Z",
-  "archivo": {
-    "nombre_original": "plano.jpg",
-    "supabase_url": "https://<proyecto>.supabase.co/storage/v1/object/public/planos_escaneados/<uuid>.jpg"
-  },
-  "extraccion_qwen": {
+  "task_id": "e1c97abb-85b4-4ab3-ba57-86858af023da",
+  "status": "pending",
+  "mensaje": "Plano recibido. El procesamiento con IA se está ejecutando en segundo plano."
+}
+```
+
+Consultar estado y resultado de la tarea:
+```bash
+curl http://localhost:8000/tareas/e1c97abb-85b4-4ab3-ba57-86858af023da
+```
+
+Respuesta cuando finaliza (`status: "completed"`):
+```json
+{
+  "task_id": "e1c97abb-85b4-4ab3-ba57-86858af023da",
+  "status": "completed",
+  "filename": "plano.jpg",
+  "resultado": {
     "arquitecto": "Francisco Salamone",
     "anio": 1936,
     "titulo": "Palacio Municipal de Azul",
@@ -43,28 +55,38 @@ Respuesta esperada:
     "tipo_de_plano": "fachada principal",
     "material_soporte": "papel tela",
     "notas": null
-  }
+  },
+  "error": null,
+  "supabase_url": "https://<proyecto>.supabase.co/storage/v1/object/public/planos_escaneados/<uuid>.jpg"
 }
+```
+
+### Modo síncrono (espera la respuesta en la misma petición):
+```bash
+curl -X POST "http://localhost:8000/procesar-plano?sync=true" \
+  -F "archivo=@/ruta/a/tu/plano.jpg"
 ```
 
 ## Almacenamiento: Supabase + MongoDB
 
 _Agregado: 2026-09-29_
 
-Cada plano procesado se persiste en dos lugares:
+Cada plano procesado (tanto en modo asíncrono como con `?sync=true`)
+se persiste en dos lugares:
 
 - **Supabase Storage** (bucket `planos_escaneados`): guarda el archivo
-  original que subió el usuario y expone su URL pública.
+  original que subió el usuario y expone su URL pública (`supabase_url`
+  en la respuesta de `/tareas/{task_id}`).
 - **MongoDB** (base `planos_db`, colección `extracciones`): guarda el
-  documento final devuelto por la API (fecha de procesamiento, datos
-  del archivo y la extracción de Qwen).
+  documento completo (fecha de procesamiento, datos del archivo y la
+  extracción de Qwen) con el esquema `DocumentoExtraccion`
+  (`api/schemas.py`).
 
-El flujo en `api/main.py` (`POST /procesar-plano`) es: recibe el
-archivo → lo sube a Supabase y obtiene la URL pública
-(`api/storage_client.py`) → preprocesa la imagen y la manda a Qwen vía
-Ollama (sin cambios respecto a antes) → arma el documento con el
-esquema `DocumentoExtraccion` (`api/schemas.py`) → lo inserta en Mongo
-(`api/db_client.py`) → devuelve el documento completo.
+Esta lógica vive en `api/tasks.py` (función `_guardar_extraccion`),
+que se llama tanto desde el worker asíncrono como desde
+`procesar_directo` (modo `sync`), después de que Qwen devuelve el
+resultado. La subida a Supabase usa `api/storage_client.py` y el
+insert a Mongo usa `api/db_client.py`.
 
 ### Variables de entorno
 

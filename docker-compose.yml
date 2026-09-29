@@ -61,6 +61,8 @@ services:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
       - MONGODB_URI=${MONGODB_URI}
+    volumes:
+      - ./api:/app/api
     ports:
       - "8000:8000"
 
