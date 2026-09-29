@@ -113,6 +113,76 @@ tiene que estar en la whitelist de Atlas (Network Access → Add IP
 Address). Si no, las operaciones se cuelgan con
 `ServerSelectionTimeoutError`.
 
+## Catálogo: PostgreSQL + MinIO (Fase 2)
+
+_Agregado: 2026-09-29_
+
+El catálogo de planos (datos de origen, estado de validación e
+historial) se guarda en **PostgreSQL**, y los archivos originales en
+**MinIO** (bucket `planos`). Ambos corren como servicios del
+`docker-compose.yml`: no hace falta crear cuentas ni instalar nada,
+las tablas se crean solas al arrancar la API.
+
+Variables en `.env` (ver `.env.example`; si no están, se usan esos
+mismos valores por defecto):
+
+```
+POSTGRES_USER=planos
+POSTGRES_PASSWORD=planos
+POSTGRES_DB=planos_db
+```
+
+Postgres queda expuesto en `localhost:5432` para inspeccionarlo con
+cualquier cliente (DBeaver, pgAdmin, `psql`), y la consola de MinIO en
+http://localhost:9001.
+
+### Tablas
+
+- **`planos`**: archivo (`nombre_original`, `content_type`,
+  `minio_path`), datos de origen (`ubicacion_fisica`, `expediente`,
+  `direccion_referencia`, `parcela`), `estado` (`pendiente` |
+  `validado` | `sin_ubicacion`), estado de la IA (`ia_estado`:
+  `procesando` | `completado` | `error` | `no_aplica`, más `ia_error`),
+  los metadatos del plano (`arquitecto`, `anio`, `titulo`, `ubicacion`,
+  `escala`, `tipo_de_plano`, `material_soporte`, `notas`) y fechas de
+  creación/actualización.
+- **`historial_modificaciones`**: `plano_id` (FK), `fecha`, `motivo`.
+
+### Endpoints
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `POST` | `/planos` | Multipart: `archivo` + `ubicacion_fisica`, `expediente`, `direccion_referencia` (opcionales). Sube a MinIO, crea el plano como `pendiente` y, si es imagen, dispara la IA en segundo plano (`ia_estado=procesando`). Los PDF quedan con `ia_estado=no_aplica`. |
+| `GET` | `/planos` | Lista. Filtros: `estado` (repetible: `?estado=validado&estado=sin_ubicacion`) y `q` (busca en dirección, parcela, expediente, ubicación física, arquitecto, título, ubicación y año). |
+| `GET` | `/planos/{id}` | Detalle con historial. Sirve para consultar si la IA terminó (`ia_estado`). |
+| `GET` | `/planos/{id}/archivo` | Devuelve el archivo original. |
+| `PUT` | `/planos/{id}/validar` | JSON con los metadatos revisados + `parcela`. Queda `validado` si hay parcela, si no `sin_ubicacion`. Agrega "Validación inicial" al historial. Devuelve 409 si el plano ya fue validado. |
+| `PUT` | `/planos/{id}/modificar` | JSON con los metadatos + `parcela` + `motivo` (obligatorio, 400 si falta). Actualiza el plano y agrega el motivo al historial. |
+
+Ejemplo:
+
+```bash
+curl -X POST http://localhost:8000/planos \
+  -F "archivo=@plano.jpg" -F "expediente=EXP-1936-045" \
+  -F "ubicacion_fisica=Estante 3, caja 12"
+
+curl -X PUT http://localhost:8000/planos/1/modificar \
+  -H "Content-Type: application/json" \
+  -d '{"arquitecto": "Francisco Salamone", "anio": 1936, "parcela": "Lote 4", "motivo": "Corrección de año"}'
+```
+
+Detalles de comportamiento:
+
+- `validar` y `modificar` reemplazan **todos** los metadatos: un campo
+  que no se manda queda en `null` (igual que el formulario del front,
+  que siempre manda el objeto completo). `anio` acepta `""` como `null`.
+- Si una persona valida un plano mientras la IA todavía lo procesa, el
+  resultado de la IA no pisa los datos cargados a mano.
+- Si la API se reinicia con planos en `procesando`, los vuelve a
+  encolar al arrancar.
+- Esto convive con `/procesar-plano` y `/tareas` (y su persistencia en
+  Supabase/MongoDB), que siguen funcionando igual.
+
 ## Notas
 
 - El esquema de campos a extraer está en `app/schemas.py` (Pydantic).
