@@ -8,7 +8,7 @@ from .vision_client import ExtraccionError, extraer_datos_plano
 app = FastAPI(
     title="API de Reconocimiento de Planos Históricos",
     description="Sube un plano escaneado y recibí los datos extraídos en JSON.",
-    version="1.0.0",
+    version="1.1.0",
 )
 
 # El front se sirve en un origen distinto (nginx en :8080) a la API (:8000),
@@ -20,7 +20,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-FORMATOS_VALIDOS = {"image/jpeg", "image/png", "image/webp", "image/tiff"}
+FORMATOS_VALIDOS = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/tiff",
+    "application/pdf",
+}
 
 
 @app.get("/health")
@@ -34,11 +40,15 @@ async def procesar_plano(archivo: UploadFile = File(...)):
         raise HTTPException(
             status_code=400,
             detail=f"Formato no soportado: {archivo.content_type}. "
-            f"Usá {', '.join(FORMATOS_VALIDOS)}.",
+            f"Usá {', '.join(sorted(FORMATOS_VALIDOS))}.",
         )
 
     contenido = await archivo.read()
-    imagen_procesada = preprocess_image(contenido)
+
+    try:
+        imagen_procesada = preprocess_image(contenido, content_type=archivo.content_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
     # Un reintento simple: los VLM chicos a veces fallan la primera vez
     ultimo_error = None
