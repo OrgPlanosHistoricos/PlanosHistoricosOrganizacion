@@ -9,13 +9,26 @@ from pydantic import BaseModel, Field
 
 class PlanoHistorico(BaseModel):
     arquitecto: Optional[str] = Field(
-        None, description="Nombre del arquitecto o autor del plano, si figura"
+        None, description= (
+            "Nombre completo de quien proyectó o firmó el plano como autor "
+            "(arquitecto o proyectista). Suele aparecer junto a rótulos como "
+            "'Arq.', 'Arquitecto', 'Proyectó', 'Proyecto' o 'Autor', o como firma. "
+            "Solo el nombre, sin el título ni el rótulo. Null si no hay un autor identificable."
+        )
     )
     anio: Optional[int] = Field(
-        None, description="Año de realización del plano o de la construcción"
+        None, description=(
+            "Año del plano o del proyecto, como número de 4 dígitos (ej. 1936). "
+            "Si figuran varias fechas (proyecto, aprobación, reforma), usar la del "
+            "proyecto o dibujo; las demás pueden mencionarse en 'notas' con su leyenda."
+        )
     )
     titulo: Optional[str] = Field(
-        None, description="Título o nombre de la obra/edificio representado"
+        None, description=(
+            "Título o rótulo del plano, normalmente en la cartela o rótulo del plano. "
+            "Suele ser un nombre de edificio, obra o proyecto, o una descripción de la vista "
+            "(ej. 'Planta baja', 'Fachada principal', 'Corte longitudinal'). Null si no hay título."
+        )
     )
     ubicacion: Optional[str] = Field(
         None, description="Ciudad, dirección o ubicación mencionada en el plano"
@@ -27,10 +40,18 @@ class PlanoHistorico(BaseModel):
         None, description="Tipo de plano: planta, corte, fachada, detalle, etc."
     )
     material_soporte: Optional[str] = Field(
-        None, description="Material sobre el que está dibujado, si se menciona (papel, tela, calco, etc.)"
+        None, description=(
+             "Material del soporte SOLO si está indicado por escrito en el plano "
+            "(papel, tela, calco, etc.). No lo deduzcas de cómo se ve la imagen."
+        )
     )
     notas: Optional[str] = Field(
-        None, description="Cualquier otro texto o dato relevante visible en el plano"
+        None, description=(
+            "Último recurso. Texto relevante que NO encaja en ningún otro campo: "
+            "leyendas, aclaraciones, sellos institucionales, números de expediente. "
+            "No incluir nombres de personas ni datos que ya estén en otro campo. "
+            "Null si no hay nada."
+        )
     )
 
     class Config:

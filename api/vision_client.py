@@ -16,11 +16,20 @@ OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
 MODEL_NAME = os.environ.get("VISION_MODEL", "qwen2.5vl:3b")
 
 PROMPT = (
-    "Sos un asistente que analiza planos arquitectónicos históricos "
-    "escaneados. Observá la imagen con atención (títulos, cartelas, "
-    "sellos, textos manuscritos o impresos) y completá los datos que "
-    "puedas identificar con certeza. Si un dato no aparece en la "
-    "imagen, dejalo en null - no inventes información."
+    "Analizá este plano arquitectónico histórico escaneado y extraé sus "
+    "metadatos. El papel puede estar envejecido, manchado o con tinta "
+    "desvaída, y el texto puede ser impreso o manuscrito.\n\n"
+    "Cómo trabajar:\n"
+    "1. Empezá por la cartela o rótulo del plano (normalmente en una esquina "
+    "o borde), los sellos y las firmas: ahí está la mayor parte de los datos. "
+    "Después revisá el resto de la hoja.\n"
+    "2. Transcribí lo que efectivamente se lee. No completes ni corrijas "
+    "nombres o fechas de memoria.\n"
+    "3. Cada dato va en el campo que le corresponde según la descripción de "
+    "ese campo. Antes de ubicar algo en 'notas', comprobá si encaja en otro "
+    "campo: 'notas' es el último recurso.\n"
+    "4. Si un dato no aparece o no se lee con certeza, dejá el campo en null. "
+    "Es mejor null que un dato dudoso."
 )
 
 
