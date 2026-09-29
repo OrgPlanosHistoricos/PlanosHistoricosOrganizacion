@@ -22,10 +22,10 @@ services:
       - ollama
     entrypoint: >
       sh -c "
-        until ollama --host ollama:11434 list > /dev/null 2>&1; do
+        until ollama list > /dev/null 2>&1; do
           echo 'Esperando a Ollama...'; sleep 2;
         done &&
-        ollama --host ollama:11434 pull qwen2.5vl:3b
+        ollama pull qwen2.5vl:3b
       "
     environment:
       - OLLAMA_HOST=ollama:11434
