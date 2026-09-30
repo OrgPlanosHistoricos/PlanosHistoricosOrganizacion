@@ -1,140 +1,146 @@
 /**
- * cu-validar.js - Caso de Uso 02: Validar y catalogar planos pendientes
+ * cu-validar.js - CU2: Validar y catalogar plano histórico (HITL).
+ * Actor: Validador documental. Revisa los datos leídos automáticamente,
+ * los corrige y vincula el plano a su dirección o parcela.
  */
 (function(window) {
   'use strict';
 
   var State = window.PH.State;
-  var selValidar = null;
+  var CAMPOS = [
+    { key: 'propietario', label: 'Propietario' },
+    { key: 'direccion', label: 'Dirección' },
+    { key: 'nomenclatura', label: 'Nomenclatura catastral' },
+    { key: 'fecha', label: 'Fecha' },
+    { key: 'sellos', label: 'Sellos' },
+    { key: 'superficie', label: 'Superficie' }
+  ];
+  var CONDICIONES = ['Aprobado', 'Conforme a obra', 'Derogado', 'Documento técnico no oficializado'];
+  var seleccionadoId = null;
 
-  function field(id, label, val) {
-    return '<div class="field"><label>' + label + '</label><input type="text" id="' + id + '" value="' + State.esc(val) + '"></div>';
+  function esc(s) {
+    return (s === undefined || s === null || s === '') ? '' :
+      String(s).replace(/[&<>]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
+  }
+  function attr(s) { return String(s || '').replace(/"/g, '&quot;'); }
+  function tituloDoc(d) {
+    return d.origen.direccion || d.origen.expediente || d.archivoNombre;
   }
 
-  function renderValidarLista() {
-    var pend = State.getPlanos().filter(function(p) { return p.estado === 'pendiente'; });
-    var el = document.getElementById('validar-lista');
-    if (!el) return;
+  function renderLista() {
+    var cont = document.getElementById('validar-lista');
+    var pendientes = State.getAll().filter(function(d) { return d.estado === 'pendiente'; });
 
-    if (!pend.length) {
-      el.innerHTML = '<div class="empty">No hay planos pendientes de revisión.</div>';
+    if (pendientes.length === 0) {
+      cont.innerHTML = '<div class="empty">No hay planos pendientes de revisión.</div>';
       return;
     }
-
-    el.innerHTML = pend.map(function(p) {
-      return '<button class="row' + (p.id === selValidar ? ' sel' : '') + '" onclick="PH.selValidar(\'' + p.id + '\')">' +
-        '<div class="t">' + State.esc(p.archNombre) + State.iaBadge(p) + '</div>' +
-        '<div class="s">' + (p.exp || 'Sin expediente') + ' · ' + p.id + '</div></button>';
+    cont.innerHTML = pendientes.map(function(d) {
+      var sel = d.id === seleccionadoId ? ' sel' : '';
+      return '<button class="row' + sel + '" onclick="PH.CUValidar.seleccionar(\'' + d.id + '\')">' +
+        '<div class="t">' + esc(tituloDoc(d)) + '</div>' +
+        '<div class="s">' + esc(d.origen.expediente || 'sin expediente') + '</div>' +
+        '</button>';
     }).join('');
   }
 
-  function renderValidarDetalle() {
-    var box = document.getElementById('validar-detalle');
-    if (!box) return;
+  function seleccionar(id) {
+    seleccionadoId = id;
+    renderDetalle();
+    renderLista();
+  }
+  function getSeleccionadoId() { return seleccionadoId; }
 
-    var p = State.byId(selValidar);
-    if (!p) {
-      box.innerHTML = '<div class="empty">Elija un plano pendiente de la lista para revisarlo.</div>';
+  function cancelar() {
+    seleccionadoId = null;
+    renderDetalle();
+    renderLista();
+  }
+
+  function toggleSinUbicacion(checked) {
+    var input = document.getElementById('v-vinculo');
+    input.disabled = checked;
+    if (checked) input.value = '';
+  }
+
+  function renderDetalle() {
+    var cont = document.getElementById('validar-detalle');
+    var d = seleccionadoId ? State.getById(seleccionadoId) : null;
+
+    if (!d || d.estado !== 'pendiente') {
+      seleccionadoId = null;
+      cont.innerHTML = '<div class="empty">Elija un plano pendiente de la lista para revisarlo.</div>';
       return;
     }
 
-    var a = p.auto || {
-      arquitecto: '', anio: '', titulo: '', ubicacion: '',
-      escala: '', tipo_de_plano: '', material_soporte: '', notas: ''
-    };
+    var huboDeterioro = CAMPOS.some(function(c) { return !d.datos[c.key]; });
+    var aviso = huboDeterioro
+      ? '<div class="hint">La lectura automática no reconoció algunos datos por el estado del documento. Complételos manualmente mirando la imagen.</div>'
+      : '<div class="confirm">Datos leídos automáticamente. Revíselos y corríjalos si hace falta.</div>';
 
-    var bannerHtml = '';
-    if (p.iaEstado === 'procesando') {
-      bannerHtml = '<div class="hint" style="display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;">' +
-        '<span class="pulse" style="margin-top:5px;flex:none;"></span>' +
-        '<div><strong>La IA está analizando este plano en segundo plano…</strong>' +
-        '<div style="font-size:12.5px;color:var(--ink-soft);margin-top:3px;">' +
-        'El modelo de visión está procesando la imagen. Podés esperar acá, cambiar de pestaña o ir completando los datos manualmente. Los campos se completarán automáticamente en cuanto termine la lectura.' +
-        '</div></div></div>';
-    } else if (p.iaEstado === 'error') {
-      bannerHtml = '<div class="error" style="margin-bottom:16px;">' +
-        '<strong>La lectura automática no pudo completarse:</strong> ' + State.esc(p.iaError || 'Error al procesar la imagen.') +
-        '<div style="font-size:12.5px;margin-top:3px;">Podés completar los campos manualmente a partir de la imagen.</div></div>';
-    } else if (p.iaEstado === 'completado') {
-      bannerHtml = '<div class="confirm" style="margin-bottom:16px;font-size:13.5px;">' +
-        '✓ <strong>Lectura de IA completada:</strong> Revisá los datos detectados antes de confirmar la catalogación.</div>';
-    } else if (p.archTipo === 'application/pdf') {
-      bannerHtml = '<div class="hint" style="margin-bottom:16px;font-size:13.5px;">' +
-        'Los archivos PDF se catalogan manualmente. Abrí el archivo y completá los campos visibles.</div>';
-    }
-
-    box.innerHTML = '<div class="card">' +
-      (p.archTipo === 'application/pdf' ?
-        '<a class="doclink" href="' + p.archData + '" target="_blank">Abrir PDF: ' + State.esc(p.archNombre) + '</a>' :
-        '<img class="thumb" src="' + p.archData + '" alt="Vista previa de ' + State.esc(p.archNombre) + '">') +
-      bannerHtml +
-      '<div class="grid2">' +
-        field('v-arquitecto', 'Arquitecto', a.arquitecto) + field('v-anio', 'Año', a.anio) +
-        field('v-titulo', 'Título / obra', a.titulo) + field('v-escala', 'Escala', a.escala) +
-        field('v-tipo', 'Tipo de plano', a.tipo_de_plano) + field('v-material', 'Material / soporte', a.material_soporte) +
-      '</div>' + field('v-ubicacion', 'Ubicación mencionada en el plano', a.ubicacion) + field('v-notas', 'Notas', a.notas) +
-      '<div class="field"><label>Dirección o parcela vinculada <span class="optional">(si no se encuentra, se guarda como "sin ubicación asignada")</span></label><input type="text" id="v-parcela" value="' + State.esc(p.parcela) + '" placeholder="Calle y número — Lote, Manzana"></div>' +
-      '<div id="validar-msgs"></div>' +
-      '<div class="actions"><button class="primary" onclick="PH.confirmarValidacion()">Confirmar catalogación</button></div>' +
-    '</div>';
-  }
-
-  function confirmarValidacion() {
-    var p = State.byId(selValidar);
-    if (!p) return;
-
-    p.auto = {
-      arquitecto: State.val('v-arquitecto'),
-      anio: State.val('v-anio'),
-      titulo: State.val('v-titulo'),
-      ubicacion: State.val('v-ubicacion'),
-      escala: State.val('v-escala'),
-      tipo_de_plano: State.val('v-tipo'),
-      material_soporte: State.val('v-material'),
-      notas: State.val('v-notas')
-    };
-
-    var parcela = State.val('v-parcela').trim();
-    p.parcela = parcela;
-    p.estado = parcela ? 'validado' : 'sin_ubicacion';
-    if (p.iaEstado === 'procesando') p.iaEstado = 'completado';
-    p.historial.push({ fecha: State.today(), motivo: 'Validación inicial' });
-    State.save();
-
-    var msg = document.getElementById('validar-msgs');
-    if (msg) {
-      msg.innerHTML = '<div class="confirm">Plano ' +
-        (parcela ? 'validado y disponible para la búsqueda general.' : 'guardado como "sin ubicación asignada" y disponible para la búsqueda general.') +
+    cont.innerHTML = ''
+      + '<img class="thumb" src="' + d.archivoUrl + '" alt="Plano ' + esc(d.id) + '">'
+      + aviso
+      + CAMPOS.map(function(c) {
+          return '<div class="field"><label>' + c.label + '</label>' +
+            '<input type="text" id="v-' + c.key + '" value="' + attr(d.datos[c.key]) + '"></div>';
+        }).join('')
+      + '<div class="field"><label>Condición legal</label>' +
+        '<select id="v-condicion"><option value="">Sin definir</option>' +
+        CONDICIONES.map(function(c) { return '<option' + (d.condicionLegal === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') +
+        '</select></div>'
+      + '<div class="field"><label>Dirección o parcela vinculada</label>' +
+        '<input type="text" id="v-vinculo" value="' + attr(d.direccionVinculada) + '" ' + (d.ubicacionAsignada === false ? 'disabled' : '') + '>' +
+        '<label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:400;">' +
+        '<input type="checkbox" id="v-sinubic" style="width:auto" ' + (d.ubicacionAsignada === false ? 'checked' : '') + ' onchange="PH.CUValidar.toggleSinUbicacion(this.checked)">' +
+        'No se encuentra la parcela o dirección exacta</label>'
+      + '</div>'
+      + '<div id="v-msg"></div>'
+      + '<div class="actions">' +
+        '<button class="ghost" onclick="PH.CUValidar.cancelar()">Cancelar</button>' +
+        '<button class="primary" onclick="PH.CUValidar.confirmar()">Confirmar e indexar</button>' +
         '</div>';
-    }
-
-    selValidar = null;
-    setTimeout(function() {
-      renderValidarLista();
-      renderValidarDetalle();
-      if (window.PH && typeof window.PH.actualizarListas === 'function') {
-        window.PH.actualizarListas();
-      }
-    }, 700);
   }
 
-  function seleccionar(id) {
-    selValidar = id;
-    renderValidarLista();
-    renderValidarDetalle();
+  function confirmar() {
+    var d = seleccionadoId ? State.getById(seleccionadoId) : null;
+    if (!d) return;
+
+    var nuevosDatos = {};
+    CAMPOS.forEach(function(c) { nuevosDatos[c.key] = document.getElementById('v-' + c.key).value.trim(); });
+    var condicion = document.getElementById('v-condicion').value;
+    var sinUbic = document.getElementById('v-sinubic').checked;
+    var vinculo = document.getElementById('v-vinculo').value.trim();
+
+    if (!sinUbic && !vinculo) {
+      document.getElementById('v-msg').innerHTML = '<div class="error">Vincule una dirección o parcela, o marque que no se encuentra.</div>';
+      return;
+    }
+
+    State.update(d.id, {
+      datos: nuevosDatos,
+      condicionLegal: condicion,
+      ubicacionAsignada: !sinUbic,
+      direccionVinculada: sinUbic ? '' : vinculo,
+      estado: 'validado',
+      historial: d.historial.concat([{ fecha: new Date().toLocaleString('es-AR'), motivo: 'Catalogación inicial' }])
+    });
+
+    seleccionadoId = null;
+    renderLista();
+    renderDetalle();
+    if (window.PH.actualizarListas) window.PH.actualizarListas();
   }
 
   window.PH = window.PH || {};
   window.PH.CUValidar = {
-    renderLista: renderValidarLista,
-    renderDetalle: renderValidarDetalle,
-    confirmarValidacion: confirmarValidacion,
+    renderLista: renderLista,
+    renderDetalle: renderDetalle,
     seleccionar: seleccionar,
-    getSeleccionadoId: function() { return selValidar; }
+    getSeleccionadoId: getSeleccionadoId,
+    toggleSinUbicacion: toggleSinUbicacion,
+    cancelar: cancelar,
+    confirmar: confirmar
   };
-
-  // Acceso directo para handlers en DOM
-  window.PH.selValidar = seleccionar;
-  window.PH.confirmarValidacion = confirmarValidacion;
 
 })(window);

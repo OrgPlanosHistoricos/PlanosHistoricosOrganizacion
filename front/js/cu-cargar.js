@@ -1,156 +1,105 @@
 /**
- * cu-cargar.js - Caso de Uso 01: Cargar plano histórico y procesar con IA
+ * cu-cargar.js - CU1: Cargar plano histórico.
+ * Actor: Operador. Valida el archivo, guarda los datos de origen (opcionales)
+ * e inicia el análisis automático en background.
  */
 (function(window) {
   'use strict';
 
   var State = window.PH.State;
 
-  function mostrarMensajeCarga(tipo, html) {
-    var el = document.getElementById('cargar-msgs');
-    if (el) el.innerHTML = tipo ? '<div class="' + tipo + '">' + html + '</div>' : '';
+  function esc(s) {
+    return (s === undefined || s === null || s === '') ? '' :
+      String(s).replace(/[&<>]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
+  }
+  function tituloDoc(d) {
+    return d.origen.direccion || d.origen.expediente || d.archivoNombre;
   }
 
-  function inicializarFormularioCarga() {
+  function mostrarMensaje(tipo, texto) {
+    document.getElementById('cargar-msgs').innerHTML = '<div class="' + tipo + '">' + texto + '</div>';
+  }
+  function limpiarMensaje() {
+    document.getElementById('cargar-msgs').innerHTML = '';
+  }
+
+  function inicializar() {
     var form = document.getElementById('form-cargar');
-    if (!form) return;
-
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-      mostrarMensajeCarga('', '');
-
-      var fileInput = document.getElementById('f-archivo');
-      var file = fileInput.files[0];
-      if (!file) {
-        mostrarMensajeCarga('error', 'El archivo del plano es indispensable para continuar.');
-        return;
-      }
-
-      var validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/tiff', 'application/pdf'];
-      if (validTypes.indexOf(file.type) === -1) {
-        mostrarMensajeCarga('error', 'El formato no es válido o el archivo está dañado. Use JPG, PNG, WEBP o PDF.');
-        return;
-      }
-
-      var reader = new FileReader();
-      reader.onload = function() {
-        var esAnalizable = State.FORMATOS_API.indexOf(file.type) !== -1;
-        var p = {
-          id: State.nid(),
-          archNombre: file.name,
-          archTipo: file.type,
-          archData: reader.result,
-          ubic: document.getElementById('f-ubic').value.trim(),
-          exp: document.getElementById('f-exp').value.trim(),
-          dirOrig: document.getElementById('f-dir').value.trim(),
-          estado: 'pendiente',
-          iaEstado: esAnalizable ? 'procesando' : 'no_aplica',
-          iaError: null,
-          tareaId: null,
-          auto: null,
-          parcela: '',
-          historial: []
-        };
-
-        var planos = State.getPlanos();
-        planos.unshift(p);
-        State.save();
-
-        var sinDatos = !p.ubic && !p.exp && !p.dirOrig;
-        form.reset();
-        renderRecientes();
-
-        if (esAnalizable) {
-          mostrarMensajeCarga(
-            'confirm',
-            '<span class="pulse"></span> <strong>Plano guardado (' + p.id + ').</strong> Enviando a la IA en segundo plano… Podés continuar cargando otros planos o cambiar de pestaña libremente.' +
-            (sinDatos ? ' <span class="optional">(Sin datos de origen adicionales).</span>' : '')
-          );
-          analizarPlano(p, file);
-        } else {
-          mostrarMensajeCarga(
-            'confirm',
-            '<strong>Plano guardado (' + p.id + ').</strong> El archivo PDF quedó listo para revisión manual en "Validar y catalogar".'
-          );
-        }
-
-        if (window.PH && typeof window.PH.actualizarListas === 'function') {
-          window.PH.actualizarListas();
-        }
-      };
-      reader.readAsDataURL(file);
+    form.addEventListener('submit', function(ev) {
+      ev.preventDefault();
+      onSubmit();
     });
   }
 
-  function analizarPlano(p, file) {
-    var formData = new FormData();
-    formData.append('archivo', file);
+  function onSubmit() {
+    limpiarMensaje();
+    var fileInput = document.getElementById('f-archivo');
+    var file = fileInput.files[0];
 
-    // La petición es asíncrona: responde de inmediato con HTTP 202 y el ID de tarea
-    fetch(State.API_BASE + '/procesar-plano', { method: 'POST', body: formData })
-      .then(function(res) {
-        if (res.ok) return res.json();
-        return res.json().catch(function() { return {}; }).then(function(err) {
-          throw new Error(err.detail || ('La API respondió con error ' + res.status));
-        });
-      })
-      .then(function(datos) {
-        var actual = State.byId(p.id) || p;
-        actual.tareaId = datos.task_id;
-        actual.iaEstado = 'procesando';
-        State.save();
-        renderRecientes();
+    if (!file) {
+      mostrarMensaje('error', 'El archivo digital del plano es obligatorio para continuar.');
+      return;
+    }
+    var okExt = /\.(jpe?g|png|webp|pdf)$/i.test(file.name);
+    if (!okExt) {
+      mostrarMensaje('error', 'El formato del archivo no es válido o está dañado. Usá JPG, PNG, WEBP o PDF.');
+      return;
+    }
 
-        if (window.PH && typeof window.PH.actualizarListas === 'function') {
-          window.PH.actualizarListas();
-        }
+    var reader = new FileReader();
+    reader.onload = function(e) { crearDoc(file.name, e.target.result); };
+    reader.onerror = function() { mostrarMensaje('error', 'No se pudo leer el archivo. Probá nuevamente.'); };
+    reader.readAsDataURL(file);
+  }
 
-        State.iniciarPollingTarea(actual.id, datos.task_id);
-      })
-      .catch(function(err) {
-        var actual = State.byId(p.id) || p;
-        actual.iaEstado = 'error';
-        actual.iaError = err.message;
-        State.save();
-        mostrarMensajeCarga(
-          'hint',
-          'Plano ' + actual.id + ' guardado, pero no se pudo iniciar el análisis automático (' + State.esc(err.message) + '). Podés completarlo a mano en "Validar y catalogar".'
-        );
-        renderRecientes();
+  function crearDoc(nombre, dataUrl) {
+    var doc = {
+      id: State.nextId(),
+      archivoNombre: nombre,
+      archivoUrl: dataUrl,
+      estado: 'procesando',
+      origen: {
+        ubicacion: document.getElementById('f-ubic').value.trim(),
+        expediente: document.getElementById('f-exp').value.trim(),
+        direccion: document.getElementById('f-dir').value.trim()
+      },
+      datos: { propietario: '', direccion: '', nomenclatura: '', fecha: '', sellos: '', superficie: '' },
+      condicionLegal: '',
+      ubicacionAsignada: null,
+      direccionVinculada: '',
+      historial: [],
+      fechaCarga: new Date().toLocaleDateString('es-AR'),
+      fechaCargaTs: Date.now()
+    };
+    State.add(doc);
+    State.iniciarProcesamiento(doc);
 
-        if (window.PH && typeof window.PH.actualizarListas === 'function') {
-          window.PH.actualizarListas();
-        }
-      });
+    document.getElementById('form-cargar').reset();
+    mostrarMensaje('confirm', 'El plano se guardó correctamente. En unos segundos va a estar disponible en la cola de revisión.');
+    renderRecientes();
+    if (window.PH.actualizarListas) window.PH.actualizarListas();
   }
 
   function renderRecientes() {
     var cont = document.getElementById('cargar-recientes');
-    if (!cont) return;
+    var recientes = State.getAll().filter(function(d) { return d.estado === 'procesando' || d.estado === 'pendiente'; });
 
-    var recientes = State.getPlanos().slice(0, 4);
-    if (!recientes.length) {
-      cont.innerHTML = '';
+    if (recientes.length === 0) {
+      cont.innerHTML = '<div class="empty">Todavía no hay planos en la cola de análisis.</div>';
       return;
     }
-
-    var html = '<h3 style="font-size:13px;color:var(--ink-soft);font-weight:600;margin:0 0 10px">Cargas recientes</h3><div class="list">';
-    recientes.forEach(function(p) {
-      html += '<div class="row" style="cursor:default">' +
-        '<div class="t">' + State.esc(p.archNombre) + ' ' + State.badge(p.estado) + State.iaBadge(p) + '</div>' +
-        '<div class="s">' + (p.exp ? State.esc(p.exp) : 'Sin expediente') + ' · ' + p.id + '</div>' +
+    cont.innerHTML = '<div class="list">' + recientes.map(function(d) {
+      var estadoHTML = d.estado === 'procesando'
+        ? '<span class="pulse"></span><span class="badge pendiente">Analizando…</span>'
+        : '<span class="badge pendiente">Pendiente de revisión</span>';
+      return '<div class="row" style="cursor:default">' +
+        '<div class="t">' + esc(tituloDoc(d)) + '</div>' +
+        '<div class="s">' + esc(d.archivoNombre) + ' · ' + estadoHTML + '</div>' +
         '</div>';
-    });
-    html += '</div>';
-    cont.innerHTML = html;
+    }).join('') + '</div>';
   }
 
   window.PH = window.PH || {};
-  window.PH.CUCargar = {
-    inicializar: inicializarFormularioCarga,
-    renderRecientes: renderRecientes,
-    analizarPlano: analizarPlano,
-    mostrarMensajeCarga: mostrarMensajeCarga
-  };
+  window.PH.CUCargar = { inicializar: inicializar, renderRecientes: renderRecientes };
 
 })(window);

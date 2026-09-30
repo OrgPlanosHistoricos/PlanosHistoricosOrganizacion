@@ -1,312 +1,166 @@
 /**
- * state.js - Gestión del estado global, persistencia en localStorage y polling de IA
+ * state.js - Capa de datos de la aplicación.
+ * Mantiene los documentos en memoria, los persiste en localStorage y simula
+ * el procesamiento en background (IDP/IA) que completa los metadatos de un
+ * plano recién cargado. En una versión con backend real, iniciarProcesamiento()
+ * dispararía una llamada a /api/ (ver nginx.conf) en vez de un setTimeout.
  */
 (function(window) {
   'use strict';
 
-  var API_BASE = '/api';
-  var FORMATOS_API = ['image/jpeg', 'image/png', 'image/webp', 'image/tiff'];
+  var STORAGE_KEY = 'ph_planos_v1';
+  var docs = [];
+  var seq = 0;
 
-  function placeholderImg(label) {
-    var svg = "<svg xmlns='http://www.w3.org/2000/svg' width='420' height='300'><rect width='420' height='300' fill='#EDE7D6'/><rect x='10' y='10' width='400' height='280' fill='none' stroke='#9C8B63' stroke-width='2'/><text x='210' y='150' font-family='Georgia,serif' font-size='15' fill='#5b5240' text-anchor='middle'>" + label + "</text></svg>";
-    return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+  function nextId() {
+    seq++;
+    return 'PL-' + String(seq).padStart(3, '0');
   }
 
-  var seq = 1;
-  function nid() {
-    return 'PL-' + String(seq++).padStart(3, '0');
+  function placeholderSVG() {
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 75">' +
+      '<rect width="100" height="75" fill="#E3DFCF"/>' +
+      '<path d="M22 55 L40 30 L52 42 L78 18" stroke="#8F3A2C" stroke-width="2.2" fill="none"/>' +
+      '<circle cx="22" cy="55" r="2.6" fill="#8F3A2C"/>' +
+      '</svg>'
+    );
   }
 
-  var planos = [];
-
-  function seed() {
-    planos = [
-      {
-        id: nid(),
-        archNombre: 'plano_calle47.jpg',
-        archTipo: 'image/svg+xml',
-        archData: placeholderImg('Plano — Calle 47 N.º 620'),
-        ubic: 'Caja 4, Estantería A',
-        exp: 'Expte. 1122-1954',
-        dirOrig: 'Calle 47 N.º 620',
-        estado: 'validado',
-        iaEstado: 'completado',
-        iaError: null,
-        tareaId: null,
-        auto: {
-          arquitecto: 'Bartolomé Uriarte',
-          anio: 1954,
-          titulo: 'Vivienda unifamiliar',
-          ubicacion: 'Calle 47 N.º 620, La Plata',
-          escala: '1:100',
-          tipo_de_plano: 'planta',
-          material_soporte: 'papel tela',
-          notas: 'Sello de la Oficina Técnica Municipal'
-        },
-        parcela: 'Calle 47 N.º 620 — Lote 9, Mz. 40',
-        historial: [{ fecha: '12/03/2024', motivo: 'Carga inicial validada' }]
-      },
-      {
-        id: nid(),
-        archNombre: 'plano_diag80.png',
-        archTipo: 'image/svg+xml',
-        archData: placeholderImg('Plano — Diagonal 80'),
-        ubic: 'Caja 9, Legajo 3',
-        exp: 'Expte. 3390-1971',
-        dirOrig: 'Diagonal 80 N.º 1450',
-        estado: 'sin_ubicacion',
-        iaEstado: 'completado',
-        iaError: null,
-        tareaId: null,
-        auto: {
-          arquitecto: 'Elena Fittipaldi',
-          anio: 1971,
-          titulo: 'Local comercial',
-          ubicacion: 'Diagonal 80 N.º 1450',
-          escala: '1:50',
-          tipo_de_plano: 'fachada',
-          material_soporte: 'papel',
-          notas: 'Sello de la Escribanía General de Gobierno'
-        },
-        parcela: '',
-        historial: [{ fecha: '02/05/2024', motivo: 'Catalogado sin ubicación exacta' }]
-      },
-      {
-        id: nid(),
-        archNombre: 'plano_expte4521.pdf',
-        archTipo: 'application/pdf',
-        archData: placeholderImg('Plano — Expte. 4521'),
-        ubic: '',
-        exp: 'Expte. 4521-1968',
-        dirOrig: '',
-        estado: 'pendiente',
-        iaEstado: 'no_aplica',
-        iaError: null,
-        tareaId: null,
-        auto: null,
-        parcela: '',
-        historial: []
-      },
-      {
-        id: nid(),
-        archNombre: 'plano_deteriorado.jpg',
-        archTipo: 'image/svg+xml',
-        archData: placeholderImg('Plano deteriorado'),
-        ubic: 'Caja 15',
-        exp: '',
-        dirOrig: '',
-        estado: 'pendiente',
-        iaEstado: 'error',
-        iaError: 'Texto ilegible por deterioro físico',
-        tareaId: null,
-        auto: null,
-        parcela: '',
-        historial: []
-      }
-    ];
-  }
-
-  function save() {
+  function persist() {
     try {
-      localStorage.setItem('ph_planos', JSON.stringify(planos));
-      localStorage.setItem('ph_seq', String(seq));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ seq: seq, docs: docs }));
+      return true;
     } catch (e) {
-      console.error('Error al guardar en localStorage', e);
+      console.warn('No se pudo guardar en localStorage:', e);
+      return false;
     }
   }
 
   function load() {
     try {
-      var raw = localStorage.getItem('ph_planos');
-      if (raw) {
-        planos = JSON.parse(raw);
-        seq = parseInt(localStorage.getItem('ph_seq') || '1', 10);
-        // Migración de retrocompatibilidad
-        planos.forEach(function(p) {
-          if (!p.iaEstado) {
-            if (p.auto) p.iaEstado = 'completado';
-            else if (p.archTipo === 'application/pdf') p.iaEstado = 'no_aplica';
-            else p.iaEstado = p.estado === 'pendiente' ? 'no_aplica' : 'completado';
-          }
-        });
-        return true;
-      }
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      var parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.docs)) return false;
+      docs = parsed.docs;
+      seq = parsed.seq || docs.length;
+      return true;
     } catch (e) {
-      console.error('Error al cargar de localStorage', e);
+      console.warn('No se pudo leer localStorage:', e);
+      return false;
     }
-    return false;
   }
 
-  function byId(id) {
-    return planos.find(function(p) { return p.id === id; });
-  }
-
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
-
-  function val(id) {
-    var el = document.getElementById(id);
-    return el ? el.value : '';
-  }
-
-  function today() {
-    var d = new Date();
-    return String(d.getDate()).padStart(2, '0') + '/' +
-      String(d.getMonth() + 1).padStart(2, '0') + '/' +
-      d.getFullYear();
-  }
-
-  function badge(estado) {
-    var map = { pendiente: 'Pendiente', validado: 'Validado', sin_ubicacion: 'Sin ubicación' };
-    return '<span class="badge ' + estado + '">' + (map[estado] || estado) + '</span>';
-  }
-
-  function iaBadge(p) {
-    if (p.iaEstado === 'procesando') {
-      return ' <span class="badge" style="background:var(--amber-soft);color:var(--amber)"><span class="pulse"></span> IA analizando…</span>';
-    }
-    if (p.iaEstado === 'completado') {
-      return ' <span class="badge" style="background:var(--ok-soft);color:var(--ok)">✓ IA lista</span>';
-    }
-    if (p.iaEstado === 'error') {
-      return ' <span class="badge" style="background:var(--brick-soft);color:var(--brick)">⚠ IA error</span>';
-    }
-    return '';
-  }
-
-  // ---- Polling Asíncrono de Tareas de IA ----
-  var pollingActivos = {};
-
-  function iniciarPollingTarea(planoId, taskId, onCompleted, onError) {
-    if (!taskId || pollingActivos[planoId]) return;
-    pollingActivos[planoId] = true;
-
-    var intervalo = 2500;
-    var intentos = 0;
-    var maxIntentos = 180; // ~7 minutos de margen
-
-    function verificar() {
-      var p = byId(planoId);
-      if (!p) {
-        delete pollingActivos[planoId];
-        return;
+  function seed() {
+    seq = 5;
+    docs = [
+      {
+        id: 'PL-001', archivoNombre: 'plano_barletta.jpg', archivoUrl: placeholderSVG(),
+        estado: 'pendiente',
+        origen: { ubicacion: 'Caja 12, Estantería B', expediente: 'Expte. 884-1987', direccion: 'Calle 47 N.º 1023' },
+        datos: { propietario: 'A. Barletta', direccion: 'Calle 47 N.º 1023', nomenclatura: 'Circ. II · Secc. C · Mz. 14 · Parc. 8', fecha: '14/03/1987', sellos: 'Municipalidad — visado 1987', superficie: '186,40 m²' },
+        condicionLegal: '', ubicacionAsignada: null, direccionVinculada: '', historial: [],
+        fechaCarga: '02/09/2026', fechaCargaTs: Date.now() - 6e8
+      },
+      {
+        id: 'PL-002', archivoNombre: 'plano_mitre.jpg', archivoUrl: placeholderSVG(),
+        estado: 'validado',
+        origen: { ubicacion: 'Caja 4, Estantería A', expediente: 'Expte. 227-2005', direccion: 'Av. Mitre 452' },
+        datos: { propietario: 'Comercial Mitre S.R.L.', direccion: 'Av. Mitre 452', nomenclatura: 'Circ. I · Secc. A · Mz. 22 · Parc. 3', fecha: '22/08/2005', sellos: 'Municipalidad — aprobado 2005', superficie: '310,00 m²' },
+        condicionLegal: 'Aprobado', ubicacionAsignada: true, direccionVinculada: 'Av. Mitre 452',
+        historial: [{ fecha: '18/08/2019 11:02', motivo: 'Catalogación inicial' }],
+        fechaCarga: '18/08/2019', fechaCargaTs: Date.now() - 2e9
+      },
+      {
+        id: 'PL-003', archivoNombre: 'plano_deteriorado.jpg', archivoUrl: placeholderSVG(),
+        estado: 'pendiente',
+        origen: { ubicacion: 'Depósito histórico', expediente: 'Expte. 1145 (parcial)', direccion: '' },
+        datos: { propietario: '', direccion: '', nomenclatura: '', fecha: 's/d', sellos: '', superficie: 's/d' },
+        condicionLegal: '', ubicacionAsignada: null, direccionVinculada: '', historial: [],
+        fechaCarga: '20/07/2026', fechaCargaTs: Date.now() - 4e8
+      },
+      {
+        id: 'PL-004', archivoNombre: 'plano_chacra44.jpg', archivoUrl: placeholderSVG(),
+        estado: 'validado',
+        origen: { ubicacion: 'Archivo histórico', expediente: 'Expte. 1968-004', direccion: '' },
+        datos: { propietario: 'Ilegible', direccion: '', nomenclatura: 'Chacra 44 (nomenclatura histórica)', fecha: 's/d', sellos: 's/d', superficie: 's/d' },
+        condicionLegal: 'Documento técnico no oficializado', ubicacionAsignada: false, direccionVinculada: '',
+        historial: [{ fecha: '21/07/2026 15:40', motivo: 'Catalogación inicial — nomenclatura histórica sin equivalencia confirmada' }],
+        fechaCarga: '21/07/2026', fechaCargaTs: Date.now() - 3e8
+      },
+      {
+        id: 'PL-005', archivoNombre: 'plano_etchegaray.jpg', archivoUrl: placeholderSVG(),
+        estado: 'procesando',
+        origen: { ubicacion: 'Caja 7, Estantería A', expediente: 'Expte. 340-2011', direccion: 'Etchegaray 233' },
+        datos: { propietario: '', direccion: '', nomenclatura: '', fecha: '', sellos: '', superficie: '' },
+        condicionLegal: '', ubicacionAsignada: null, direccionVinculada: '', historial: [],
+        fechaCarga: new Date().toLocaleDateString('es-AR'), fechaCargaTs: Date.now()
       }
-      // Si el usuario ya lo validó manualmente y se completó, cortar polling
-      if (p.estado !== 'pendiente' && p.iaEstado === 'completado') {
-        delete pollingActivos[planoId];
-        return;
-      }
+    ];
+  }
 
-      fetch(API_BASE + '/tareas/' + encodeURIComponent(taskId))
-        .then(function(res) {
-          if (!res.ok) {
-            if (res.status === 404) throw new Error('Tarea no encontrada en el servidor');
-            throw new Error('Error al consultar tarea: ' + res.status);
-          }
-          return res.json();
-        })
-        .then(function(info) {
-          p = byId(planoId);
-          if (!p) {
-            delete pollingActivos[planoId];
-            return;
-          }
+  function getAll() {
+    return docs.slice().sort(function(a, b) { return (b.fechaCargaTs || 0) - (a.fechaCargaTs || 0); });
+  }
 
-          if (info.status === 'completed') {
-            delete pollingActivos[planoId];
-            p.auto = info.resultado;
-            p.iaEstado = 'completado';
-            p.iaError = null;
-            save();
-            if (typeof onCompleted === 'function') onCompleted(p);
-            if (window.PH && typeof window.PH.onPlanoIAActualizado === 'function') {
-              window.PH.onPlanoIAActualizado(p);
-            }
-          } else if (info.status === 'error') {
-            delete pollingActivos[planoId];
-            p.iaEstado = 'error';
-            p.iaError = info.error || 'Error durante la extracción';
-            save();
-            if (typeof onError === 'function') onError(p);
-            if (window.PH && typeof window.PH.onPlanoIAActualizado === 'function') {
-              window.PH.onPlanoIAActualizado(p);
-            }
-          } else {
-            // Sigue en 'pending' o 'processing'
-            intentos++;
-            if (intentos >= maxIntentos) {
-              delete pollingActivos[planoId];
-              p.iaEstado = 'error';
-              p.iaError = 'Tiempo de espera agotado';
-              save();
-              if (typeof onError === 'function') onError(p);
-              if (window.PH && typeof window.PH.onPlanoIAActualizado === 'function') {
-                window.PH.onPlanoIAActualizado(p);
-              }
-            } else {
-              setTimeout(verificar, intervalo);
-            }
-          }
-        })
-        .catch(function(err) {
-          intentos++;
-          if (intentos >= maxIntentos) {
-            delete pollingActivos[planoId];
-            p = byId(planoId);
-            if (p) {
-              p.iaEstado = 'error';
-              p.iaError = err.message;
-              save();
-              if (typeof onError === 'function') onError(p);
-              if (window.PH && typeof window.PH.onPlanoIAActualizado === 'function') {
-                window.PH.onPlanoIAActualizado(p);
-              }
-            }
-          } else {
-            setTimeout(verificar, 4000);
-          }
-        });
-    }
+  function getById(id) {
+    for (var i = 0; i < docs.length; i++) if (docs[i].id === id) return docs[i];
+    return null;
+  }
 
-    setTimeout(verificar, 1500);
+  function add(doc) {
+    docs.unshift(doc);
+    persist();
+    return doc;
+  }
+
+  function update(id, patch) {
+    var d = getById(id);
+    if (!d) return null;
+    Object.keys(patch).forEach(function(k) { d[k] = patch[k]; });
+    persist();
+    return d;
+  }
+
+  function iniciarProcesamiento(doc, delayMs) {
+    delayMs = delayMs || 2200;
+    setTimeout(function() {
+      var d = getById(doc.id);
+      if (!d || d.estado !== 'procesando') return;
+      // Simula una lectura incompleta cuando el nombre del archivo sugiere deterioro,
+      // igual que pasaría con un documento realmente ilegible.
+      var deteriorado = /deterior/i.test(d.archivoNombre);
+      d.estado = 'pendiente';
+      d.datos = deteriorado
+        ? { propietario: '', direccion: d.origen.direccion || '', nomenclatura: '', fecha: '', sellos: '', superficie: '' }
+        : { propietario: 'A confirmar', direccion: d.origen.direccion || 'A confirmar', nomenclatura: 'A confirmar', fecha: 'A confirmar', sellos: 'A confirmar', superficie: 'A confirmar' };
+      persist();
+      if (window.PH && window.PH.onPlanoIAActualizado) window.PH.onPlanoIAActualizado(d);
+    }, delayMs);
   }
 
   function reanudarTareasPendientes() {
-    planos.forEach(function(p) {
-      if (p.iaEstado === 'procesando' && p.tareaId) {
-        iniciarPollingTarea(p.id, p.tareaId);
-      }
+    // Si la página se recargó con planos que habían quedado "procesando",
+    // el setTimeout original se perdió: los reprogramamos con un delay corto.
+    docs.forEach(function(d) {
+      if (d.estado === 'procesando') iniciarProcesamiento(d, 1500);
     });
   }
 
-  // Reactivar polling si el usuario vuelve a la pestaña del navegador
-  document.addEventListener('visibilitychange', function() {
-    if (!document.hidden) {
-      reanudarTareasPendientes();
-    }
-  });
-
-  // Exportar al objeto global PH
   window.PH = window.PH || {};
   window.PH.State = {
-    API_BASE: API_BASE,
-    FORMATOS_API: FORMATOS_API,
-    getPlanos: function() { return planos; },
-    setPlanos: function(p) { planos = p; },
-    nid: nid,
-    seed: seed,
-    save: save,
+    STORAGE_KEY: STORAGE_KEY,
     load: load,
-    byId: byId,
-    esc: esc,
-    val: val,
-    today: today,
-    badge: badge,
-    iaBadge: iaBadge,
-    iniciarPollingTarea: iniciarPollingTarea,
+    seed: seed,
+    save: persist,
+    getAll: getAll,
+    getById: getById,
+    add: add,
+    update: update,
+    nextId: nextId,
+    placeholderSVG: placeholderSVG,
+    iniciarProcesamiento: iniciarProcesamiento,
     reanudarTareasPendientes: reanudarTareasPendientes
   };
 

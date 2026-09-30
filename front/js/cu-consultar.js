@@ -1,102 +1,92 @@
 /**
- * cu-consultar.js - Caso de Uso 04: Búsqueda y consulta de planos históricos
+ * cu-consultar.js - CU4: Consultar planos históricos.
+ * Actor: Usuario / Consultor. Busca por calle, expediente, propietario o
+ * parcela y visualiza la ficha completa del plano encontrado.
  */
 (function(window) {
   'use strict';
 
   var State = window.PH.State;
+  var seleccionadoId = null;
 
-  function renderConsultarLista(q) {
-    var disponibles = State.getPlanos().filter(function(p) {
-      return p.estado !== 'pendiente';
+  function esc(s) {
+    return (s === undefined || s === null || s === '') ? 's/d' :
+      String(s).replace(/[&<>]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
+  }
+  function tituloDoc(d) {
+    return d.origen.direccion || d.origen.expediente || d.archivoNombre;
+  }
+
+  function inicializar() {
+    document.getElementById('c-buscar').addEventListener('click', function() {
+      renderLista(document.getElementById('c-query').value.trim());
+    });
+    document.getElementById('c-query').addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter') renderLista(this.value.trim());
+    });
+  }
+
+  function renderLista(query) {
+    var cont = document.getElementById('consultar-lista');
+    var base = State.getAll().filter(function(d) { return d.estado === 'validado'; });
+    var q = (query || '').toLowerCase();
+    var resultados = !q ? base : base.filter(function(d) {
+      var hay = [tituloDoc(d), d.origen.expediente, d.datos.propietario, d.datos.nomenclatura, d.direccionVinculada]
+        .join(' ').toLowerCase();
+      return hay.indexOf(q) !== -1;
     });
 
-    var query = (q || '').trim().toLowerCase();
-    var res = query ? disponibles.filter(function(p) {
-      var hay = [
-        p.dirOrig,
-        p.parcela,
-        p.exp,
-        p.ubic,
-        (p.auto && p.auto.anio) || '',
-        (p.auto && p.auto.arquitecto) || '',
-        (p.auto && p.auto.titulo) || '',
-        (p.auto && p.auto.ubicacion) || ''
-      ].join(' ').toLowerCase();
-      return hay.indexOf(query) !== -1;
-    }) : disponibles;
-
-    var el = document.getElementById('consultar-lista');
-    var det = document.getElementById('consultar-detalle');
-    if (!el || !det) return;
-
-    if (!res.length) {
-      el.innerHTML = '<div class="empty">No se encontraron planos con esos datos.</div>';
-      det.innerHTML = '<div class="empty">Cambie los términos de búsqueda e intente de nuevo.</div>';
+    if (resultados.length === 0) {
+      cont.innerHTML = '<div class="empty">No se encontraron planos coincidentes. Redefina los términos de búsqueda.</div>';
+      seleccionadoId = null;
+      document.getElementById('consultar-detalle').innerHTML = '<div class="empty">Los resultados de su búsqueda aparecerán acá.</div>';
       return;
     }
-
-    el.innerHTML = res.map(function(p) {
-      return '<button class="row" onclick="PH.verConsulta(\'' + p.id + '\')">' +
-        '<div class="t">' + State.esc(p.dirOrig || p.parcela || p.archNombre) + ' ' + State.badge(p.estado) + '</div>' +
-        '<div class="s">' + (p.exp || 'Sin expediente') + ' · ' + p.id + '</div></button>';
+    cont.innerHTML = resultados.map(function(d) {
+      var sel = d.id === seleccionadoId ? ' sel' : '';
+      var badge = d.ubicacionAsignada === false
+        ? '<span class="badge sin_ubicacion">Sin ubicación</span>'
+        : '<span class="badge validado">Validado</span>';
+      return '<button class="row' + sel + '" onclick="PH.CUConsultar.seleccionar(\'' + d.id + '\')">' +
+        '<div class="t">' + esc(tituloDoc(d)) + '</div>' +
+        '<div class="s">' + badge + '</div>' +
+        '</button>';
     }).join('');
   }
 
-  function verConsulta(id) {
-    var p = State.byId(id);
-    if (!p) return;
-
-    var a = p.auto || {};
-    var det = document.getElementById('consultar-detalle');
-    if (!det) return;
-
-    det.innerHTML = '<div class="card">' +
-      (p.archTipo === 'application/pdf' ?
-        '<a class="doclink" href="' + p.archData + '" target="_blank">Abrir / descargar PDF: ' + State.esc(p.archNombre) + '</a>' :
-        '<img class="thumb" src="' + p.archData + '" alt="Plano ' + State.esc(p.dirOrig) + '">' +
-        '<a class="doclink" href="' + p.archData + '" download="' + State.esc(p.archNombre) + '">Descargar imagen</a>') +
-      '<p><strong>Dirección / parcela:</strong> ' + State.esc(p.parcela || p.dirOrig || '—') + ' ' + State.badge(p.estado) + '</p>' +
-      '<p><strong>Expediente:</strong> ' + State.esc(p.exp || '—') + ' &nbsp; <strong>Ubicación física:</strong> ' + State.esc(p.ubic || '—') + '</p>' +
-      '<p><strong>Arquitecto:</strong> ' + State.esc(a.arquitecto || '—') + ' &nbsp; <strong>Año:</strong> ' + State.esc(a.anio || '—') + '</p>' +
-      '<p><strong>Título / obra:</strong> ' + State.esc(a.titulo || '—') + ' &nbsp; <strong>Escala:</strong> ' + State.esc(a.escala || '—') + '</p>' +
-      '<p><strong>Tipo de plano:</strong> ' + State.esc(a.tipo_de_plano || '—') + ' &nbsp; <strong>Material / soporte:</strong> ' + State.esc(a.material_soporte || '—') + '</p>' +
-      (a.notas ? '<p><strong>Notas:</strong> ' + State.esc(a.notas) + '</p>' : '') +
-      '</div>';
-  }
-
-  function inicializarBusqueda() {
-    var btnBuscar = document.getElementById('c-buscar');
-    var inputQuery = document.getElementById('c-query');
-
-    if (btnBuscar) {
-      btnBuscar.addEventListener('click', function() {
-        renderConsultarLista(State.val('c-query'));
-      });
+  function seleccionar(id) {
+    seleccionadoId = id;
+    var d = State.getById(id);
+    var cont = document.getElementById('consultar-detalle');
+    if (!d) {
+      cont.innerHTML = '<div class="empty">Los resultados de su búsqueda aparecerán acá.</div>';
+      return;
     }
 
-    if (inputQuery) {
-      inputQuery.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          renderConsultarLista(State.val('c-query'));
-        }
-      });
-      // Búsqueda en vivo reactiva opcional al tipear
-      inputQuery.addEventListener('input', function() {
-        renderConsultarLista(State.val('c-query'));
-      });
-    }
+    var historialHTML = d.historial.length
+      ? '<div class="hist"><h3>Historial</h3><ul>' +
+        d.historial.slice().reverse().map(function(h) {
+          return '<li><strong>' + esc(h.fecha) + '</strong> — ' + esc(h.motivo) + '</li>';
+        }).join('') + '</ul></div>'
+      : '';
+
+    cont.innerHTML = ''
+      + '<img class="thumb" src="' + d.archivoUrl + '" alt="Plano ' + esc(d.id) + '">'
+      + '<a class="doclink" href="' + d.archivoUrl + '" download="' + esc(d.archivoNombre) + '" target="_blank" rel="noopener">Ver / descargar archivo original</a>'
+      + '<div class="field"><label>Dirección / Parcela</label><div>' + (d.ubicacionAsignada === false ? 'Sin ubicación asignada' : esc(d.direccionVinculada)) + '</div></div>'
+      + '<div class="field"><label>Propietario</label><div>' + esc(d.datos.propietario) + '</div></div>'
+      + '<div class="field"><label>Nomenclatura catastral</label><div>' + esc(d.datos.nomenclatura) + '</div></div>'
+      + '<div class="field"><label>Fecha</label><div>' + esc(d.datos.fecha) + '</div></div>'
+      + '<div class="field"><label>Sellos</label><div>' + esc(d.datos.sellos) + '</div></div>'
+      + '<div class="field"><label>Superficie</label><div>' + esc(d.datos.superficie) + '</div></div>'
+      + '<div class="field"><label>Condición legal</label><div>' + esc(d.condicionLegal) + '</div></div>'
+      + '<div class="field"><label>Expediente de origen</label><div>' + esc(d.origen.expediente) + '</div></div>'
+      + historialHTML;
+
+    renderLista(document.getElementById('c-query').value.trim());
   }
 
   window.PH = window.PH || {};
-  window.PH.CUConsultar = {
-    inicializar: inicializarBusqueda,
-    renderLista: renderConsultarLista,
-    verConsulta: verConsulta
-  };
-
-  // Acceso directo para handlers en DOM
-  window.PH.verConsulta = verConsulta;
+  window.PH.CUConsultar = { inicializar: inicializar, renderLista: renderLista, seleccionar: seleccionar };
 
 })(window);
