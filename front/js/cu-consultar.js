@@ -95,3 +95,4 @@
   window.PH.CUConsultar = { inicializar: inicializar, renderLista: renderLista, seleccionar: seleccionar };
 
 })(window);
+
