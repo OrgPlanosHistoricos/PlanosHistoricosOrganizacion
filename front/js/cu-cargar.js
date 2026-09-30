@@ -21,6 +21,7 @@
     document.getElementById('cargar-msgs').innerHTML = '';
   }
 
+
   function inicializar() {
     var form = document.getElementById('form-cargar');
     form.addEventListener('submit', function(ev) {
