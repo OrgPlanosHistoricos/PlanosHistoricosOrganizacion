@@ -1,14 +1,27 @@
 /**
+<<<<<<< Updated upstream
  * cu-cargar.js - Caso de Uso 01: Cargar plano histórico y procesar con IA
+=======
+ * cu-cargar.js - CU1: Cargar plano histórico.
+>>>>>>> Stashed changes
  */
 (function(window) {
   'use strict';
 
-  var State = window.PH.State;
+  var API = window.PH.API;
 
+<<<<<<< Updated upstream
   function mostrarMensajeCarga(tipo, html) {
     var el = document.getElementById('cargar-msgs');
     if (el) el.innerHTML = tipo ? '<div class="' + tipo + '">' + html + '</div>' : '';
+=======
+  function esc(s) {
+    return (s === undefined || s === null || s === '') ? '' :
+      String(s).replace(/[&<>]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
+  }
+  function tituloDoc(d) {
+    return d.direccion_referencia || d.expediente || d.nombre_original;
+>>>>>>> Stashed changes
   }
 
   function inicializarFormularioCarga() {
@@ -82,9 +95,16 @@
     });
   }
 
+<<<<<<< Updated upstream
   function analizarPlano(p, file) {
     var formData = new FormData();
     formData.append('archivo', file);
+=======
+  async function onSubmit() {
+    limpiarMensaje();
+    var fileInput = document.getElementById('f-archivo');
+    var file = fileInput.files[0];
+>>>>>>> Stashed changes
 
     // La petición es asíncrona: responde de inmediato con HTTP 202 y el ID de tarea
     fetch(State.API_BASE + '/procesar-plano', { method: 'POST', body: formData })
@@ -101,6 +121,7 @@
         State.save();
         renderRecientes();
 
+<<<<<<< Updated upstream
         if (window.PH && typeof window.PH.actualizarListas === 'function') {
           window.PH.actualizarListas();
         }
@@ -143,6 +164,52 @@
     });
     html += '</div>';
     cont.innerHTML = html;
+=======
+    var ubicacion = document.getElementById('f-ubic').value.trim();
+    var expediente = document.getElementById('f-exp').value.trim();
+    var direccion = document.getElementById('f-dir').value.trim();
+
+    try {
+      mostrarMensaje('pulse', 'Subiendo archivo e iniciando procesamiento...');
+      var doc = await API.create(file, ubicacion, expediente, direccion);
+      document.getElementById('form-cargar').reset();
+      mostrarMensaje('confirm', 'El plano se guardó correctamente. Estará disponible en la cola de revisión en breve.');
+      renderRecientes();
+      if (window.PH.actualizarListas) window.PH.actualizarListas();
+    } catch (e) {
+      mostrarMensaje('error', 'Error al cargar: ' + e.message);
+    }
+  }
+
+  async function renderRecientes() {
+    var cont = document.getElementById('cargar-recientes');
+    try {
+      var pendientes = await API.getAll('pendiente');
+      
+      // En API, estado "pendiente" significa que ya se subió y (si aplica) se procesó.
+      // Pero si quisiéramos mostrar los que están "procesando" la IA,
+      // la API no filtra por ia_estado con query param "estado". 
+      // Por ahora traemos todo y filtramos localmente los pendientes + ia procesando.
+      var todos = await API.getAll();
+      var recientes = todos.filter(d => d.estado === 'pendiente' || d.ia_estado === 'procesando');
+
+      if (recientes.length === 0) {
+        cont.innerHTML = '<div class="empty">Todavía no hay planos en la cola de análisis.</div>';
+        return;
+      }
+      cont.innerHTML = '<div class="list">' + recientes.map(function(d) {
+        var estadoHTML = d.ia_estado === 'procesando'
+          ? '<span class="pulse"></span><span class="badge pendiente">Analizando…</span>'
+          : '<span class="badge pendiente">Pendiente de revisión</span>';
+        return '<div class="row" style="cursor:default">' +
+          '<div class="t">' + esc(tituloDoc(d)) + '</div>' +
+          '<div class="s">' + esc(d.nombre_original) + ' · ' + estadoHTML + '</div>' +
+          '</div>';
+      }).join('') + '</div>';
+    } catch (e) {
+      cont.innerHTML = '<div class="error">Error al cargar recientes: ' + e.message + '</div>';
+    }
+>>>>>>> Stashed changes
   }
 
   window.PH = window.PH || {};
