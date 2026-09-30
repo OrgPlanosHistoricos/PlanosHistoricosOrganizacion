@@ -13,6 +13,8 @@ from .planos_router import router as planos_router
 from .planos_worker import planos_worker
 from .tasks import task_manager, procesar_directo, ExtraccionError
 
+from .preprocessing import preprocess_image #para PDF
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()

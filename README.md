@@ -193,11 +193,9 @@ Detalles de comportamiento:
 - `app/preprocessing.py` redimensiona y mejora el contraste de la
   imagen antes de mandarla al modelo - ajustá `MAX_DIMENSION` si tus
   planos tienen mucho detalle fino.
-# planosHistoricos
-# planosHistoricos
-# planosHistoricos
 
-IMPORTANTE
+
+# IMPORTANTE
 Se debe desacargar un modelo en ollama (configurado actualmente qwen2.5vl:3b que pesa aprox 3.2 gb) se peude consultar el estado de la descarga en cualquier momento con:
 
 ```bash
@@ -205,8 +203,7 @@ docker exec -it ollama ollama list
 ```
 
 el ingreso a la app debe hacerse desde http://localhost:8080 en el navegador. Sino se bloquea el uso de la API de reconocimiento de imagenes.
-Los formatos admitidos actualmente son solamente JPEG, PNG .... NO PDF!!!
-
+Los formatos admitidos actualmente son solamente JPEG, PNG, TIFF Y PDF
 El procesamiento por CPU tarda de 60 a 90 segundos.
 
 .

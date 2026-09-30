@@ -5,7 +5,7 @@
   'use strict';
 
   var API_BASE = '/api';
-  var FORMATOS_API = ['image/jpeg', 'image/png', 'image/webp', 'image/tiff'];
+  var FORMATOS_API = ['image/jpeg', 'image/png', 'image/webp', 'image/tiff', 'application/pdf'];
 
   function placeholderImg(label) {
     var svg = "<svg xmlns='http://www.w3.org/2000/svg' width='420' height='300'><rect width='420' height='300' fill='#EDE7D6'/><rect x='10' y='10' width='400' height='280' fill='none' stroke='#9C8B63' stroke-width='2'/><text x='210' y='150' font-family='Georgia,serif' font-size='15' fill='#5b5240' text-anchor='middle'>" + label + "</text></svg>";

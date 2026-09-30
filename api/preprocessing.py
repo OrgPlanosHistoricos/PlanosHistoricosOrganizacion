@@ -1,4 +1,8 @@
 """
+Preprocesamiento simple de imágenes de planos históricos.
+Planos viejos suelen venir con bajo contraste, manchas o tamaños
+grandes que no aportan nada al modelo. Esto mejora la extracción
+sin necesitar nada más pesado que Pillow.
 Preprocesamiento de planos históricos: imágenes y PDFs.
 
 Flujo:
@@ -12,10 +16,12 @@ y enviado al modelo de visión.
 import io
 from PIL import Image, ImageOps, ImageEnhance
 
+MAX_DIMENSION = 1600  # el modelo de visión no necesita más resolución que esta
 MAX_DIMENSION = 1200  # resolución máxima; 1200 px equilibra detalle e inferencia
 PDF_DPI = 150         # DPI de rasterización del PDF (150 = buena legibilidad sin exceso)
 
 
+def preprocess_image(image_bytes: bytes) -> bytes:
 def _rasterize_pdf_first_page(pdf_bytes: bytes) -> bytes:
     """Convierte la primera página de un PDF en JPEG usando PyMuPDF."""
     import fitz  # importación diferida para no romper el arranque si falta el paquete

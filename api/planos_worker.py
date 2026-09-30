@@ -17,8 +17,8 @@ from .vision_client import ExtraccionError, extraer_datos_plano
 logger = logging.getLogger("planos.worker")
 
 
-def _extraer(image_bytes: bytes) -> dict:
-    imagen = preprocess_image(image_bytes)
+def _extraer(image_bytes: bytes, content_type: str = "image/jpeg") -> dict:
+    imagen = preprocess_image(image_bytes, content_type=content_type)
     ultimo_error = None
     # Un reintento: los VLM chicos a veces fallan la primera vez
     for _ in range(2):
@@ -49,10 +49,10 @@ def _guardar_resultado(plano_id: int, datos: Optional[dict], error: Optional[str
         session.commit()
 
 
-def _planos_sin_terminar() -> list[tuple[int, bytes]]:
+def _planos_sin_terminar() -> list[tuple[int, bytes, str]]:
     with Session(engine) as session:
         planos = session.exec(select(Plano).where(Plano.ia_estado == EstadoIA.procesando)).all()
-        return [(p.id, obtener_archivo(p.minio_path)) for p in planos]
+        return [(p.id, obtener_archivo(p.minio_path), p.content_type) for p in planos]
 
 
 class PlanosWorker:
@@ -73,30 +73,30 @@ class PlanosWorker:
                 pass
             self._task = None
 
-    def encolar(self, plano_id: int, image_bytes: bytes) -> None:
-        self.queue.put_nowait((plano_id, image_bytes))
+    def encolar(self, plano_id: int, image_bytes: bytes, content_type: str = "image/jpeg") -> None:
+        self.queue.put_nowait((plano_id, image_bytes, content_type))
 
     async def _loop(self) -> None:
         # La cola vive en memoria: lo que quedó a medias antes de un reinicio se retoma acá
         try:
-            for plano_id, image_bytes in await asyncio.to_thread(_planos_sin_terminar):
-                self.encolar(plano_id, image_bytes)
+            for plano_id, image_bytes, content_type in await asyncio.to_thread(_planos_sin_terminar):
+                self.encolar(plano_id, image_bytes, content_type)
         except Exception:
             logger.exception("No se pudieron recuperar los planos pendientes de IA")
 
         while True:
-            plano_id, image_bytes = await self.queue.get()
+            plano_id, image_bytes, content_type = await self.queue.get()
             try:
-                await self._procesar(plano_id, image_bytes)
+                await self._procesar(plano_id, image_bytes, content_type)
             except Exception:
                 logger.exception(f"Error guardando el resultado de IA del plano {plano_id}")
             finally:
                 self.queue.task_done()
 
-    async def _procesar(self, plano_id: int, image_bytes: bytes) -> None:
+    async def _procesar(self, plano_id: int, image_bytes: bytes, content_type: str) -> None:
         logger.info(f"Procesando IA del plano {plano_id}...")
         try:
-            datos = await asyncio.to_thread(_extraer, image_bytes)
+            datos = await asyncio.to_thread(_extraer, image_bytes, content_type)
         except Exception as exc:
             logger.warning(f"IA falló para el plano {plano_id}: {exc}")
             await asyncio.to_thread(_guardar_resultado, plano_id, None, str(exc))

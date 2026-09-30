@@ -70,7 +70,7 @@
         } else {
           mostrarMensajeCarga(
             'confirm',
-            '<strong>Plano guardado (' + p.id + ').</strong> El archivo PDF quedó listo para revisión manual en "Validar y catalogar".'
+            '<strong>Plano guardado (' + p.id + ').</strong> El archivo quedó listo para revisión manual en "Validar y catalogar".'
           );
         }
 

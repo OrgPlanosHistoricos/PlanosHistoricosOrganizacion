@@ -25,9 +25,13 @@ from .planos_worker import planos_worker
 
 router = APIRouter(prefix="/planos", tags=["planos"])
 
-FORMATOS_IMAGEN = {"image/jpeg", "image/png", "image/webp", "image/tiff"}
-# Los PDF se guardan pero no pasan por la IA: se catalogan a mano
-FORMATOS_ACEPTADOS = FORMATOS_IMAGEN | {"application/pdf"}
+FORMATOS_ACEPTADOS = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/tiff",
+    "application/pdf",
+}
 
 
 def _obtener_plano(session: Session, plano_id: int) -> Plano:
@@ -71,7 +75,6 @@ async def crear_plano(
     nombre = archivo.filename or "plano"
     minio_path = await asyncio.to_thread(subir_archivo, contenido, nombre, archivo.content_type)
 
-    analizable = archivo.content_type in FORMATOS_IMAGEN
     plano = await asyncio.to_thread(
         _insertar_plano,
         Plano(
@@ -81,12 +84,11 @@ async def crear_plano(
             ubicacion_fisica=ubicacion_fisica.strip(),
             expediente=expediente.strip(),
             direccion_referencia=direccion_referencia.strip(),
-            ia_estado=EstadoIA.procesando if analizable else EstadoIA.no_aplica,
+            ia_estado=EstadoIA.procesando,
         ),
     )
 
-    if analizable:
-        planos_worker.encolar(plano.id, contenido)
+    planos_worker.encolar(plano.id, contenido, archivo.content_type)
     return plano
 
 

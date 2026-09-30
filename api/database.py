@@ -5,7 +5,9 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from . import models  # noqa: F401  (registra las tablas en SQLModel.metadata)
 
-DATABASE_URL = os.environ["DATABASE_URL"]
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL", "postgresql://planos:planos@localhost:5432/planos_db"
+)
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 

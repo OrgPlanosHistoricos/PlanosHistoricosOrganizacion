@@ -58,9 +58,9 @@
     } else if (p.iaEstado === 'completado') {
       bannerHtml = '<div class="confirm" style="margin-bottom:16px;font-size:13.5px;">' +
         '✓ <strong>Lectura de IA completada:</strong> Revisá los datos detectados antes de confirmar la catalogación.</div>';
-    } else if (p.archTipo === 'application/pdf') {
+    } else if (p.archTipo === 'application/pdf' && p.iaEstado === 'no_aplica') {
       bannerHtml = '<div class="hint" style="margin-bottom:16px;font-size:13.5px;">' +
-        'Los archivos PDF se catalogan manualmente. Abrí el archivo y completá los campos visibles.</div>';
+        'Los archivos PDF sin análisis automático se catalogan manualmente. Abrí el archivo y completá los campos visibles.</div>';
     }
 
     box.innerHTML = '<div class="card">' +

@@ -1,17 +1,27 @@
-"""Cliente de Supabase Storage: sube el archivo original y devuelve su URL pública."""
+import logging
 import os
+from typing import Optional
 import uuid
 
 from supabase import create_client, Client
 
-SUPABASE_URL = os.environ["SUPABASE_URL"]
-SUPABASE_KEY = os.environ["SUPABASE_KEY"]
+logger = logging.getLogger("planos.storage")
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 BUCKET_NAME = "planos_escaneados"
 
-_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+_client: Optional[Client] = None
+if SUPABASE_URL and SUPABASE_KEY:
+    try:
+        _client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as exc:
+        logger.warning(f"No se pudo inicializar cliente de Supabase: {exc}")
 
 
 def subir_plano(contenido: bytes, nombre_original: str, content_type: str) -> str:
+    if not _client:
+        raise RuntimeError("Supabase no está configurado (faltan SUPABASE_URL y/o SUPABASE_KEY).")
     extension = nombre_original.rsplit(".", 1)[-1] if "." in nombre_original else "bin"
     nombre_storage = f"{uuid.uuid4()}.{extension}"
 

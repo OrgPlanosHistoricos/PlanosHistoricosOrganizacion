@@ -150,7 +150,7 @@ class TaskManager:
 
         try:
             # 1. Preprocesamiento de imagen en thread separado
-            imagen_procesada = await asyncio.to_thread(preprocess_image, image_bytes)
+            imagen_procesada = await asyncio.to_thread(preprocess_image, image_bytes, content_type)
 
             # 2. Inferencia con Ollama (con reintento) en thread separado
             ultimo_error = None
@@ -201,7 +201,7 @@ async def procesar_directo(
     image_bytes: bytes, filename: str, content_type: str
 ) -> PlanoHistorico:
     """Procesamiento directo síncrono para llamadas con ?sync=true sin bloquear el event loop."""
-    imagen_procesada = await asyncio.to_thread(preprocess_image, image_bytes)
+    imagen_procesada = await asyncio.to_thread(preprocess_image, image_bytes, content_type)
     ultimo_error = None
     for intento in range(2):
         try:
