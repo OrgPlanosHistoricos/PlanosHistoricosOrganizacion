@@ -504,3 +504,115 @@ button.ghost:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   Pantalla de inicio (selector de módulo) — agregado, no reemplaza nada
+   de lo anterior.
+   ========================================================================== */
+
+.landing {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.landing-inner {
+  max-width: 860px;
+  width: 100%;
+  text-align: center;
+}
+
+.landing-brand {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--navy);
+  margin-bottom: 6px;
+}
+
+.landing-brand-sub {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  margin-bottom: 40px;
+}
+
+.landing h1 {
+  margin-bottom: 6px;
+}
+
+.landing .lede {
+  margin: 0 auto 34px;
+}
+
+.module-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  text-align: left;
+}
+
+.module-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 26px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--ink);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.module-card:hover {
+  border-color: var(--navy);
+  transform: translateY(-2px);
+}
+
+.module-card .icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.module-card h2 {
+  font-size: 20px;
+  margin: 0;
+}
+
+.module-card p {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  margin: 0;
+  flex: 1;
+}
+
+.module-card .enter {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--navy);
+  margin-top: 4px;
+}
+
+.module-card.pending .enter {
+  color: var(--ink-soft);
+}
+
+.tag-soon {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  align-self: flex-start;
+}
+
+@media (max-width: 640px) {
+  .module-grid {
+    grid-template-columns: 1fr;
+  }
+}

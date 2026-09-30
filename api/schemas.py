@@ -3,6 +3,7 @@ Esquema de los datos que queremos extraer de cada plano histórico.
 Agregá o quitá campos según lo que necesites - el modelo de visión
 va a usar este mismo esquema para saber qué generar.
 """
+from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field
 
@@ -46,3 +47,16 @@ class PlanoHistorico(BaseModel):
                 "notas": "Sello del archivo municipal en la esquina inferior derecha",
             }
         }
+
+
+class ArchivoInfo(BaseModel):
+    nombre_original: str
+    supabase_url: str
+
+
+class DocumentoExtraccion(BaseModel):
+    fecha_procesamiento: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    archivo: ArchivoInfo
+    extraccion_qwen: PlanoHistorico

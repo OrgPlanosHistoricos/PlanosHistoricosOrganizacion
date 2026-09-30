@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Archivo de Planos Históricos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <aside class="nav">
+    <div class="brand">🗺️<span>Archivo de<br>Planos Históricos<small>Dirección de Catastro</small></span></div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="cargar">Cargar plano</button>
+      <button class="tab" data-tab="validar">Validar y catalogar</button>
+      <button class="tab" data-tab="modificar">Modificar catalogación</button>
+      <button class="tab" data-tab="consultar">Consultar</button>
+    </nav>
+  </aside>
+  <main>
+
+    <section id="view-cargar" class="view active">
+      <h1>Cargar plano histórico</h1>
+      <p class="lede">Suba el archivo digital del plano. Los datos de origen son opcionales, pero ayudan a ubicarlo más adelante.</p>
+      <div class="card">
+        <form id="form-cargar">
+          <div class="filebox">
+            <label for="f-archivo">Archivo del plano — JPG, PNG, WEBP o PDF</label>
+            <input type="file" id="f-archivo" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf">
+          </div>
+          <div id="cargar-msgs"></div>
+          <div class="grid2" style="margin-top:16px">
+            <div class="field"><label>Ubicación física de guarda <span class="optional">(opcional)</span></label><input type="text" id="f-ubic" placeholder="Caja 12, Estantería B"></div>
+            <div class="field"><label>Expediente de origen <span class="optional">(opcional)</span></label><input type="text" id="f-exp" placeholder="Expte. 4521-1968"></div>
+          </div>
+          <div class="field"><label>Dirección o ubicación de referencia <span class="optional">(opcional)</span></label><input type="text" id="f-dir" placeholder="Calle 47 N.º 620"></div>
+          <button class="primary" type="submit">Guardar y analizar</button>
+        </form>
+      </div>
+      <div id="cargar-recientes" style="margin-top:22px"></div>
+    </section>
+
+    <section id="view-validar" class="view">
+      <h1>Validar y catalogar</h1>
+      <p class="lede">Revise los datos leídos automáticamente, corríjalos si hace falta y vincule el plano con su dirección o parcela.</p>
+      <div class="split">
+        <div><div id="validar-lista" class="list"></div></div>
+        <div id="validar-detalle"><div class="empty">Elija un plano pendiente de la lista para revisarlo.</div></div>
+      </div>
+    </section>
+
+    <section id="view-modificar" class="view">
+      <h1>Modificar catalogación</h1>
+      <p class="lede">Corrija los datos de un plano ya validado. Toda modificación requiere un motivo.</p>
+      <div class="split">
+        <div><div id="modificar-lista" class="list"></div></div>
+        <div id="modificar-detalle"><div class="empty">Elija un plano catalogado para modificarlo.</div></div>
+      </div>
+    </section>
+
+    <section id="view-consultar" class="view">
+      <h1>Consultar planos históricos</h1>
+      <p class="lede">Busque por calle, número, expediente, año o datos de la parcela.</p>
+      <div class="searchbar">
+        <input type="search" id="c-query" placeholder="Ej: Calle 47, Expte. 4521, 1968…">
+        <button class="primary" id="c-buscar">Buscar</button>
+      </div>
+      <div class="split">
+        <div><div id="consultar-lista" class="list"></div></div>
+        <div id="consultar-detalle"><div class="empty">Los resultados de su búsqueda aparecerán acá.</div></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+  <!-- Módulos de lógica por caso de uso -->
+  <script src="js/state.js"></script>
+  <script src="js/cu-cargar.js"></script>
+  <script src="js/cu-validar.js"></script>
+  <script src="js/cu-modificar.js"></script>
+  <script src="js/cu-consultar.js"></script>
+  <!-- Orquestador principal de la aplicación -->
+  <script src="app.js"></script>
+</body>
+</html>

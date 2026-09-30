@@ -43,14 +43,38 @@ services:
       - "9000:9000"   # API S3
       - "9001:9001"   # Consola web
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: planos-postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-planos}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-planos}
+      - POSTGRES_DB=${POSTGRES_DB:-planos_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   api:
     build: .
     container_name: planos-api
     depends_on:
-      - ollama
-      - ollama-pull
-      - minio
+      ollama:
+        condition: service_started
+      ollama-pull:
+        condition: service_started
+      minio:
+        condition: service_started
+      # La API crea las tablas al arrancar, así que necesita Postgres aceptando conexiones
+      postgres:
+        condition: service_healthy
     environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-planos}:${POSTGRES_PASSWORD:-planos}@postgres:5432/${POSTGRES_DB:-planos_db}
       - OLLAMA_HOST=http://ollama:11434
       - VISION_MODEL=qwen2.5vl:3b
       - MINIO_ENDPOINT=minio:9000
@@ -58,6 +82,9 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin123}
       - MINIO_BUCKET=planos
       - MINIO_SECURE=false
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - MONGODB_URI=${MONGODB_URI}
     volumes:
       - ./api:/app/api
     ports:
@@ -77,3 +104,4 @@ services:
 volumes:
   ollama_data:
   minio_data:
+  postgres_data:

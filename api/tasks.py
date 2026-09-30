@@ -10,12 +10,30 @@ import logging
 from typing import Any, Dict, Optional
 import uuid
 
+from .db_client import coleccion_extracciones
 from .preprocessing import preprocess_image
-from .schemas import PlanoHistorico
+from .schemas import ArchivoInfo, DocumentoExtraccion, PlanoHistorico
+from .storage_client import subir_plano
 from .vision_client import ExtraccionError, extraer_datos_plano
 
 logger = logging.getLogger("planos.tasks")
 logging.basicConfig(level=logging.INFO)
+
+
+def _guardar_extraccion(
+    filename: str, content_type: str, image_bytes: bytes, resultado: PlanoHistorico
+) -> str:
+    """Sube el archivo original a Supabase e inserta el documento final en MongoDB.
+
+    Devuelve la URL pública del archivo subido.
+    """
+    supabase_url = subir_plano(image_bytes, filename, content_type)
+    documento = DocumentoExtraccion(
+        archivo=ArchivoInfo(nombre_original=filename, supabase_url=supabase_url),
+        extraccion_qwen=resultado,
+    )
+    coleccion_extracciones.insert_one(documento.model_dump())
+    return supabase_url
 
 
 class TaskStatus(str, Enum):
@@ -35,6 +53,7 @@ class TareaInfo:
         updated_at: Optional[str] = None,
         resultado: Optional[Dict[str, Any]] = None,
         error: Optional[str] = None,
+        supabase_url: Optional[str] = None,
     ):
         self.task_id = task_id
         self.status = status
@@ -43,6 +62,7 @@ class TareaInfo:
         self.updated_at = updated_at or datetime.utcnow().isoformat()
         self.resultado = resultado
         self.error = error
+        self.supabase_url = supabase_url
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -53,6 +73,7 @@ class TareaInfo:
             "updated_at": self.updated_at,
             "resultado": self.resultado,
             "error": self.error,
+            "supabase_url": self.supabase_url,
         }
 
 
@@ -77,7 +98,7 @@ class TaskManager:
             self._worker_task = None
             logger.info("Worker de tareas de IA detenido.")
 
-    def crear_tarea(self, filename: str, image_bytes: bytes) -> TareaInfo:
+    def crear_tarea(self, filename: str, content_type: str, image_bytes: bytes) -> TareaInfo:
         task_id = str(uuid.uuid4())
         tarea = TareaInfo(
             task_id=task_id,
@@ -91,7 +112,7 @@ class TaskManager:
             oldest_key = next(iter(self.tasks))
             self.tasks.pop(oldest_key, None)
 
-        self.queue.put_nowait((task_id, image_bytes))
+        self.queue.put_nowait((task_id, image_bytes, content_type))
         logger.info(f"Tarea encolada: {task_id} ({filename})")
         return tarea
 
@@ -104,12 +125,12 @@ class TaskManager:
     async def _worker_loop(self):
         while True:
             try:
-                task_id, image_bytes = await self.queue.get()
+                task_id, image_bytes, content_type = await self.queue.get()
             except asyncio.CancelledError:
                 break
 
             try:
-                await self._procesar_tarea(task_id, image_bytes)
+                await self._procesar_tarea(task_id, image_bytes, content_type)
             except Exception as exc:
                 logger.error(
                     f"Error crítico en worker al procesar tarea {task_id}: {exc}",
@@ -118,7 +139,7 @@ class TaskManager:
             finally:
                 self.queue.task_done()
 
-    async def _procesar_tarea(self, task_id: str, image_bytes: bytes):
+    async def _procesar_tarea(self, task_id: str, image_bytes: bytes, content_type: str):
         tarea = self.tasks.get(task_id)
         if not tarea:
             return
@@ -153,8 +174,14 @@ class TaskManager:
                     f"No se pudo extraer la información del plano: {ultimo_error}"
                 )
 
+            # 3. Subida a Supabase Storage + insert en MongoDB, en thread separado
+            supabase_url = await asyncio.to_thread(
+                _guardar_extraccion, tarea.filename, content_type, image_bytes, resultado
+            )
+
             tarea.status = TaskStatus.COMPLETED
             tarea.resultado = resultado.model_dump()
+            tarea.supabase_url = supabase_url
             tarea.updated_at = datetime.utcnow().isoformat()
             logger.info(f"Tarea {task_id} finalizada exitosamente.")
 
@@ -170,13 +197,19 @@ class TaskManager:
 task_manager = TaskManager()
 
 
-async def procesar_directo(image_bytes: bytes) -> PlanoHistorico:
+async def procesar_directo(
+    image_bytes: bytes, filename: str, content_type: str
+) -> PlanoHistorico:
     """Procesamiento directo síncrono para llamadas con ?sync=true sin bloquear el event loop."""
     imagen_procesada = await asyncio.to_thread(preprocess_image, image_bytes)
     ultimo_error = None
     for intento in range(2):
         try:
-            return await asyncio.to_thread(extraer_datos_plano, imagen_procesada)
+            resultado = await asyncio.to_thread(extraer_datos_plano, imagen_procesada)
+            await asyncio.to_thread(
+                _guardar_extraccion, filename, content_type, image_bytes, resultado
+            )
+            return resultado
         except ExtraccionError as exc:
             ultimo_error = exc
             if intento == 0:
