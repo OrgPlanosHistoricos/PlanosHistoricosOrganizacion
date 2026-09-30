@@ -56,7 +56,7 @@ def extraer_datos_plano(image_bytes: bytes) -> PlanoHistorico:
 
     try:
         response = requests.post(
-            f"{OLLAMA_HOST}/api/chat", json=payload, timeout=120
+            f"{OLLAMA_HOST}/api/chat", json=payload, timeout=300
         )
         response.raise_for_status()
     except requests.RequestException as exc:

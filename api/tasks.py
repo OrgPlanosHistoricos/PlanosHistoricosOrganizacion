@@ -175,9 +175,15 @@ class TaskManager:
                 )
 
             # 3. Subida a Supabase Storage + insert en MongoDB, en thread separado
-            supabase_url = await asyncio.to_thread(
-                _guardar_extraccion, tarea.filename, content_type, image_bytes, resultado
-            )
+            supabase_url = None
+            try:
+                supabase_url = await asyncio.to_thread(
+                    _guardar_extraccion, tarea.filename, content_type, image_bytes, resultado
+                )
+            except Exception as storage_exc:
+                logger.error(
+                    f"Fallo al persistir en Supabase/MongoDB para tarea {task_id}: {storage_exc}"
+                )
 
             tarea.status = TaskStatus.COMPLETED
             tarea.resultado = resultado.model_dump()
@@ -206,9 +212,12 @@ async def procesar_directo(
     for intento in range(2):
         try:
             resultado = await asyncio.to_thread(extraer_datos_plano, imagen_procesada)
-            await asyncio.to_thread(
-                _guardar_extraccion, filename, content_type, image_bytes, resultado
-            )
+            try:
+                await asyncio.to_thread(
+                    _guardar_extraccion, filename, content_type, image_bytes, resultado
+                )
+            except Exception as storage_exc:
+                logger.error(f"Fallo al persistir en Supabase/MongoDB: {storage_exc}")
             return resultado
         except ExtraccionError as exc:
             ultimo_error = exc
