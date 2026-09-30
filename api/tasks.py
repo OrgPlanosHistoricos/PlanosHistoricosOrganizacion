@@ -32,7 +32,8 @@ def _guardar_extraccion(
         archivo=ArchivoInfo(nombre_original=filename, supabase_url=supabase_url),
         extraccion_qwen=resultado,
     )
-    coleccion_extracciones.insert_one(documento.model_dump())
+    if coleccion_extracciones is not None:
+        coleccion_extracciones.insert_one(documento.model_dump())
     return supabase_url
 
 
