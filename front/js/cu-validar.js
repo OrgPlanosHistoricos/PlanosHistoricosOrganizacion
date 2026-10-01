@@ -85,10 +85,12 @@
         return;
       }
 
-      var aviso = '<div class="confirm">Datos leídos automáticamente. Revíselos y corríjalos si hace falta.</div>';
+      var aviso = d.ia_estado === 'error'
+        ? '<div class="hint" style="background:#fff3cd;border:1px solid #ffeeba;padding:8px 12px;border-radius:4px;margin-bottom:12px;">⚠️ La lectura automática tuvo una advertencia. Podés completar los datos a mano mirando el documento.</div>'
+        : '<div class="confirm" style="margin-bottom:12px;">Datos leídos automáticamente. Revíselos y corríjalos si hace falta.</div>';
 
       cont.innerHTML = ''
-        + '<img class="thumb" src="' + API.getArchivoUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
+        + API.renderPreviewHTML(d)
         + aviso
         + CAMPOS.map(function(c) {
             var val = d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : '';
@@ -103,10 +105,13 @@
           'No se encuentra la parcela o dirección exacta</label>'
         + '</div>'
         + '<div id="v-msg"></div>'
-        + '<div class="actions">' +
-          '<button class="ghost" onclick="PH.CUValidar.cancelar()">Cancelar</button>' +
-          '<button class="primary" onclick="PH.CUValidar.confirmar()">Confirmar e indexar</button>' +
-          '</div>';
+        + '<div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">'
+        +   '<button class="danger" style="background:#dc3545;color:#fff;border:none;padding:8px 14px;border-radius:3px;cursor:pointer;" onclick="PH.CUValidar.eliminarActual()">Eliminar plano</button>'
+        +   '<div style="display:flex;gap:8px;">'
+        +     '<button class="ghost" onclick="PH.CUValidar.cancelar()">Cancelar</button>'
+        +     '<button class="primary" onclick="PH.CUValidar.confirmar()">Confirmar e indexar</button>'
+        +   '</div>'
+        + '</div>';
 
     } catch (e) {
       cont.innerHTML = '<div class="error">Error: ' + e.message + '</div>';
@@ -143,6 +148,20 @@
     }
   }
 
+  async function eliminarActual() {
+    if (!seleccionadoId) return;
+    if (!confirm('¿Seguro que querés eliminar este plano y sus archivos?')) return;
+    try {
+      await API.eliminar(seleccionadoId);
+      seleccionadoId = null;
+      renderLista();
+      renderDetalle();
+      if (window.PH.actualizarListas) window.PH.actualizarListas();
+    } catch (e) {
+      alert('Error al eliminar: ' + e.message);
+    }
+  }
+
   window.PH = window.PH || {};
   window.PH.CUValidar = {
     renderLista: renderLista,
@@ -151,8 +170,10 @@
     getSeleccionadoId: getSeleccionadoId,
     toggleSinUbicacion: toggleSinUbicacion,
     cancelar: cancelar,
-    confirmar: confirmar
+    confirmar: confirmar,
+    eliminarActual: eliminarActual
   };
 
 })(window);
+
 

@@ -86,7 +86,7 @@
         : '';
 
       cont.innerHTML = ''
-        + '<img class="thumb" src="' + API.getArchivoUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
+        + API.renderPreviewHTML(d)
         + CAMPOS.map(function(c) {
             var val = d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : '';
             var type = c.type === 'number' ? 'number' : 'text';
@@ -98,10 +98,13 @@
           '<textarea id="m-motivo" rows="3" placeholder="Cuente brevemente por qué se corrige este dato"></textarea></div>'
         + '<div id="m-msg"></div>'
         + historialHTML
-        + '<div class="det-actions">' +
-          '<button class="ghost" onclick="PH.CUModificar.cancelar()">Cancelar</button>' +
-          '<button class="primary" onclick="PH.CUModificar.guardar()">Guardar cambios</button>' +
-          '</div>';
+        + '<div class="det-actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">'
+        +   '<button class="danger" style="background:#dc3545;color:#fff;border:none;padding:8px 14px;border-radius:3px;cursor:pointer;" onclick="PH.CUModificar.eliminarActual()">Eliminar plano</button>'
+        +   '<div style="display:flex;gap:8px;">'
+        +     '<button class="ghost" onclick="PH.CUModificar.cancelar()">Cancelar</button>'
+        +     '<button class="primary" onclick="PH.CUModificar.guardar()">Guardar cambios</button>'
+        +   '</div>'
+        + '</div>';
 
     } catch (e) {
       cont.innerHTML = '<div class="error">Error: ' + e.message + '</div>';
@@ -136,14 +139,30 @@
     }
   }
 
+  async function eliminarActual() {
+    if (!seleccionadoId) return;
+    if (!confirm('¿Seguro que querés eliminar este plano catalogado? Esta acción no se puede deshacer.')) return;
+    try {
+      await API.eliminar(seleccionadoId);
+      seleccionadoId = null;
+      renderLista();
+      renderDetalle();
+      if (window.PH.actualizarListas) window.PH.actualizarListas();
+    } catch (e) {
+      alert('Error al eliminar: ' + e.message);
+    }
+  }
+
   window.PH = window.PH || {};
   window.PH.CUModificar = {
     renderLista: renderLista,
     renderDetalle: renderDetalle,
     seleccionar: seleccionar,
     cancelar: cancelar,
-    guardar: guardar
+    guardar: guardar,
+    eliminarActual: eliminarActual
   };
 
 })(window);
+
 

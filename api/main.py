@@ -45,8 +45,22 @@ FORMATOS_VALIDOS = {"image/jpeg", "image/png", "image/webp", "image/tiff"}
 
 @app.get("/health")
 def health():
+    db_ok = True
+    try:
+        from sqlalchemy import text
+        from .database import engine
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception:
+        db_ok = False
+
+    from .minio_client import check_minio_health
+    minio_ok = check_minio_health()
+
     return {
-        "status": "ok",
+        "status": "ok" if (db_ok and minio_ok) else "degraded",
+        "database": "ok" if db_ok else "error",
+        "minio": "ok" if minio_ok else "error",
         "tareas_en_cola": task_manager.queue.qsize(),
     }
 

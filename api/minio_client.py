@@ -44,3 +44,22 @@ def obtener_archivo(key: str) -> bytes:
     finally:
         respuesta.close()
         respuesta.release_conn()
+
+
+def borrar_archivo(key: str) -> bool:
+    """Elimina el archivo del bucket si existe."""
+    try:
+        _client.remove_object(BUCKET, key)
+        return True
+    except Exception:
+        return False
+
+
+def check_minio_health() -> bool:
+    """Verifica si MinIO responde y el bucket existe."""
+    try:
+        _asegurar_bucket()
+        return _client.bucket_exists(BUCKET)
+    except Exception:
+        return False
+

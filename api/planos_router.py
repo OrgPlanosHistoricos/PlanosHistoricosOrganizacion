@@ -8,7 +8,7 @@ from sqlalchemy import String, cast, or_
 from sqlmodel import Session, select
 
 from .database import engine, get_session
-from .minio_client import obtener_archivo, subir_archivo
+from .minio_client import borrar_archivo, obtener_archivo, subir_archivo
 from .models import (
     DatosPlano,
     EstadoIA,
@@ -160,3 +160,14 @@ def modificar_plano(plano_id: int, datos: PlanoModificar, session: Session = Dep
     session.commit()
     session.refresh(plano)
     return PlanoDetalle.model_validate(plano)
+
+
+@router.delete("/{plano_id}", status_code=204)
+def eliminar_plano(plano_id: int, session: Session = Depends(get_session)):
+    plano = _obtener_plano(session, plano_id)
+    if plano.minio_path:
+        borrar_archivo(plano.minio_path)
+    session.delete(plano)
+    session.commit()
+    return Response(status_code=204)
+

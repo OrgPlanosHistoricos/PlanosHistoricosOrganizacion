@@ -52,7 +52,14 @@ def _guardar_resultado(plano_id: int, datos: Optional[dict], error: Optional[str
 def _planos_sin_terminar() -> list[tuple[int, bytes]]:
     with Session(engine) as session:
         planos = session.exec(select(Plano).where(Plano.ia_estado == EstadoIA.procesando)).all()
-        return [(p.id, obtener_archivo(p.minio_path)) for p in planos]
+        pendientes = []
+        for p in planos:
+            try:
+                archivo_bytes = obtener_archivo(p.minio_path)
+                pendientes.append((p.id, archivo_bytes))
+            except Exception as exc:
+                logger.warning(f"No se pudo recuperar archivo de plano {p.id} ({p.minio_path}): {exc}")
+        return pendientes
 
 
 class PlanosWorker:

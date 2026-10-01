@@ -41,9 +41,15 @@
   }
 
   function actualizarListas() {
-    CUCargar.renderRecientes();
-    CUValidar.renderLista();
-    CUModificar.renderLista();
+    var activeTab = document.querySelector('.tab.active');
+    var tabName = activeTab ? activeTab.dataset.tab : '';
+    if (tabName === 'cargar') {
+      CUCargar.renderRecientes();
+    } else if (tabName === 'validar') {
+      CUValidar.renderLista();
+    } else if (tabName === 'modificar') {
+      CUModificar.renderLista();
+    }
   }
 
   function initApp() {

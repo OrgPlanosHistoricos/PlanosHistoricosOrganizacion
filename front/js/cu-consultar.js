@@ -70,8 +70,7 @@
         : '';
 
       cont.innerHTML = ''
-        + '<img class="thumb" src="' + API.getArchivoUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
-        + '<a class="doclink" href="' + API.getArchivoUrl(d.id) + '" download="' + esc(d.nombre_original) + '" target="_blank" rel="noopener">Ver / descargar archivo original</a>'
+        + API.renderPreviewHTML(d)
         + '<div class="field"><label>Parcela</label><div>' + (d.estado === 'sin_ubicacion' ? 'Sin ubicación asignada' : esc(d.parcela)) + '</div></div>'
         + '<div class="field"><label>Título</label><div>' + esc(d.titulo) + '</div></div>'
         + '<div class="field"><label>Arquitecto</label><div>' + esc(d.arquitecto) + '</div></div>'

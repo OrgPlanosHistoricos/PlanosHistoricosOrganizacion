@@ -66,7 +66,10 @@ class Plano(PlanoBase, table=True):
 
     historial: List["HistorialModificacion"] = Relationship(
         back_populates="plano",
-        sa_relationship_kwargs={"order_by": "HistorialModificacion.fecha"},
+        sa_relationship_kwargs={
+            "order_by": "HistorialModificacion.fecha",
+            "cascade": "all, delete-orphan",
+        },
     )
 
 
@@ -74,7 +77,7 @@ class HistorialModificacion(SQLModel, table=True):
     __tablename__ = "historial_modificaciones"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    plano_id: int = Field(foreign_key="planos.id", index=True)
+    plano_id: int = Field(foreign_key="planos.id", ondelete="CASCADE", index=True)
     fecha: datetime = Field(default_factory=ahora, sa_type=DateTime(timezone=True))
     motivo: str
 
