@@ -20,3 +20,4 @@ if MONGODB_URI:
     except Exception as e:
         logger.error(f"Error al inicializar cliente de MongoDB: {e}")
         coleccion_extracciones = None
+
