@@ -1,3 +1,8 @@
+En esta branch voy a estar probando cambios en el modelo de IA y también 
+experimentando con los prompts. Si los cambios son beneficiosos los voy a 
+subir a main. 
+
+
 # API de Reconocimiento de Planos Históricos
 
 Extrae datos (arquitecto, año, ubicación, etc.) de planos históricos
