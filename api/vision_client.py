@@ -15,13 +15,24 @@ from .schemas import PlanoHistorico
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
 MODEL_NAME = os.environ.get("VISION_MODEL", "qwen2.5vl:3b")
 
-PROMPT = (
-    "Sos un asistente que analiza planos arquitectónicos históricos "
-    "escaneados. Observá la imagen con atención (títulos, cartelas, "
-    "sellos, textos manuscritos o impresos) y completá los datos que "
-    "puedas identificar con certeza. Si un dato no aparece en la "
-    "imagen, dejalo en null - no inventes información."
-)
+PROMPT = """\
+Analizá este plano arquitectónico histórico escaneado y extraé sus metadatos. \
+El papel puede estar envejecido, manchado o con tinta desvaída, y el texto \
+puede ser impreso o manuscrito.
+
+Instrucciones paso a paso:
+1. Empezá por la cartela o rótulo del plano (normalmente en una esquina \
+o borde), los sellos y las firmas: ahí está la mayor parte de los datos. \
+Después revisá el resto de la hoja.
+2. Transcribí lo que efectivamente se lee. No completes ni corrijas \
+nombres o fechas de memoria ni inventes información.
+3. Cada dato va en su campo correspondiente según la descripción de ese campo. \
+Antes de ubicar algo en 'notas', comprobá si encaja en otro campo.
+4. Si un dato no aparece o es ilegible, el valor debe ser explícitamente null. \
+Es preferible null antes que un dato dudoso.
+
+Respondé en español y basate EXCLUSIVAMENTE en lo que ves en la imagen.\
+"""
 
 
 class ExtraccionError(Exception):
