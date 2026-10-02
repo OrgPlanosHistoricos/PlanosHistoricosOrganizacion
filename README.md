@@ -6,7 +6,7 @@ subir a main.
 # API de Reconocimiento de Planos Históricos
 
 Extrae datos (arquitecto, año, ubicación, etc.) de planos históricos
-escaneados usando el modelo de visión Qwen2.5-VL 3B servido por Ollama,
+escaneados usando el modelo de visión Qwen3-VL 4B servido por Ollama,
 y los devuelve en JSON estructurado.
 
 ## Uso
@@ -14,6 +14,10 @@ y los devuelve en JSON estructurado.
 ```bash
 docker compose up -d
 ```
+
+La API espera hasta 300 segundos por la respuesta de Ollama, ya que la
+inferencia puede tardar más cuando se ejecuta con CPU. Este valor se puede
+ajustar mediante la variable `OLLAMA_TIMEOUT`.
 
 La primera vez, el servicio `ollama-pull` descarga el modelo
 (~2-3 GB) automáticamente. Puede tardar varios minutos según tu
@@ -203,7 +207,7 @@ Detalles de comportamiento:
 # planosHistoricos
 
 IMPORTANTE
-Se debe desacargar un modelo en ollama (configurado actualmente qwen2.5vl:3b que pesa aprox 3.2 gb) se peude consultar el estado de la descarga en cualquier momento con:
+Se debe desacargar un modelo en ollama (configurado actualmente qwen3-vl:4b) se peude consultar el estado de la descarga en cualquier momento con:
 
 ```bash
 docker exec -it ollama ollama list

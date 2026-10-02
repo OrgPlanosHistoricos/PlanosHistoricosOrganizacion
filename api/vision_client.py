@@ -13,7 +13,8 @@ import requests
 from .schemas import PlanoHistorico
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
-MODEL_NAME = os.environ.get("VISION_MODEL", "qwen2.5vl:3b")
+MODEL_NAME = os.environ.get("VISION_MODEL", "qwen3-vl:4b")
+OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "300"))
 
 PROMPT = """\
 Analizá este plano arquitectónico histórico escaneado y extraé sus metadatos. \
@@ -58,7 +59,7 @@ def extraer_datos_plano(image_bytes: bytes) -> PlanoHistorico:
 
     try:
         response = requests.post(
-            f"{OLLAMA_HOST}/api/chat", json=payload, timeout=120
+            f"{OLLAMA_HOST}/api/chat", json=payload, timeout=OLLAMA_TIMEOUT
         )
         response.raise_for_status()
     except requests.RequestException as exc:
