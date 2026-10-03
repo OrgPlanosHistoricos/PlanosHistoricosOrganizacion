@@ -8,6 +8,7 @@
   var seleccionadoId = null;
 
   var CAMPOS = [
+    { key: 'texto_extraido', label: 'Texto extraído', type: 'textarea' },
     { key: 'titulo', label: 'Título' },
     { key: 'arquitecto', label: 'Arquitecto' },
     { key: 'ubicacion', label: 'Ubicación' },
@@ -89,6 +90,10 @@
         + '<img class="thumb" src="' + API.getArchivoUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
         + CAMPOS.map(function(c) {
             var val = d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : '';
+            if (c.type === 'textarea') {
+              return '<div class="field"><label>' + c.label + '</label>' +
+                '<textarea id="m-' + c.key + '" rows="4">' + esc(val) + '</textarea></div>';
+            }
             var type = c.type === 'number' ? 'number' : 'text';
             return '<div class="field"><label>' + c.label + '</label>' +
               '<input type="' + type + '" id="m-' + c.key + '" value="' + attr(val) + '"></div>';

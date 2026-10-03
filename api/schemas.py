@@ -5,10 +5,19 @@ va a usar este mismo esquema para saber qué generar.
 """
 from datetime import datetime, timezone
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class PlanoHistorico(BaseModel):
+    texto_extraido: Optional[str] = Field(
+        None,
+        validation_alias=AliasChoices("texto_extraido", "texto extraido"),
+        description=(
+            "Transcripción completa de TODO el texto legible que se encuentre en el plano "
+            "(carátula, recuadros, rótulos, firmas, sellos, notas, cotas, leyendas, etc.). "
+            "Extraé primero aquí absolutamente todo el texto antes de clasificarlo en los demás campos."
+        ),
+    )
     arquitecto: Optional[str] = Field(
         None, description= (
             "Nombre completo de quien proyectó o firmó el plano como autor "
@@ -58,6 +67,7 @@ class PlanoHistorico(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
+                "texto_extraido": "MUNICIPALIDAD DE AZUL\nPALACIO MUNICIPAL\nPROYECTO: ARQ. FRANCISCO SALAMONE\nAÑO: 1936\nESCALA 1:50\nFACHADA PRINCIPAL\nSello del archivo municipal",
                 "arquitecto": "Francisco Salamone",
                 "anio": 1936,
                 "titulo": "Palacio Municipal de Azul",

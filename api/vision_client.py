@@ -22,15 +22,25 @@ El papel puede estar envejecido, manchado o con tinta desvaída, y el texto \
 puede ser impreso o manuscrito.
 
 Instrucciones paso a paso:
-1. Empezá por la cartela o rótulo del plano (normalmente en una esquina \
-o borde), los sellos y las firmas: ahí está la mayor parte de los datos. \
-Después revisá el resto de la hoja.
-2. Transcribí lo que efectivamente se lee. No completes ni corrijas \
-nombres o fechas de memoria ni inventes información.
-3. Cada dato va en su campo correspondiente según la descripción de ese campo. \
-Antes de ubicar algo en 'notas', comprobá si encaja en otro campo.
-4. Si un dato no aparece o es ilegible, el valor debe ser explícitamente null. \
-Es preferible null antes que un dato dudoso.
+1. En primer lugar, transcribí en el campo 'texto_extraido' TODO el texto legible que \
+encuentres en el plano (carátula, recuadros, rótulos, firmas, sellos, \
+aprobaciones, notas, leyendas, cotas, títulos, etc.). Extraé absolutamente todo el texto \
+aquí antes de clasificarlo en los demás campos.
+2. A continuación, leé y analizá detenidamente ese texto que acabás de transcribir \
+en 'texto_extraido' y, a partir de él, andá ubicando cada dato en su campo \
+correspondiente del JSON:
+   - arquitecto: nombre completo del profesional autor o proyectista (sin título profesional ni rótulo).
+   - anio: año del plano o proyecto (número de 4 dígitos, ej. 1936).
+   - titulo: nombre de la obra, edificio, proyecto o descripción de la vista.
+   - ubicacion: ciudad, dirección o ubicación mencionada en el plano.
+   - escala: escala del plano (ej. '1:100', '1:50').
+   - tipo_de_plano: planta, corte, fachada, detalle, etc.
+   - material_soporte: material solo si está expresamente escrito en el plano (papel, tela, etc.).
+   - notas: leyendas, aclaraciones o sellos relevantes que no encajen en otro campo.
+3. Transcribí fielmente lo que se lee en el plano. No completes ni corrijas \
+nombres o fechas de memoria ni inventes información que no esté en el plano.
+4. Si un dato no figura en el texto extraído o es ilegible, su valor debe ser \
+explícitamente null. Es preferible null antes que un dato dudoso.
 
 Respondé en español y basate EXCLUSIVAMENTE en lo que ves en la imagen.\
 """
@@ -70,6 +80,8 @@ def extraer_datos_plano(image_bytes: bytes) -> PlanoHistorico:
 
     try:
         parsed = json.loads(contenido)
+        if isinstance(parsed, dict) and "texto extraido" in parsed and "texto_extraido" not in parsed:
+            parsed["texto_extraido"] = parsed.pop("texto extraido")
         return PlanoHistorico.model_validate(parsed)
     except (json.JSONDecodeError, ValueError) as exc:
         raise ExtraccionError(

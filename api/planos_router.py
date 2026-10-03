@@ -93,7 +93,7 @@ async def crear_plano(
 @router.get("", response_model=List[PlanoRead])
 def listar_planos(
     estado: Optional[List[EstadoPlano]] = Query(None, description="Se puede repetir: ?estado=validado&estado=sin_ubicacion"),
-    q: Optional[str] = Query(None, description="Búsqueda de texto en dirección, parcela, expediente, ubicación, arquitecto, título y año"),
+    q: Optional[str] = Query(None, description="Búsqueda de texto en dirección, parcela, expediente, ubicación, arquitecto, título, año y texto extraído"),
     session: Session = Depends(get_session),
 ):
     consulta = select(Plano).order_by(Plano.creado_en.desc())
@@ -110,6 +110,7 @@ def listar_planos(
                 Plano.arquitecto.ilike(patron),
                 Plano.titulo.ilike(patron),
                 Plano.ubicacion.ilike(patron),
+                Plano.texto_extraido.ilike(patron),
                 cast(Plano.anio, String).ilike(patron),
             )
         )

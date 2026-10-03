@@ -6,6 +6,7 @@
 
   var API = window.PH.API;
   var CAMPOS = [
+    { key: 'texto_extraido', label: 'Texto extraído', type: 'textarea' },
     { key: 'titulo', label: 'Título' },
     { key: 'arquitecto', label: 'Arquitecto' },
     { key: 'ubicacion', label: 'Ubicación' },
@@ -92,6 +93,10 @@
         + aviso
         + CAMPOS.map(function(c) {
             var val = d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : '';
+            if (c.type === 'textarea') {
+              return '<div class="field"><label>' + c.label + '</label>' +
+                '<textarea id="v-' + c.key + '" rows="4">' + esc(val) + '</textarea></div>';
+            }
             var type = c.type === 'number' ? 'number' : 'text';
             return '<div class="field"><label>' + c.label + '</label>' +
               '<input type="' + type + '" id="v-' + c.key + '" value="' + attr(val) + '"></div>';
