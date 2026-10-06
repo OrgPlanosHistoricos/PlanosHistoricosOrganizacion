@@ -86,8 +86,15 @@
           }).join('') + '</ul></div>'
         : '';
 
+      var esPdf = d.content_type === 'application/pdf' || (d.nombre_original && d.nombre_original.toLowerCase().endsWith('.pdf'));
+      var enlaceArchivo = '<div style="margin: 6px 0 12px 0;">'
+        + '<a class="doclink" href="' + API.getArchivoUrl(d.id) + '" target="_blank" rel="noopener">'
+        + (esPdf ? '📄 Abrir / Descargar PDF original (' + esc(d.nombre_original) + ')' : '🖼️ Ver / Descargar imagen original')
+        + '</a></div>';
+
       cont.innerHTML = ''
-        + '<img class="thumb" src="' + API.getArchivoUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
+        + '<img class="thumb" src="' + API.getPreviewUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
+        + enlaceArchivo
         + CAMPOS.map(function(c) {
             var val = d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : '';
             if (c.type === 'textarea') {

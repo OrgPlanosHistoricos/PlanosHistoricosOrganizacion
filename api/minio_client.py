@@ -44,3 +44,27 @@ def obtener_archivo(key: str) -> bytes:
     finally:
         respuesta.close()
         respuesta.release_conn()
+
+
+def subir_archivo_con_key(contenido: bytes, key: str, content_type: str = "image/jpeg") -> str:
+    """Sube un archivo a MinIO con una key fija (ej. previsualizaciones)."""
+    _asegurar_bucket()
+    _client.put_object(
+        BUCKET, key, io.BytesIO(contenido), length=len(contenido), content_type=content_type
+    )
+    return key
+
+
+def existe_archivo(key: str) -> bool:
+    """Verifica si un objeto existe en el bucket."""
+    try:
+        _asegurar_bucket()
+        _client.stat_object(BUCKET, key)
+        return True
+    except Exception:
+        return False
+
+
+def obtener_preview_key(minio_path: str) -> str:
+    """Calcula la key correspondiente a la miniatura/preview de un archivo."""
+    return f"{minio_path}.preview.jpg"

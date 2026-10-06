@@ -40,7 +40,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-FORMATOS_VALIDOS = {"image/jpeg", "image/png", "image/webp", "image/tiff"}
+FORMATOS_VALIDOS = {"image/jpeg", "image/png", "image/webp", "image/tiff", "application/pdf"}
 
 
 @app.get("/health")
