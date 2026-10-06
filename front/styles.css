@@ -341,6 +341,11 @@ button.ghost:hover {
   color: var(--brick);
 }
 
+.badge.ia-error {
+  background: var(--brick-soft);
+  color: var(--brick);
+}
+
 .pulse {
   display: inline-block;
   width: 7px;
