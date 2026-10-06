@@ -150,16 +150,13 @@ class TaskManager:
         logger.info(f"Iniciando procesamiento IA para tarea {task_id}...")
 
         try:
-            # 1. Preprocesamiento de imagen en thread separado
-            imagen_procesada = await asyncio.to_thread(preprocess_image, image_bytes)
-
-            # 2. Inferencia con Ollama (con reintento) en thread separado
+            # 1. Inferencia con Ollama (grounding de cajetín + recorte HD + extracción JSON)
             ultimo_error = None
             resultado: Optional[PlanoHistorico] = None
             for intento in range(2):
                 try:
                     resultado = await asyncio.to_thread(
-                        extraer_datos_plano, imagen_procesada
+                        extraer_datos_plano, image_bytes
                     )
                     break
                 except ExtraccionError as exc:
@@ -202,11 +199,10 @@ async def procesar_directo(
     image_bytes: bytes, filename: str, content_type: str
 ) -> PlanoHistorico:
     """Procesamiento directo síncrono para llamadas con ?sync=true sin bloquear el event loop."""
-    imagen_procesada = await asyncio.to_thread(preprocess_image, image_bytes)
     ultimo_error = None
     for intento in range(2):
         try:
-            resultado = await asyncio.to_thread(extraer_datos_plano, imagen_procesada)
+            resultado = await asyncio.to_thread(extraer_datos_plano, image_bytes)
             await asyncio.to_thread(
                 _guardar_extraccion, filename, content_type, image_bytes, resultado
             )
@@ -218,4 +214,5 @@ async def procesar_directo(
     raise ExtraccionError(
         f"No se pudo extraer la información del plano: {ultimo_error}"
     )
+
 

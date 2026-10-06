@@ -25,7 +25,7 @@ services:
         until ollama list > /dev/null 2>&1; do
           echo 'Esperando a Ollama...'; sleep 2;
         done &&
-        ollama pull qwen3-vl:4b
+        ollama pull qwen2.5vl:3b
       "
     environment:
       - OLLAMA_HOST=ollama:11434
@@ -76,7 +76,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-planos}:${POSTGRES_PASSWORD:-planos}@postgres:5432/${POSTGRES_DB:-planos_db}
       - OLLAMA_HOST=http://ollama:11434
-      - VISION_MODEL=qwen3-vl:4b
+      - VISION_MODEL=qwen2.5vl:3b
       - OLLAMA_TIMEOUT=300
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}

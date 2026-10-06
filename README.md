@@ -6,7 +6,7 @@ subir a main.
 # API de Reconocimiento de Planos Históricos
 
 Extrae datos (arquitecto, año, ubicación, etc.) de planos históricos
-escaneados usando el modelo de visión Qwen3-VL 4B servido por Ollama,
+escaneados usando el modelo de visión Qwen2.5-VL 3B servido por Ollama,
 y los devuelve en JSON estructurado.
 
 ## Uso
@@ -70,11 +70,108 @@ Respuesta cuando finaliza (`status: "completed"`):
 }
 ```
 
-### Modo síncrono (espera la respuesta en la misma petición):
-```bash
-curl -X POST "http://localhost:8000/procesar-plano?sync=true" \
-  -F "archivo=@/ruta/a/tu/plano.jpg"
+## Funcionamiento del Procesamiento con IA (Pipeline en 2 Pasos con Grounding)
+
+El procesamiento de planos combina las normas de dibujo técnico (**IRAM 4504** en Argentina e **ISO 7200** a nivel internacional) con las capacidades de **Grounding y Detección de Objetos** del modelo **Qwen2.5-VL 3B**.
+
+### El desafío en planos de gran formato
+Los planos arquitectónicos digitalizados suelen tener resoluciones gigantescas (ej. 4000×3000 px o más). Si se envía el plano completo comprimido a 1600 px a un modelo de visión, los textos críticos (año, cotas, firmas a mano, escalas y nomenclatura catastral) quedan reducidos a un puñado de píxeles borrosos e ilegibles.
+
+Por norma técnica, la información legal, catastral y de autoría se concentra siempre en el **cajetín, carimbo o rótulo**, ubicado reglamentariamente en la **esquina inferior derecha**. Por eso, el sistema no analiza todo el plano de una sola vez: divide la tarea en **dos pasos estratégicos**.
+
 ```
+[ Plano Original en Alta Resolución ]
+                  │
+                  ▼
+ 1. Preprocesamiento liviano (preview ~1600px)
+                  │
+                  ▼
+ 2. Paso 1: Grounding con Qwen2.5-VL ─────► {"bbox_2d": [ymin, xmin, ymax, xmax]}
+                  │                         (Fallback: Cuadrante inferior derecho IRAM)
+                  ▼
+ 3. Recorte HD sobre imagen ORIGINAL con margen de seguridad (Padding 2%)
+                  │
+                  ▼
+ 4. Mejora de contraste y nitidez (Pillow: autocontrast + sharpness)
+                  │
+                  ▼
+ 5. Paso 2: Inferencia de extracción con Qwen2.5-VL ──► JSON estructurado (PlanoHistorico)
+```
+
+---
+
+### Paso 1: Detección y Grounding del Cajetín
+
+Se genera una vista previa optimizada del plano para no sobrecargar la memoria de la GPU ni dilatar el tiempo de inferencia, y se le pide al modelo que localice la caja delimitadora (**Bounding Box**) del cuadro técnico.
+
+- **Prompt utilizado en el Paso 1:**
+  ```text
+  Detecta el cajetín, carimbo o cuadro de datos técnicos del plano.
+  Devuelve únicamente un JSON con la bounding box en formato [ymin, xmin, ymax, xmax] normalizado de 0 a 1000.
+  Por normas técnicas IRAM e ISO, el cajetín suele encontrarse en la zona inferior derecha del plano.
+  Ejemplo de respuesta: {"bbox_2d": [750, 700, 990, 990]}
+  ```
+
+- **Structured Output:** Se fuerza mediante Ollama (`format: CajetinBBoxSchema.model_json_schema()`) asegurando que la salida sea un JSON estrictamente tipado.
+- **Validación y Fallback IRAM:** El sistema valida que las coordenadas cumplan `0 <= ymin < ymax <= 1000` y `0 <= xmin < xmax <= 1000`. Si la detección falla, el modelo no responde o la caja es anómala, se activa automáticamente el **fallback por norma técnica IRAM 4504** (`[600, 500, 1000, 1000]`), garantizando que la tubería nunca se interrumpa.
+
+---
+
+### Recorte en Alta Resolución (Crop & Preprocesamiento)
+
+Implementado en `api/preprocessing.py` con la función `crop_cajetin_from_bbox`:
+
+1. **Desnormalización:** Las coordenadas `[0..1000]` se convierten a píxeles exactos de la **imagen original sin comprimir**.
+2. **Margen de seguridad (*Padding*):** Se expande la caja un 2% en ancho y alto para evitar cortar palabras o sellos que rocen los márgenes del cajetín.
+3. **Optimización con Pillow (`preprocess_cajetin`):**
+   - **Autocontraste:** Recupera trazos en tinta descolorida o papel amarillento (`ImageOps.autocontrast`).
+   - **Realce de nitidez:** Aplica un filtro de nitidez (`ImageEnhance.Sharpness.enhance(1.5)`) para destacar tipografías pequeñas, números catastrales y firmas caligráficas.
+
+---
+
+### Paso 2: Extracción Estructurada de Datos Técnicos en HD
+
+Se envía **únicamente el recorte del cajetín en máxima resolución** a Qwen2.5-VL con el esquema JSON completo de `PlanoHistorico` (`api/schemas.py`). Al tener solo el rótulo en primer plano, el modelo dispone del 100% de su capacidad atencional y de resolución óptica en el texto que importa.
+
+- **Prompt utilizado en el Paso 2:**
+  ```text
+  Respondé únicamente con el objeto JSON solicitado, sin explicaciones ni razonamiento.
+  Analizá este recorte en alta resolución del cajetín / carimbo / rótulo de datos técnicos del plano histórico y respondé en español basándote solo en lo visible.
+
+  Completá estos campos:
+  - texto_extraido: transcripción fiel y completa de todo el texto legible visible en este cajetín (rótulos, firmas, sellos, datos catastrales, fechas, notas y escalas).
+  - arquitecto: autor o proyectista (arquitecto, ingeniero o profesional firmante), sin el título profesional.
+  - anio: año del plano o proyecto como número de cuatro dígitos (ej. 1936).
+  - titulo: obra, edificio, proyecto o descripción de la vista.
+  - ubicacion: datos de ubicación o catastrales (ciudad, dirección, circunscripción, sección, manzana, parcela).
+  - escala: escala indicada en el rótulo (ej. 1:100, 1:50).
+  - tipo_de_plano: planta, corte, fachada, relevamiento, detalle, etc.
+  - material_soporte: solo si aparece escrito en el plano, no lo deduzcas.
+  - notas: números de expediente, sellos municipales, aprobaciones o datos técnicos que no encajen en otro campo.
+
+  Transcribí fielmente. No inventes ni corrijas datos. Usá null si un dato no aparece o es ilegible. Devolvé JSON válido y ningún texto fuera del JSON.
+  ```
+
+- **Campos del Esquema Resultante (`PlanoHistorico`):**
+  - `texto_extraido`: Transcripción integral de texto (OCR del cajetín).
+  - `arquitecto`: Nombre del proyectista o profesional firmante.
+  - `anio`: Año de confección o visado (4 dígitos).
+  - `titulo`: Nombre de la obra, proyecto o designación de la lámina.
+  - `ubicacion`: Localidad, calle o nomenclatura catastral.
+  - `escala`: Relación de escala métrica (ej. `1:100`).
+  - `tipo_de_plano`: Tipología gráfica (planta, corte, fachada, etc.).
+  - `material_soporte`: Sustrato indicado explícitamente (papel vegetal, tela, etc.).
+  - `notas`: Referencias a expedientes, números de archivo o sellos.
+
+---
+
+### Resiliencia y Manejo de Errores
+
+- **Reintentos automáticos:** Tanto `tasks.py` como `planos_worker.py` ejecutan reintentos automáticos si la llamada al modelo no responde en el primer intento.
+- **Doble Fallback:** Si por algún caso extremo la extracción sobre el recorte del cajetín fallase, el sistema reintenta la extracción sobre el plano completo para no dejar la petición en error.
+- **Concurrencia no bloqueante:** Toda la inferencia pesada corre en hilos separados (`asyncio.to_thread`) para mantener ágil el event loop de FastAPI.
+
+---
 
 ## Almacenamiento: Supabase + MongoDB
 
@@ -82,6 +179,7 @@ _Agregado: 2026-09-29_
 
 Cada plano procesado (tanto en modo asíncrono como con `?sync=true`)
 se persiste en dos lugares:
+
 
 - **Supabase Storage** (bucket `planos_escaneados`): guarda el archivo
   original que subió el usuario y expone su URL pública (`supabase_url`
@@ -207,7 +305,7 @@ Detalles de comportamiento:
 # planosHistoricos
 
 IMPORTANTE
-Se debe desacargar un modelo en ollama (configurado actualmente qwen3-vl:4b) se peude consultar el estado de la descarga en cualquier momento con:
+Se debe desacargar un modelo en ollama (configurado actualmente qwen2.5vl:3b) se peude consultar el estado de la descarga en cualquier momento con:
 
 ```bash
 docker exec -it ollama ollama list

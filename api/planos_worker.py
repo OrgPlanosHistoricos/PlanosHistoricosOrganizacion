@@ -18,15 +18,15 @@ logger = logging.getLogger("planos.worker")
 
 
 def _extraer(image_bytes: bytes) -> dict:
-    imagen = preprocess_image(image_bytes)
     ultimo_error = None
     # Un reintento: los VLM chicos a veces fallan la primera vez
     for _ in range(2):
         try:
-            return extraer_datos_plano(imagen).model_dump()
+            return extraer_datos_plano(image_bytes).model_dump()
         except ExtraccionError as exc:
             ultimo_error = exc
     raise ExtraccionError(f"No se pudo extraer la información del plano: {ultimo_error}")
+
 
 
 def _guardar_resultado(plano_id: int, datos: Optional[dict], error: Optional[str]) -> None:
