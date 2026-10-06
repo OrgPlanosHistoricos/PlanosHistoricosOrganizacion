@@ -7,11 +7,41 @@ import io
 import logging
 from typing import List, Optional, Union
 from PIL import Image, ImageOps, ImageEnhance
+import pypdfium2 as pdfium
 
 logger = logging.getLogger("planos.preprocessing")
 
 MAX_DIMENSION = 1600  # Resolución para análisis preliminar o planos completos
 MAX_CAJETIN_DIMENSION = 1800  # Resolución máxima para el recorte del cajetín
+
+
+def pdf_to_image(pdf_input: Union[bytes, bytearray], page_index: int = 0) -> Image.Image:
+    """Convierte una página de un archivo PDF a PIL.Image en alta resolución."""
+    pdf = pdfium.PdfDocument(pdf_input)
+    if len(pdf) == 0:
+        raise ValueError("El documento PDF no contiene páginas.")
+    if page_index >= len(pdf) or page_index < 0:
+        page_index = 0
+    page = pdf[page_index]
+    width, height = page.get_size()
+    max_side = max(width, height)
+    # Escala dinámica para asegurar legibilidad (~2400-3000px en el lado mayor, min 1.5x, max 4.0x)
+    scale = max(1.5, min(4.0, 2600.0 / max(max_side, 1)))
+    bitmap = page.render(scale=scale)
+    img = bitmap.to_pil()
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    return img
+
+
+def pdf_page_to_jpeg_bytes(
+    pdf_bytes: Union[bytes, bytearray], page_index: int = 0, quality: int = 92
+) -> bytes:
+    """Renderiza una página de un PDF como imagen JPEG en bytes."""
+    img = pdf_to_image(pdf_bytes, page_index=page_index)
+    output = io.BytesIO()
+    img.save(output, format="JPEG", quality=quality)
+    return output.getvalue()
 
 
 def crop_cajetin_from_bbox(
@@ -26,8 +56,14 @@ def crop_cajetin_from_bbox(
     Si se proporciona output_path, guarda el recorte en el archivo especificado.
     Añade un margen de seguridad (padding_pct) para evitar recortar bordes de texto.
     """
-    if isinstance(image_input, str):
-        img = Image.open(image_input)
+    if isinstance(image_input, (bytes, bytearray)) and image_input.startswith(b"%PDF"):
+        img = pdf_to_image(image_input, page_index=0)
+    elif isinstance(image_input, str):
+        if image_input.lower().endswith(".pdf"):
+            with open(image_input, "rb") as f:
+                img = pdf_to_image(f.read(), page_index=0)
+        else:
+            img = Image.open(image_input)
     elif isinstance(image_input, (bytes, bytearray)):
         img = Image.open(io.BytesIO(image_input))
     elif isinstance(image_input, Image.Image):
@@ -103,7 +139,10 @@ def preprocess_cajetin(cajetin_input: Union[Image.Image, bytes]) -> bytes:
 
 def preprocess_image(image_bytes: bytes) -> bytes:
     """Preprocesamiento general para planos completos (análisis o inferencia rápida)."""
-    image = Image.open(io.BytesIO(image_bytes))
+    if image_bytes.startswith(b"%PDF"):
+        image = pdf_to_image(image_bytes, page_index=0)
+    else:
+        image = Image.open(io.BytesIO(image_bytes))
     if image.mode != "RGB":
         image = image.convert("RGB")
 

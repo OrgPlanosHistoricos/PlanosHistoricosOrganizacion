@@ -254,10 +254,11 @@ http://localhost:9001.
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| `POST` | `/planos` | Multipart: `archivo` + `ubicacion_fisica`, `expediente`, `direccion_referencia` (opcionales). Sube a MinIO, crea el plano como `pendiente` y, si es imagen, dispara la IA en segundo plano (`ia_estado=procesando`). Los PDF quedan con `ia_estado=no_aplica`. |
+| `POST` | `/planos` | Multipart: `archivo` + `ubicacion_fisica`, `expediente`, `direccion_referencia` (opcionales). Sube a MinIO, crea el plano como `pendiente` y dispara la IA en segundo plano (`ia_estado=procesando`). Si es PDF, rasteriza la primera página para el análisis y la previsualización. |
 | `GET` | `/planos` | Lista. Filtros: `estado` (repetible: `?estado=validado&estado=sin_ubicacion`) y `q` (busca en dirección, parcela, expediente, ubicación física, arquitecto, título, ubicación y año). |
 | `GET` | `/planos/{id}` | Detalle con historial. Sirve para consultar si la IA terminó (`ia_estado`). |
-| `GET` | `/planos/{id}/archivo` | Devuelve el archivo original. |
+| `GET` | `/planos/{id}/archivo` | Devuelve el archivo original (imagen o PDF original). |
+| `GET` | `/planos/{id}/preview` | Devuelve una imagen JPEG de previsualización (la imagen original o la primera página rasterizada si es PDF). |
 | `PUT` | `/planos/{id}/validar` | JSON con los metadatos revisados + `parcela`. Queda `validado` si hay parcela, si no `sin_ubicacion`. Agrega "Validación inicial" al historial. Devuelve 409 si el plano ya fue validado. |
 | `PUT` | `/planos/{id}/modificar` | JSON con los metadatos + `parcela` + `motivo` (obligatorio, 400 si falta). Actualiza el plano y agrega el motivo al historial. |
 
@@ -307,8 +308,6 @@ docker exec -it ollama ollama list
 ```
 
 el ingreso a la app debe hacerse desde http://localhost:8080 en el navegador. Sino se bloquea el uso de la API de reconocimiento de imagenes.
-Los formatos admitidos actualmente son solamente JPEG, PNG .... NO PDF!!!
+Formatos admitidos: JPEG, PNG, WEBP, TIFF y PDF (se analiza y previsualiza la primera página del plano).
 
 El procesamiento por CPU tarda de 60 a 90 segundos.
-
-.

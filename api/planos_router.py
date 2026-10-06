@@ -8,7 +8,13 @@ from sqlalchemy import String, cast, or_
 from sqlmodel import Session, select
 
 from .database import engine, get_session
-from .minio_client import obtener_archivo, subir_archivo
+from .minio_client import (
+    existe_archivo,
+    obtener_archivo,
+    obtener_preview_key,
+    subir_archivo,
+    subir_archivo_con_key,
+)
 from .models import (
     DatosPlano,
     EstadoIA,
@@ -22,12 +28,13 @@ from .models import (
     ahora,
 )
 from .planos_worker import planos_worker
+from .preprocessing import pdf_page_to_jpeg_bytes
 
 router = APIRouter(prefix="/planos", tags=["planos"])
 
 FORMATOS_IMAGEN = {"image/jpeg", "image/png", "image/webp", "image/tiff"}
-# Los PDF se guardan pero no pasan por la IA: se catalogan a mano
-FORMATOS_ACEPTADOS = FORMATOS_IMAGEN | {"application/pdf"}
+FORMATOS_PDF = {"application/pdf"}
+FORMATOS_ACEPTADOS = FORMATOS_IMAGEN | FORMATOS_PDF
 
 
 def _obtener_plano(session: Session, plano_id: int) -> Plano:
@@ -71,7 +78,19 @@ async def crear_plano(
     nombre = archivo.filename or "plano"
     minio_path = await asyncio.to_thread(subir_archivo, contenido, nombre, archivo.content_type)
 
-    analizable = archivo.content_type in FORMATOS_IMAGEN
+    es_pdf = archivo.content_type in FORMATOS_PDF
+    preview_bytes = None
+    if es_pdf:
+        try:
+            preview_bytes = await asyncio.to_thread(pdf_page_to_jpeg_bytes, contenido, 0)
+            preview_key = obtener_preview_key(minio_path)
+            await asyncio.to_thread(subir_archivo_con_key, preview_bytes, preview_key, "image/jpeg")
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se pudo leer o renderizar el archivo PDF: {exc}",
+            )
+
     plano = await asyncio.to_thread(
         _insertar_plano,
         Plano(
@@ -81,12 +100,14 @@ async def crear_plano(
             ubicacion_fisica=ubicacion_fisica.strip(),
             expediente=expediente.strip(),
             direccion_referencia=direccion_referencia.strip(),
-            ia_estado=EstadoIA.procesando if analizable else EstadoIA.no_aplica,
+            ia_estado=EstadoIA.procesando,
         ),
     )
 
-    if analizable:
-        planos_worker.encolar(plano.id, contenido)
+    # Si es PDF, encolamos los bytes renderizados de la primera página.
+    # Si es imagen, encolamos el contenido original.
+    bytes_para_ia = preview_bytes if es_pdf else contenido
+    planos_worker.encolar(plano.id, bytes_para_ia)
     return plano
 
 
@@ -130,6 +151,33 @@ def descargar_archivo(plano_id: int, session: Session = Depends(get_session)):
         content=contenido,
         media_type=plano.content_type,
         headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(plano.nombre_original)}"},
+    )
+
+
+@router.get("/{plano_id}/preview")
+def obtener_preview(plano_id: int, session: Session = Depends(get_session)):
+    plano = _obtener_plano(session, plano_id)
+    if plano.content_type in FORMATOS_IMAGEN:
+        contenido = obtener_archivo(plano.minio_path)
+        return Response(
+            content=contenido,
+            media_type=plano.content_type,
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    # Si es PDF, buscar o generar la vista previa JPEG en MinIO
+    preview_key = obtener_preview_key(plano.minio_path)
+    if existe_archivo(preview_key):
+        contenido = obtener_archivo(preview_key)
+    else:
+        pdf_bytes = obtener_archivo(plano.minio_path)
+        contenido = pdf_page_to_jpeg_bytes(pdf_bytes, page_index=0)
+        subir_archivo_con_key(contenido, preview_key, "image/jpeg")
+
+    return Response(
+        content=contenido,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400"},
     )
 
 

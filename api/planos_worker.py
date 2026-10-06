@@ -9,9 +9,9 @@ from typing import Optional
 from sqlmodel import Session, select
 
 from .database import engine
-from .minio_client import obtener_archivo
+from .minio_client import existe_archivo, obtener_archivo, obtener_preview_key
 from .models import DatosPlano, EstadoIA, EstadoPlano, Plano, ahora
-from .preprocessing import preprocess_image
+from .preprocessing import pdf_page_to_jpeg_bytes, preprocess_image
 from .vision_client import ExtraccionError, extraer_datos_plano
 
 logger = logging.getLogger("planos.worker")
@@ -52,7 +52,22 @@ def _guardar_resultado(plano_id: int, datos: Optional[dict], error: Optional[str
 def _planos_sin_terminar() -> list[tuple[int, bytes]]:
     with Session(engine) as session:
         planos = session.exec(select(Plano).where(Plano.ia_estado == EstadoIA.procesando)).all()
-        return [(p.id, obtener_archivo(p.minio_path)) for p in planos]
+        resultado = []
+        for p in planos:
+            try:
+                if p.content_type == "application/pdf":
+                    preview_key = obtener_preview_key(p.minio_path)
+                    if existe_archivo(preview_key):
+                        bytes_img = obtener_archivo(preview_key)
+                    else:
+                        pdf_bytes = obtener_archivo(p.minio_path)
+                        bytes_img = pdf_page_to_jpeg_bytes(pdf_bytes, page_index=0)
+                else:
+                    bytes_img = obtener_archivo(p.minio_path)
+                resultado.append((p.id, bytes_img))
+            except Exception as exc:
+                logger.error(f"No se pudo recuperar archivo del plano pendiente {p.id}: {exc}")
+        return resultado
 
 
 class PlanosWorker:

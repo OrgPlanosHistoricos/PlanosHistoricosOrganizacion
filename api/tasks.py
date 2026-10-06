@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 import uuid
 
 from .db_client import coleccion_extracciones
-from .preprocessing import preprocess_image
+from .preprocessing import pdf_page_to_jpeg_bytes, preprocess_image
 from .schemas import ArchivoInfo, DocumentoExtraccion, PlanoHistorico
 from .storage_client import subir_plano
 from .vision_client import ExtraccionError, extraer_datos_plano
@@ -150,13 +150,19 @@ class TaskManager:
         logger.info(f"Iniciando procesamiento IA para tarea {task_id}...")
 
         try:
+            # Si el archivo es un PDF, rasterizamos la primera página para la IA
+            if content_type == "application/pdf" or image_bytes.startswith(b"%PDF"):
+                bytes_para_ia = await asyncio.to_thread(pdf_page_to_jpeg_bytes, image_bytes, 0)
+            else:
+                bytes_para_ia = image_bytes
+
             # 1. Inferencia con Ollama (grounding de cajetín + recorte HD + extracción JSON)
             ultimo_error = None
             resultado: Optional[PlanoHistorico] = None
             for intento in range(2):
                 try:
                     resultado = await asyncio.to_thread(
-                        extraer_datos_plano, image_bytes
+                        extraer_datos_plano, bytes_para_ia
                     )
                     break
                 except ExtraccionError as exc:
@@ -199,10 +205,15 @@ async def procesar_directo(
     image_bytes: bytes, filename: str, content_type: str
 ) -> PlanoHistorico:
     """Procesamiento directo síncrono para llamadas con ?sync=true sin bloquear el event loop."""
+    if content_type == "application/pdf" or image_bytes.startswith(b"%PDF"):
+        bytes_para_ia = await asyncio.to_thread(pdf_page_to_jpeg_bytes, image_bytes, 0)
+    else:
+        bytes_para_ia = image_bytes
+
     ultimo_error = None
     for intento in range(2):
         try:
-            resultado = await asyncio.to_thread(extraer_datos_plano, image_bytes)
+            resultado = await asyncio.to_thread(extraer_datos_plano, bytes_para_ia)
             await asyncio.to_thread(
                 _guardar_extraccion, filename, content_type, image_bytes, resultado
             )

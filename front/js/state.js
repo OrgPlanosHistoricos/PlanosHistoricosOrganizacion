@@ -67,6 +67,10 @@
     return API_BASE + '/planos/' + id + '/archivo';
   }
 
+  function getPreviewUrl(id) {
+    return API_BASE + '/planos/' + id + '/preview';
+  }
+
   window.PH = window.PH || {};
   window.PH.API = {
     getAll: getAll,
@@ -74,7 +78,8 @@
     create: create,
     validar: validar,
     modificar: modificar,
-    getArchivoUrl: getArchivoUrl
+    getArchivoUrl: getArchivoUrl,
+    getPreviewUrl: getPreviewUrl
   };
 
 })(window);
