@@ -8,13 +8,13 @@ services:
       - "11434:11434"
     # Si tenés GPU NVIDIA y el nvidia-container-toolkit instalado,
     # descomentá lo siguiente para acelerar la inferencia:
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
 
   ollama-pull:
     image: ollama/ollama:latest
