@@ -1,6 +1,7 @@
 """Conexión a PostgreSQL con SQLModel."""
 import os
 
+from sqlalchemy import text
 from sqlmodel import Session, SQLModel, create_engine
 
 from . import models  # noqa: F401  (registra las tablas en SQLModel.metadata)
@@ -12,6 +13,9 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 def init_db() -> None:
     SQLModel.metadata.create_all(engine)
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS texto_extraido TEXT;"))
+        conn.commit()
 
 
 def get_session():

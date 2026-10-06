@@ -6,6 +6,7 @@
 
   var API = window.PH.API;
   var CAMPOS = [
+    { key: 'texto_extraido', label: 'Texto extraído', type: 'textarea' },
     { key: 'titulo', label: 'Título' },
     { key: 'arquitecto', label: 'Arquitecto' },
     { key: 'ubicacion', label: 'Ubicación' },
@@ -26,6 +27,9 @@
   function tituloDoc(d) {
     return d.direccion_referencia || d.expediente || d.nombre_original;
   }
+  function respuestaInvalida(d) {
+    return d.ia_error && d.ia_error.indexOf('JSON válido') !== -1;
+  }
 
   async function renderLista() {
     var cont = document.getElementById('validar-lista');
@@ -40,9 +44,14 @@
       }
       cont.innerHTML = pendientes.map(function(d) {
         var sel = d.id === seleccionadoId ? ' sel' : '';
+        var indicador = respuestaInvalida(d)
+          ? '<span class="badge ia-error">IA: respuesta no JSON</span>'
+          : d.ia_estado === 'error'
+            ? '<span class="badge ia-error">Error de IA</span>'
+            : '';
         return '<button class="row' + sel + '" onclick="PH.CUValidar.seleccionar(' + d.id + ')">' +
           '<div class="t">' + esc(tituloDoc(d)) + '</div>' +
-          '<div class="s">' + esc(d.expediente || 'sin expediente') + '</div>' +
+          '<div class="s">' + esc(d.expediente || 'sin expediente') + ' · ' + indicador + '</div>' +
           '</button>';
       }).join('');
     } catch (e) {
@@ -85,13 +94,23 @@
         return;
       }
 
-      var aviso = '<div class="confirm">Datos leídos automáticamente. Revíselos y corríjalos si hace falta.</div>';
+      var aviso = respuestaInvalida(d)
+        ? '<div class="error"><strong>La IA devolvió una respuesta inválida.</strong> No se recibió un JSON válido. Complete o corrija los campos manualmente.' +
+          (d.ia_error ? '<br><small>' + esc(d.ia_error) + '</small>' : '') + '</div>'
+        : d.ia_estado === 'error'
+          ? '<div class="error"><strong>La IA no pudo procesar este plano.</strong> Complete o corrija los campos manualmente.' +
+            (d.ia_error ? '<br><small>' + esc(d.ia_error) + '</small>' : '') + '</div>'
+          : '<div class="confirm">Datos leídos automáticamente. Revíselos y corríjalos si hace falta.</div>';
 
       cont.innerHTML = ''
         + '<img class="thumb" src="' + API.getArchivoUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
         + aviso
         + CAMPOS.map(function(c) {
             var val = d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : '';
+            if (c.type === 'textarea') {
+              return '<div class="field"><label>' + c.label + '</label>' +
+                '<textarea id="v-' + c.key + '" rows="4">' + esc(val) + '</textarea></div>';
+            }
             var type = c.type === 'number' ? 'number' : 'text';
             return '<div class="field"><label>' + c.label + '</label>' +
               '<input type="' + type + '" id="v-' + c.key + '" value="' + attr(val) + '"></div>';
@@ -155,4 +174,3 @@
   };
 
 })(window);
-

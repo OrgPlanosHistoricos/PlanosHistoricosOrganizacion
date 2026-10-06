@@ -28,6 +28,7 @@ class EstadoIA(str, Enum):
 class DatosPlano(SQLModel):
     """Metadatos leídos del plano: mismos campos que PlanoHistorico (api/schemas.py)."""
 
+    texto_extraido: Optional[str] = None
     arquitecto: Optional[str] = None
     anio: Optional[int] = None
     titulo: Optional[str] = None

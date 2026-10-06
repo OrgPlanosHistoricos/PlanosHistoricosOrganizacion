@@ -13,6 +13,9 @@
   function tituloDoc(d) {
     return d.direccion_referencia || d.expediente || d.nombre_original;
   }
+  function respuestaInvalida(d) {
+    return d.ia_error && d.ia_error.indexOf('JSON válido') !== -1;
+  }
 
   function mostrarMensaje(tipo, texto) {
     document.getElementById('cargar-msgs').innerHTML = '<div class="' + tipo + '">' + texto + '</div>';
@@ -80,6 +83,10 @@
       cont.innerHTML = '<div class="list">' + recientes.map(function(d) {
         var estadoHTML = d.ia_estado === 'procesando'
           ? '<span class="pulse"></span><span class="badge pendiente">Analizando…</span>'
+          : respuestaInvalida(d)
+            ? '<span class="badge ia-error">Respuesta IA inválida (no JSON)</span>'
+            : d.ia_estado === 'error'
+              ? '<span class="badge ia-error">Error de IA</span>'
           : '<span class="badge pendiente">Pendiente de revisión</span>';
         return '<div class="row" style="cursor:default">' +
           '<div class="t">' + esc(tituloDoc(d)) + '</div>' +

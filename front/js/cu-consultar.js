@@ -80,6 +80,7 @@
         + '<div class="field"><label>Escala</label><div>' + esc(d.escala) + '</div></div>'
         + '<div class="field"><label>Tipo de plano</label><div>' + esc(d.tipo_de_plano) + '</div></div>'
         + '<div class="field"><label>Material / Soporte</label><div>' + esc(d.material_soporte) + '</div></div>'
+        + '<div class="field"><label>Texto extraído</label><div style="white-space: pre-wrap;">' + esc(d.texto_extraido) + '</div></div>'
         + '<div class="field"><label>Notas</label><div>' + esc(d.notas) + '</div></div>'
         + '<div class="field"><label>Expediente de origen</label><div>' + esc(d.expediente) + '</div></div>'
         + '<div class="field"><label>Ubicación física</label><div>' + esc(d.ubicacion_fisica) + '</div></div>'
