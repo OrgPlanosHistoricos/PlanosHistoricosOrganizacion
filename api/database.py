@@ -15,6 +15,8 @@ def init_db() -> None:
     SQLModel.metadata.create_all(engine)
     with engine.connect() as conn:
         conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS texto_extraido TEXT;"))
+        conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS usado_gpu BOOLEAN DEFAULT FALSE;"))
+        conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS tipo_gpu TEXT DEFAULT 'CPU';"))
         conn.commit()
 
 

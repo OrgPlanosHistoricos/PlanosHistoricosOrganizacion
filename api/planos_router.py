@@ -27,6 +27,7 @@ from .models import (
     PlanoValidar,
     ahora,
 )
+from .gpu_detector import detectar_hardware_gpu
 from .planos_worker import planos_worker
 from .preprocessing import pdf_page_to_jpeg_bytes
 
@@ -60,12 +61,19 @@ def _insertar_plano(plano: Plano) -> PlanoRead:
         return PlanoRead.model_validate(plano)
 
 
+@router.get("/hardware")
+def obtener_hardware():
+    """Detecta el hardware y acelerador disponible (NVIDIA, AMD o CPU)."""
+    return detectar_hardware_gpu()
+
+
 @router.post("", response_model=PlanoRead, status_code=201)
 async def crear_plano(
     archivo: UploadFile = File(...),
     ubicacion_fisica: str = Form(""),
     expediente: str = Form(""),
     direccion_referencia: str = Form(""),
+    usar_gpu: bool = Form(False),
 ):
     if archivo.content_type not in FORMATOS_ACEPTADOS:
         raise HTTPException(
@@ -91,6 +99,8 @@ async def crear_plano(
                 detail=f"No se pudo leer o renderizar el archivo PDF: {exc}",
             )
 
+    tipo_gpu = detectar_hardware_gpu().get("tipo", "CPU") if usar_gpu else "CPU"
+
     plano = await asyncio.to_thread(
         _insertar_plano,
         Plano(
@@ -101,13 +111,15 @@ async def crear_plano(
             expediente=expediente.strip(),
             direccion_referencia=direccion_referencia.strip(),
             ia_estado=EstadoIA.procesando,
+            usado_gpu=usar_gpu,
+            tipo_gpu=tipo_gpu,
         ),
     )
 
     # Si es PDF, encolamos los bytes renderizados de la primera página.
     # Si es imagen, encolamos el contenido original.
     bytes_para_ia = preview_bytes if es_pdf else contenido
-    planos_worker.encolar(plano.id, bytes_para_ia)
+    planos_worker.encolar(plano.id, bytes_para_ia, usar_gpu=usar_gpu, tipo_gpu=tipo_gpu)
     return plano
 
 

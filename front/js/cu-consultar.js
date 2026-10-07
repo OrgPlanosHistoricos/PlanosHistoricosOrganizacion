@@ -44,9 +44,12 @@
         var badge = d.estado === 'sin_ubicacion'
           ? '<span class="badge sin_ubicacion">Sin ubicación</span>'
           : '<span class="badge validado">Validado</span>';
+        var hwClass = (d.tipo_gpu || (d.usado_gpu ? 'gpu' : 'cpu')).toLowerCase();
+        var hwLabel = d.tipo_gpu || (d.usado_gpu ? 'GPU' : 'CPU');
+        var hwBadge = '<span class="badge-hw ' + hwClass + '">' + esc(hwLabel) + '</span>';
         return '<button class="row' + sel + '" onclick="PH.CUConsultar.seleccionar(' + d.id + ')">' +
           '<div class="t">' + esc(tituloDoc(d)) + '</div>' +
-          '<div class="s">' + badge + '</div>' +
+          '<div class="s">' + badge + hwBadge + '</div>' +
           '</button>';
       }).join('');
     } catch (e) {

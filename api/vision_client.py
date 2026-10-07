@@ -111,7 +111,7 @@ def _extraer_bbox_de_texto(contenido: str) -> Optional[List[int]]:
     return None
 
 
-def detectar_cajetin_bbox(image_bytes: bytes) -> List[int]:
+def detectar_cajetin_bbox(image_bytes: bytes, usar_gpu: bool = False) -> List[int]:
     """Paso 1: Detecta las coordenadas del cajetín [ymin, xmin, ymax, xmax] normalizadas de 0 a 1000."""
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
@@ -127,7 +127,12 @@ def detectar_cajetin_bbox(image_bytes: bytes) -> List[int]:
         "format": CajetinBBoxSchema.model_json_schema(),
         "stream": False,
         "think": False,
-        "options": {"temperature": 0.1, "think": False, "num_predict": 512},
+        "options": {
+            "temperature": 0.1,
+            "think": False,
+            "num_predict": 512,
+            "num_gpu": 99 if usar_gpu else 0,
+        },
     }
 
     try:
@@ -139,16 +144,16 @@ def detectar_cajetin_bbox(image_bytes: bytes) -> List[int]:
         contenido = data.get("message", {}).get("content", "")
         bbox = _extraer_bbox_de_texto(contenido)
         if bbox:
-            logger.info(f"Cajetín detectado con éxito: {bbox}")
+            logger.info(f"Cajetín detectado con éxito: {bbox} (GPU={usar_gpu})")
             return bbox
     except Exception as exc:
-        logger.warning(f"Fallo en detección automática de cajetín: {exc}")
+        logger.warning(f"Fallo en detección automática de cajetín (GPU={usar_gpu}): {exc}")
 
     logger.info(f"Usando coordenadas de cajetín por norma técnica IRAM: {FALLBACK_BBOX_IRAM}")
     return FALLBACK_BBOX_IRAM
 
 
-def extraer_datos_cajetin(cajetin_bytes: bytes) -> PlanoHistorico:
+def extraer_datos_cajetin(cajetin_bytes: bytes, usar_gpu: bool = False) -> PlanoHistorico:
     """Paso 2: Extrae los datos técnicos directamente del recorte en alta resolución."""
     image_b64 = base64.b64encode(cajetin_bytes).decode("utf-8")
 
@@ -164,7 +169,12 @@ def extraer_datos_cajetin(cajetin_bytes: bytes) -> PlanoHistorico:
         "format": PlanoHistorico.model_json_schema(),
         "stream": False,
         "think": False,
-        "options": {"temperature": 0.1, "think": False, "num_predict": 8192},
+        "options": {
+            "temperature": 0.1,
+            "think": False,
+            "num_predict": 8192,
+            "num_gpu": 99 if usar_gpu else 0,
+        },
     }
 
     try:
@@ -212,7 +222,7 @@ def extraer_datos_cajetin(cajetin_bytes: bytes) -> PlanoHistorico:
 
 
 def extraer_datos_plano(
-    image_bytes: bytes, output_cajetin_path: Optional[str] = None
+    image_bytes: bytes, output_cajetin_path: Optional[str] = None, usar_gpu: bool = False
 ) -> PlanoHistorico:
     """Pipeline completo en 2 pasos:
     
@@ -220,10 +230,10 @@ def extraer_datos_plano(
     2. Recorta el cajetín de la imagen original en alta resolución.
     3. Extrae la información técnica del recorte con JSON estructurado.
     """
-    logger.info("Iniciando detección del cajetín en el plano...")
+    logger.info(f"Iniciando detección del cajetín en el plano (usar_gpu={usar_gpu})...")
     # Preprocesar versión ligera para no saturar memoria durante la detección geométrica
     imagen_deteccion = preprocess_image(image_bytes)
-    bbox = detectar_cajetin_bbox(imagen_deteccion)
+    bbox = detectar_cajetin_bbox(imagen_deteccion, usar_gpu=usar_gpu)
 
     logger.info(f"Recortando cajetín en alta resolución usando bbox {bbox}...")
     cajetin_img = crop_cajetin_from_bbox(
@@ -231,12 +241,12 @@ def extraer_datos_plano(
     )
     cajetin_hd_bytes = preprocess_cajetin(cajetin_img)
 
-    logger.info("Extrayendo datos estructurados desde el recorte del cajetín...")
+    logger.info(f"Extrayendo datos estructurados desde el recorte del cajetín (usar_gpu={usar_gpu})...")
     try:
-        return extraer_datos_cajetin(cajetin_hd_bytes)
+        return extraer_datos_cajetin(cajetin_hd_bytes, usar_gpu=usar_gpu)
     except ExtraccionError as exc:
         logger.warning(
             f"Extracción sobre el recorte falló ({exc}), reintentando con plano completo..."
         )
-        return extraer_datos_cajetin(imagen_deteccion)
+        return extraer_datos_cajetin(imagen_deteccion, usar_gpu=usar_gpu)
 

@@ -49,9 +49,12 @@
           : d.ia_estado === 'error'
             ? '<span class="badge ia-error">Error de IA</span>'
             : '';
+        var hwClass = (d.tipo_gpu || (d.usado_gpu ? 'gpu' : 'cpu')).toLowerCase();
+        var hwLabel = d.tipo_gpu || (d.usado_gpu ? 'GPU' : 'CPU');
+        var hwHTML = '<span class="badge-hw ' + hwClass + '">' + esc(hwLabel) + '</span>';
         return '<button class="row' + sel + '" onclick="PH.CUValidar.seleccionar(' + d.id + ')">' +
           '<div class="t">' + esc(tituloDoc(d)) + '</div>' +
-          '<div class="s">' + esc(d.expediente || 'sin expediente') + ' · ' + indicador + '</div>' +
+          '<div class="s">' + esc(d.expediente || 'sin expediente') + (indicador ? ' · ' + indicador : '') + hwHTML + '</div>' +
           '</button>';
       }).join('');
     } catch (e) {

@@ -18,6 +18,18 @@
       <button class="tab" data-tab="modificar">Modificar catalogación</button>
       <button class="tab" data-tab="consultar">Consultar</button>
     </nav>
+    <div class="nav-settings">
+      <div class="nav-settings-header">
+        <span class="nav-settings-title">Motor IA</span>
+        <span id="gpu-status-badge" class="badge-engine cpu">CPU</span>
+      </div>
+      <label class="switch-container" title="Alternar entre procesamiento por CPU o GPU NVIDIA">
+        <input type="checkbox" id="toggle-gpu">
+        <span class="switch-slider"></span>
+        <span class="switch-label">Aceleración GPU</span>
+      </label>
+      <div class="nav-settings-desc" id="gpu-desc-text">Inferencia en CPU (predeterminado)</div>
+    </div>
   </aside>
   <main>
 
@@ -36,7 +48,10 @@
             <div class="field"><label>Expediente de origen <span class="optional">(opcional)</span></label><input type="text" id="f-exp" placeholder="Expte. 4521-1968"></div>
           </div>
           <div class="field"><label>Dirección o ubicación de referencia <span class="optional">(opcional)</span></label><input type="text" id="f-dir" placeholder="Calle 47 N.º 620"></div>
-          <button class="primary" type="submit">Guardar y analizar</button>
+          <div class="form-actions-row">
+            <button class="primary" type="submit">Guardar y analizar</button>
+            <span class="processing-hint" id="cargar-modo-hint">⚙️ Procesamiento actual: <strong>CPU</strong></span>
+          </div>
         </form>
       </div>
       <div id="cargar-recientes" style="margin-top:22px"></div>

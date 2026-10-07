@@ -6,15 +6,15 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
-    # Si tenés GPU NVIDIA y el nvidia-container-toolkit instalado,
-    # descomentá lo siguiente para acelerar la inferencia:
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
+    # Aceleración GPU disponible para el contenedor.
+    # El procesamiento efectivo (CPU vs GPU) se controla dinámicamente desde la app/API.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   ollama-pull:
     image: ollama/ollama:latest
@@ -88,6 +88,7 @@ services:
       - MONGODB_URI=${MONGODB_URI}
     volumes:
       - ./api:/app/api
+      - /usr/lib/wsl:/usr/lib/wsl:ro
     ports:
       - "8000:8000"
 

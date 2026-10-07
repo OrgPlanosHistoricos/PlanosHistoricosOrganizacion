@@ -55,6 +55,8 @@ class PlanoBase(DatosPlano):
     estado: EstadoPlano = EstadoPlano.pendiente
     ia_estado: EstadoIA = EstadoIA.procesando
     ia_error: Optional[str] = None
+    usado_gpu: bool = False
+    tipo_gpu: str = "CPU"
 
 
 class Plano(PlanoBase, table=True):

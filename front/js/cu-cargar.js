@@ -88,9 +88,12 @@
             : d.ia_estado === 'error'
               ? '<span class="badge ia-error">Error de IA</span>'
           : '<span class="badge pendiente">Pendiente de revisión</span>';
+        var hwClass = (d.tipo_gpu || (d.usado_gpu ? 'gpu' : 'cpu')).toLowerCase();
+        var hwLabel = d.tipo_gpu || (d.usado_gpu ? 'GPU' : 'CPU');
+        var hwHTML = '<span class="badge-hw ' + hwClass + '">' + esc(hwLabel) + '</span>';
         return '<div class="row" style="cursor:default">' +
           '<div class="t">' + esc(tituloDoc(d)) + '</div>' +
-          '<div class="s">' + esc(d.nombre_original) + ' · ' + estadoHTML + '</div>' +
+          '<div class="s">' + esc(d.nombre_original) + ' · ' + estadoHTML + hwHTML + '</div>' +
           '</div>';
       }).join('') + '</div>';
     } catch (e) {

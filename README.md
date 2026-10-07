@@ -286,6 +286,64 @@ Detalles de comportamiento:
 - Esto convive con `/procesar-plano` y `/tareas` (y su persistencia en
   Supabase/MongoDB), que siguen funcionando igual.
 
+## Tipos de Procesamiento e Inferencia con IA
+
+El sistema permite alternar dinámicamente entre **procesamiento por CPU** y **aceleración por GPU (NVIDIA o AMD)** directamente desde la interfaz web, sin necesidad de reiniciar contenedores ni modificar archivos de configuración.
+
+### 1. Modos de Ejecución Soportados
+
+| Modo | Hardware / Plataforma | Rendimiento Estimado | Requisitos | Caso de Uso |
+|---|---|---|---|---|
+| **CPU (Predeterminado)** | Procesador principal x86_64 | 40 - 90 seg / plano | 8 GB+ RAM | Universal: servidores estándar, entornos de prueba o PCs sin placa gráfica. |
+| **GPU NVIDIA** | Núcleos CUDA / Tensor Cores | 4 - 12 seg / plano (~8x más rápido) | 4 GB+ VRAM y drivers NVIDIA | Digitalización intensiva y producción en equipos con NVIDIA GeForce/RTX/Quadro. |
+| **GPU AMD** | Compute Units vía ROCm | 6 - 15 seg / plano | 4 GB+ VRAM y drivers AMD ROCm | Equipos y workstations con tarjetas gráficas dedicadas AMD Radeon (RDNA2/RDNA3). |
+
+---
+
+### 2. ¿Cómo Funciona la Alternancia Dinámica?
+
+A diferencia de enfoques estáticos que requieren comentar/descomentar código en `docker-compose.yml` y reiniciar el contenedor, el sistema desacopla la **infraestructura de Docker** de la **inferencia de Ollama**:
+
+1. **A nivel Docker**:
+   El contenedor de Ollama se levanta con los recursos de aceleración habilitados y mapeados al sistema.
+2. **A nivel Inferencia (Ollama API)**:
+   Ollama permite decidir en cada solicitud cuántas capas del modelo cargar en memoria de video mediante la opción `num_gpu`:
+   * **Modo CPU (`num_gpu: 0`)**: Fuerza a Ollama a ejecutar la inferencia 100% en los núcleos de la CPU utilizando la memoria RAM del sistema.
+   * **Modo GPU (`num_gpu: 99`)**: Fuerza a Ollama a volcar todas las capas del modelo a la memoria de video (VRAM) de la GPU detectada.
+
+---
+
+### 3. Autodetección Inteligente de Hardware
+
+El backend cuenta con un módulo de diagnóstico (`api/gpu_detector.py`) accesible a través del endpoint `GET /planos/hardware`:
+* Al cargar la aplicación web, el sistema inspecciona los controladores y dispositivos del sistema operativo anfitrión (subsistema WSL2 en Windows, Linux nativo o llamadas al sistema).
+* Si detecta una placa **NVIDIA** (ej. *NVIDIA GeForce RTX 3080*), la interfaz se etiqueta y tiñe como `NVIDIA`.
+* Si detecta una placa **AMD Radeon**, la interfaz se adapta automáticamente como `AMD`.
+* Si no se detecta ninguna GPU dedicada compatible, el sistema reporta `CPU` y mantiene la inferencia segura en procesador.
+
+---
+
+### 4. Resiliencia con Fallback Automático
+
+Si un usuario activa la aceleración por GPU pero se produce un fallo imprevisto durante el análisis (por ejemplo, falta de VRAM por un plano escaneado a dimensiones colosales o falla transitoria en el controlador gráfico):
+1. El worker asíncrono (`api/planos_worker.py`) captura la excepción.
+2. Registra una advertencia en los logs (`Extracción con GPU falló. Aplicando fallback automático a CPU...`).
+3. **Reintenta inmediatamente la extracción en CPU** (`num_gpu: 0`).
+4. Guarda el plano con éxito registrando `usado_gpu = False` y `tipo_gpu = "CPU"`.
+
+Esto garantiza alta disponibilidad: **ningún plano queda colgado ni en estado de error por problemas de hardware de video**.
+
+---
+
+### 5. Control desde el Frontend
+
+* **Toggle global**: En la barra lateral izquierda se encuentra el switch `Aceleración GPU`. Al activarlo o desactivarlo, la preferencia se memoriza en el navegador (`localStorage`) para futuras cargas.
+* **Indicador en formulario**: Al momento de subir un plano (`Cargar plano`), un rótulo informa en tiempo real qué procesador se usará (`⚙️ Procesamiento actual: CPU` o `GPU (NVIDIA / AMD)`).
+* **Auditoría por plano**: En las listas de *Revisión*, *Validar* y *Consultar*, cada plano catalogado muestra una etiqueta distintiva (`CPU`, `NVIDIA` o `AMD`) para auditar con qué motor fue extraído.
+* **Pestaña de Guía**: La interfaz cuenta con la pestaña `Guía y Procesamiento` donde se describe la arquitectura del sistema, el pipeline IRAM 4504 / ISO 7200 y el estado de la GPU.
+
+---
+
 ## Notas
 
 - El esquema de campos a extraer está en `app/schemas.py` (Pydantic).

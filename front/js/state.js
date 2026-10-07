@@ -28,12 +28,23 @@
     return await fetchJSON('/planos/' + id);
   }
 
-  async function create(file, ubicacion_fisica, expediente, direccion_referencia) {
+  function getGpuPreference() {
+    return localStorage.getItem('ph_usar_gpu') === 'true'; // false por defecto (procesamiento por CPU)
+  }
+
+  function setGpuPreference(enabled) {
+    localStorage.setItem('ph_usar_gpu', enabled ? 'true' : 'false');
+  }
+
+  async function create(file, ubicacion_fisica, expediente, direccion_referencia, usar_gpu) {
     var formData = new FormData();
     formData.append('archivo', file);
     formData.append('ubicacion_fisica', ubicacion_fisica || '');
     formData.append('expediente', expediente || '');
     formData.append('direccion_referencia', direccion_referencia || '');
+    
+    var gpuActivada = (usar_gpu !== undefined && usar_gpu !== null) ? Boolean(usar_gpu) : getGpuPreference();
+    formData.append('usar_gpu', gpuActivada ? 'true' : 'false');
     
     var res = await fetch(API_BASE + '/planos', {
       method: 'POST',
@@ -71,6 +82,14 @@
     return API_BASE + '/planos/' + id + '/preview';
   }
 
+  async function getHardwareInfo() {
+    try {
+      return await fetchJSON('/planos/hardware');
+    } catch (e) {
+      return { gpu_disponible: false, tipo: 'CPU', nombre: 'CPU' };
+    }
+  }
+
   window.PH = window.PH || {};
   window.PH.API = {
     getAll: getAll,
@@ -79,7 +98,10 @@
     validar: validar,
     modificar: modificar,
     getArchivoUrl: getArchivoUrl,
-    getPreviewUrl: getPreviewUrl
+    getPreviewUrl: getPreviewUrl,
+    getGpuPreference: getGpuPreference,
+    setGpuPreference: setGpuPreference,
+    getHardwareInfo: getHardwareInfo
   };
 
 })(window);
