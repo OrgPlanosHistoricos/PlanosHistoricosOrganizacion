@@ -30,13 +30,25 @@ def _extraer(image_bytes: bytes) -> dict:
 
 
 def _guardar_resultado(plano_id: int, datos: Optional[dict], error: Optional[str]) -> None:
+    from .models import ProcesamientoIA
     with Session(engine) as session:
         plano = session.get(Plano, plano_id)
         if plano is None:
             return
+            
+        ultimo_procesamiento = session.exec(
+            select(ProcesamientoIA)
+            .where(ProcesamientoIA.plano_id == plano_id)
+            .order_by(ProcesamientoIA.intento.desc())
+        ).first()
+        
         if datos is None:
             plano.ia_estado = EstadoIA.error
             plano.ia_error = error
+            if ultimo_procesamiento:
+                ultimo_procesamiento.estado = EstadoIA.error
+                ultimo_procesamiento.error = error
+                session.add(ultimo_procesamiento)
         else:
             # Si una persona ya validó el plano mientras la IA corría, sus datos mandan
             if plano.estado == EstadoPlano.pendiente:
@@ -44,6 +56,11 @@ def _guardar_resultado(plano_id: int, datos: Optional[dict], error: Optional[str
                     setattr(plano, campo, datos.get(campo))
             plano.ia_estado = EstadoIA.completado
             plano.ia_error = None
+            if ultimo_procesamiento:
+                ultimo_procesamiento.estado = EstadoIA.completado
+                ultimo_procesamiento.error = None
+                session.add(ultimo_procesamiento)
+                
         plano.actualizado_en = ahora()
         session.add(plano)
         session.commit()

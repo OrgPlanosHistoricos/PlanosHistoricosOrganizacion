@@ -61,11 +61,12 @@
     try {
       var d = await API.getById(id);
 
-      var historialHTML = d.historial && d.historial.length
+      var historialHTML = d.eventos && d.eventos.length
         ? '<div class="hist"><h3>Historial</h3><ul>' +
-          d.historial.slice().reverse().map(function(h) {
+          d.eventos.slice().reverse().map(function(h) {
             var date = new Date(h.fecha).toLocaleString('es-AR');
-            return '<li><strong>' + esc(date) + '</strong> — ' + esc(h.motivo) + '</li>';
+            var usr = h.usuario_id || 'anonimo';
+            return '<li><strong>' + esc(date) + ' (' + esc(usr) + ')</strong> — ' + esc(h.motivo) + '</li>';
           }).join('') + '</ul></div>'
         : '';
 

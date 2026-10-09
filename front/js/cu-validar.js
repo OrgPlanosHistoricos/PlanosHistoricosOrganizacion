@@ -94,12 +94,22 @@
         return;
       }
 
+      var errorMsg = (d.ia_error ? '<br><small>' + esc(d.ia_error) + '</small>' : '');
+      var maxIntentos = 3;
+      var intentos = d.procesamientos ? d.procesamientos.length : 0;
+      var btnReintentar = '';
+      if (intentos < maxIntentos) {
+          btnReintentar = '<br><button class="ghost" style="margin-top:8px" onclick="PH.CUValidar.reintentar(' + d.id + ')">Reintentar análisis IA (' + intentos + '/' + maxIntentos + ')</button>';
+      } else {
+          btnReintentar = '<br><span style="color:red; font-size: 0.9em; margin-top:8px; display:inline-block;">Se alcanzó el límite de reintentos (' + maxIntentos + '). Cargue a mano.</span>';
+      }
+
       var aviso = respuestaInvalida(d)
-        ? '<div class="error"><strong>La IA devolvió una respuesta inválida.</strong> No se recibió un JSON válido. Complete o corrija los campos manualmente.' +
-          (d.ia_error ? '<br><small>' + esc(d.ia_error) + '</small>' : '') + '</div>'
+        ? '<div class="error"><strong>La IA devolvió una respuesta inválida.</strong> No se recibió un JSON válido. Complete o corríjalos manualmente.' +
+          errorMsg + btnReintentar + '</div>'
         : d.ia_estado === 'error'
-          ? '<div class="error"><strong>La IA no pudo procesar este plano.</strong> Complete o corrija los campos manualmente.' +
-            (d.ia_error ? '<br><small>' + esc(d.ia_error) + '</small>' : '') + '</div>'
+          ? '<div class="error"><strong>La IA no pudo procesar este plano.</strong> Complete o corríjalos manualmente.' +
+            errorMsg + btnReintentar + '</div>'
           : '<div class="confirm">Datos leídos automáticamente. Revíselos y corríjalos si hace falta.</div>';
 
       var esPdf = d.content_type === 'application/pdf' || (d.nombre_original && d.nombre_original.toLowerCase().endsWith('.pdf'));
@@ -157,6 +167,7 @@
     }
 
     nuevosDatos.parcela = sinUbic ? '' : vinculo;
+    nuevosDatos.usuario_id = "Validador"; // Hardcoded for now as there's no login
 
     try {
       await API.validar(seleccionadoId, nuevosDatos);
@@ -169,6 +180,19 @@
     }
   }
 
+  async function reintentar(id) {
+    if (!id) return;
+    try {
+      await API.reintentarIA(id, "Validador");
+      seleccionadoId = null;
+      renderLista();
+      renderDetalle();
+      if (window.PH.actualizarListas) window.PH.actualizarListas();
+    } catch (e) {
+      document.getElementById('v-msg').innerHTML = '<div class="error">Error al reintentar: ' + e.message + '</div>';
+    }
+  }
+
   window.PH = window.PH || {};
   window.PH.CUValidar = {
     renderLista: renderLista,
@@ -177,7 +201,8 @@
     getSeleccionadoId: getSeleccionadoId,
     toggleSinUbicacion: toggleSinUbicacion,
     cancelar: cancelar,
-    confirmar: confirmar
+    confirmar: confirmar,
+    reintentar: reintentar
   };
 
 })(window);

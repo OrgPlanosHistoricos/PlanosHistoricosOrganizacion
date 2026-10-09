@@ -55,6 +55,8 @@ class PlanoBase(DatosPlano):
     estado: EstadoPlano = EstadoPlano.pendiente
     ia_estado: EstadoIA = EstadoIA.procesando
     ia_error: Optional[str] = None
+    creado_por: Optional[str] = None
+    validado_por: Optional[str] = None
 
 
 class Plano(PlanoBase, table=True):
@@ -65,27 +67,54 @@ class Plano(PlanoBase, table=True):
     creado_en: datetime = Field(default_factory=ahora, sa_type=DateTime(timezone=True))
     actualizado_en: datetime = Field(default_factory=ahora, sa_type=DateTime(timezone=True))
 
-    historial: List["HistorialModificacion"] = Relationship(
+    eventos: List["EventoAuditoria"] = Relationship(
         back_populates="plano",
-        sa_relationship_kwargs={"order_by": "HistorialModificacion.fecha"},
+        sa_relationship_kwargs={"order_by": "EventoAuditoria.fecha"},
+    )
+    procesamientos: List["ProcesamientoIA"] = Relationship(
+        back_populates="plano",
+        sa_relationship_kwargs={"order_by": "ProcesamientoIA.fecha"},
     )
 
 
-class HistorialModificacion(SQLModel, table=True):
-    __tablename__ = "historial_modificaciones"
+class EventoAuditoria(SQLModel, table=True):
+    __tablename__ = "eventos_auditoria"
 
     id: Optional[int] = Field(default=None, primary_key=True)
     plano_id: int = Field(foreign_key="planos.id", index=True)
+    usuario_id: str
     fecha: datetime = Field(default_factory=ahora, sa_type=DateTime(timezone=True))
     motivo: str
 
-    plano: Optional[Plano] = Relationship(back_populates="historial")
+    plano: Optional[Plano] = Relationship(back_populates="eventos")
 
 
-class HistorialRead(SQLModel):
+class ProcesamientoIA(SQLModel, table=True):
+    __tablename__ = "procesamientos_ia"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    plano_id: int = Field(foreign_key="planos.id", index=True)
+    intento: int
+    estado: EstadoIA
+    error: Optional[str] = None
+    fecha: datetime = Field(default_factory=ahora, sa_type=DateTime(timezone=True))
+
+    plano: Optional[Plano] = Relationship(back_populates="procesamientos")
+
+
+class EventoRead(SQLModel):
     id: int
     fecha: datetime
     motivo: str
+    usuario_id: str
+
+
+class ProcesamientoRead(SQLModel):
+    id: int
+    intento: int
+    estado: EstadoIA
+    error: Optional[str] = None
+    fecha: datetime
 
 
 class PlanoRead(PlanoBase):
@@ -95,13 +124,16 @@ class PlanoRead(PlanoBase):
 
 
 class PlanoDetalle(PlanoRead):
-    historial: List[HistorialRead] = []
+    eventos: List[EventoRead] = []
+    procesamientos: List[ProcesamientoRead] = []
 
 
 class PlanoValidar(DatosPlano):
     parcela: str = ""
+    usuario_id: str = "anonimo"
 
 
 class PlanoModificar(DatosPlano):
     parcela: str = ""
     motivo: str
+    usuario_id: str = "anonimo"
