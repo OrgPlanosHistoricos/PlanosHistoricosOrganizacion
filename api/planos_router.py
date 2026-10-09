@@ -19,8 +19,7 @@ from .models import (
     DatosPlano,
     EstadoIA,
     EstadoPlano,
-    EventoAuditoria,
-    ProcesamientoIA,
+    HistorialModificacion,
     Plano,
     PlanoDetalle,
     PlanoModificar,
@@ -67,7 +66,6 @@ async def crear_plano(
     ubicacion_fisica: str = Form(""),
     expediente: str = Form(""),
     direccion_referencia: str = Form(""),
-    usuario_id: str = Form("anonimo", description="ID del usuario que sube el plano"),
 ):
     if archivo.content_type not in FORMATOS_ACEPTADOS:
         raise HTTPException(
@@ -93,33 +91,24 @@ async def crear_plano(
                 detail=f"No se pudo leer o renderizar el archivo PDF: {exc}",
             )
 
-    nuevo_plano = Plano(
-        nombre_original=nombre,
-        content_type=archivo.content_type,
-        minio_path=minio_path,
-        ubicacion_fisica=ubicacion_fisica.strip(),
-        expediente=expediente.strip(),
-        direccion_referencia=direccion_referencia.strip(),
-        ia_estado=EstadoIA.procesando,
-        creado_por=usuario_id,
+    plano = await asyncio.to_thread(
+        _insertar_plano,
+        Plano(
+            nombre_original=nombre,
+            content_type=archivo.content_type,
+            minio_path=minio_path,
+            ubicacion_fisica=ubicacion_fisica.strip(),
+            expediente=expediente.strip(),
+            direccion_referencia=direccion_referencia.strip(),
+            ia_estado=EstadoIA.procesando,
+        ),
     )
-    
-    with Session(engine) as session:
-        session.add(nuevo_plano)
-        session.commit()
-        session.refresh(nuevo_plano)
-        session.add(EventoAuditoria(plano_id=nuevo_plano.id, motivo="Creación de plano", usuario_id=usuario_id))
-        
-        # Guardar el primer intento de IA
-        session.add(ProcesamientoIA(plano_id=nuevo_plano.id, intento=1, estado=EstadoIA.procesando))
-        session.commit()
-        session.refresh(nuevo_plano)
 
     # Si es PDF, encolamos los bytes renderizados de la primera página.
     # Si es imagen, encolamos el contenido original.
     bytes_para_ia = preview_bytes if es_pdf else contenido
-    planos_worker.encolar(nuevo_plano.id, bytes_para_ia)
-    return PlanoRead.model_validate(nuevo_plano)
+    planos_worker.encolar(plano.id, bytes_para_ia)
+    return plano
 
 
 @router.get("", response_model=List[PlanoRead])
@@ -201,9 +190,8 @@ def validar_plano(plano_id: int, datos: PlanoValidar, session: Session = Depends
             detail="El plano ya fue validado. Usá PUT /planos/{id}/modificar para cambiarlo.",
         )
     _aplicar_datos(plano, datos)
-    plano.validado_por = datos.usuario_id
     session.add(plano)
-    session.add(EventoAuditoria(plano_id=plano.id, motivo="Validación inicial", usuario_id=datos.usuario_id))
+    session.add(HistorialModificacion(plano_id=plano.id, motivo="Validación inicial"))
     session.commit()
     session.refresh(plano)
     return PlanoDetalle.model_validate(plano)
@@ -217,44 +205,7 @@ def modificar_plano(plano_id: int, datos: PlanoModificar, session: Session = Dep
     plano = _obtener_plano(session, plano_id)
     _aplicar_datos(plano, datos)
     session.add(plano)
-    session.add(EventoAuditoria(plano_id=plano.id, motivo=motivo, usuario_id=datos.usuario_id))
+    session.add(HistorialModificacion(plano_id=plano.id, motivo=motivo))
     session.commit()
     session.refresh(plano)
-    return PlanoDetalle.model_validate(plano)
-
-
-@router.post("/{plano_id}/reintentar_ia", response_model=PlanoDetalle)
-def reintentar_ia(plano_id: int, usuario_id: str = Query(..., description="ID del usuario que solicita el reintento"), session: Session = Depends(get_session)):
-    plano = _obtener_plano(session, plano_id)
-    if plano.ia_estado not in (EstadoIA.error, EstadoIA.no_aplica):
-        raise HTTPException(
-            status_code=400,
-            detail="El plano no tiene un análisis fallido o que no aplique.",
-        )
-    
-    intentos_previos = session.exec(select(ProcesamientoIA).where(ProcesamientoIA.plano_id == plano.id)).all()
-    max_intentos = 3
-    if len(intentos_previos) >= max_intentos:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Se alcanzó el límite máximo de {max_intentos} intentos.",
-        )
-
-    nuevo_intento_num = len(intentos_previos) + 1
-    plano.ia_estado = EstadoIA.procesando
-    session.add(plano)
-    
-    session.add(EventoAuditoria(plano_id=plano.id, motivo="Reintento de análisis IA", usuario_id=usuario_id))
-    session.add(ProcesamientoIA(plano_id=plano.id, intento=nuevo_intento_num, estado=EstadoIA.procesando))
-    session.commit()
-    session.refresh(plano)
-    
-    contenido = obtener_archivo(plano.minio_path)
-    if plano.content_type in FORMATOS_PDF:
-        try:
-            contenido = pdf_page_to_jpeg_bytes(contenido, 0)
-        except Exception:
-            pass
-            
-    planos_worker.encolar(plano.id, contenido)
     return PlanoDetalle.model_validate(plano)

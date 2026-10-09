@@ -34,7 +34,6 @@
     formData.append('ubicacion_fisica', ubicacion_fisica || '');
     formData.append('expediente', expediente || '');
     formData.append('direccion_referencia', direccion_referencia || '');
-    formData.append('usuario_id', 'Operador'); // Hardcoded for now
     
     var res = await fetch(API_BASE + '/planos', {
       method: 'POST',
@@ -64,15 +63,6 @@
     return await res.json();
   }
 
-  async function reintentarIA(id, usuario_id) {
-    var qs = '?usuario_id=' + encodeURIComponent(usuario_id || 'Validador');
-    var res = await fetch(API_BASE + '/planos/' + id + '/reintentar_ia' + qs, {
-      method: 'POST'
-    });
-    if (!res.ok) throw new Error(await res.text());
-    return await res.json();
-  }
-
   function getArchivoUrl(id) {
     return API_BASE + '/planos/' + id + '/archivo';
   }
@@ -88,7 +78,6 @@
     create: create,
     validar: validar,
     modificar: modificar,
-    reintentarIA: reintentarIA,
     getArchivoUrl: getArchivoUrl,
     getPreviewUrl: getPreviewUrl
   };
