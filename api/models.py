@@ -4,7 +4,7 @@ from enum import Enum
 from typing import List, Optional
 
 from pydantic import field_validator
-from sqlalchemy import DateTime
+from sqlalchemy import DateTime, Index
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -52,6 +52,11 @@ class PlanoBase(DatosPlano):
     expediente: str = ""
     direccion_referencia: str = ""
     parcela: str = ""
+    circunscripcion: str = ""
+    seccion: str = ""
+    manzana: str = ""
+    parcela_catastral: str = ""
+    nomenclatura: Optional[str] = None
     estado: EstadoPlano = EstadoPlano.pendiente
     ia_estado: EstadoIA = EstadoIA.procesando
     ia_error: Optional[str] = None
@@ -61,6 +66,7 @@ class PlanoBase(DatosPlano):
 
 class Plano(PlanoBase, table=True):
     __tablename__ = "planos"
+    __table_args__ = (Index("ux_planos_nomenclatura", "nomenclatura", unique=True),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
     minio_path: str
@@ -128,12 +134,19 @@ class PlanoDetalle(PlanoRead):
     procesamientos: List[ProcesamientoRead] = []
 
 
-class PlanoValidar(DatosPlano):
+class NomenclaturaEntrada(SQLModel):
+    circunscripcion: str
+    seccion: str
+    manzana: str
+    parcela_catastral: str
+
+
+class PlanoValidar(DatosPlano, NomenclaturaEntrada):
     parcela: str = ""
     usuario_id: str = "anonimo"
 
 
-class PlanoModificar(DatosPlano):
+class PlanoModificar(DatosPlano, NomenclaturaEntrada):
     parcela: str = ""
     motivo: str
     usuario_id: str = "anonimo"

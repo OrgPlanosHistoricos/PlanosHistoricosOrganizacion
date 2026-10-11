@@ -25,7 +25,7 @@
   }
   function attr(s) { return String(s || '').replace(/"/g, '&quot;'); }
   function tituloDoc(d) {
-    return d.direccion_referencia || d.expediente || d.nombre_original;
+    return window.PH.Nomenclatura.titulo(d);
   }
 
   async function renderLista() {
@@ -51,7 +51,7 @@
           '</button>';
       }).join('');
     } catch (e) {
-      cont.innerHTML = '<div class="error">Error: ' + e.message + '</div>';
+      cont.innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
     }
   }
 
@@ -96,6 +96,7 @@
       cont.innerHTML = ''
         + '<img class="thumb" src="' + API.getPreviewUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
         + enlaceArchivo
+        + window.PH.Nomenclatura.formulario('m-', d)
         + CAMPOS.map(function(c) {
             var val = d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : '';
             if (c.type === 'textarea') {
@@ -106,7 +107,6 @@
             return '<div class="field"><label>' + c.label + '</label>' +
               '<input type="' + type + '" id="m-' + c.key + '" value="' + attr(val) + '"></div>';
           }).join('')
-        + '<div class="field"><label>Parcela</label><input type="text" id="m-parcela" value="' + attr(d.parcela) + '"></div>'
         + '<div class="field"><label>Motivo del cambio</label>' +
           '<textarea id="m-motivo" rows="3" placeholder="Cuente brevemente por qué se corrige este dato"></textarea></div>'
         + '<div id="m-msg"></div>'
@@ -117,7 +117,7 @@
           '</div>';
 
     } catch (e) {
-      cont.innerHTML = '<div class="error">Error: ' + e.message + '</div>';
+      cont.innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
     }
   }
 
@@ -135,18 +135,19 @@
       var v = document.getElementById('m-' + c.key).value.trim();
       datos[c.key] = v || null;
     });
-    datos.parcela = document.getElementById('m-parcela').value.trim();
+    try { Object.assign(datos, window.PH.Nomenclatura.leer('m-')); }
+    catch (e) { document.getElementById('m-msg').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>'; return; }
     datos.motivo = motivo;
     datos.usuario_id = "Operador"; // Hardcoded for now
 
     try {
       await API.modificar(seleccionadoId, datos);
       renderLista();
-      renderDetalle();
+      await renderDetalle();
       document.getElementById('m-msg').innerHTML = '<div class="confirm">Los cambios se guardaron correctamente.</div>';
       if (window.PH.actualizarListas) window.PH.actualizarListas();
     } catch (e) {
-      document.getElementById('m-msg').innerHTML = '<div class="error">Error: ' + e.message + '</div>';
+      document.getElementById('m-msg').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
     }
   }
 

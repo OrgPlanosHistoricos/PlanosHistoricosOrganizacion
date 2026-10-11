@@ -621,3 +621,7 @@ button.ghost:hover {
     grid-template-columns: 1fr;
   }
 }
+
+.nomenclatura { border: 1px solid var(--line, #ddd); border-radius: 8px; padding: 16px; margin: 16px 0; min-width: 0; }
+.nomenclatura legend { font-weight: 600; padding: 0 6px; }
+.nomenclatura p { font-size: 13px; margin: 0 0 12px; }

@@ -12,28 +12,38 @@
       String(s).replace(/[&<>]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
   }
   function tituloDoc(d) {
-    return d.direccion_referencia || d.expediente || d.nombre_original;
+    return window.PH.Nomenclatura.titulo(d);
   }
 
+  var ultimaBusqueda = null;
   function inicializar() {
-    document.getElementById('c-buscar').addEventListener('click', function() {
-      renderLista(document.getElementById('c-query').value.trim());
-    });
-    document.getElementById('c-query').addEventListener('keydown', function(ev) {
-      if (ev.key === 'Enter') renderLista(this.value.trim());
+    document.getElementById('consultar-nomenclatura').innerHTML = window.PH.Nomenclatura.formulario('c-');
+    document.getElementById('form-consultar').addEventListener('submit', function(ev) {
+      ev.preventDefault();
+      buscar();
     });
   }
-
+  function buscar() {
+    try { renderLista(window.PH.Nomenclatura.clave(window.PH.Nomenclatura.leer('c-'))); }
+    catch (e) {
+      document.getElementById('consultar-lista').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
+    }
+  }
   async function renderLista(query) {
     var cont = document.getElementById('consultar-lista');
+    if (!query) {
+      cont.innerHTML = '<div class="empty">Completá los cuatro datos de nomenclatura para buscar un plano.</div>';
+      return;
+    }
+    ultimaBusqueda = query;
     try {
-      // The API supports ?q= search directly
+      // La API busca una coincidencia exacta de los cuatro componentes.
       var resultados = await API.getAll(null, query);
       // We only want to show validados/sin_ubicacion in catalog search
       resultados = resultados.filter(d => d.estado === 'validado' || d.estado === 'sin_ubicacion');
 
       if (resultados.length === 0) {
-        cont.innerHTML = '<div class="empty">No se encontraron planos coincidentes. Redefina los términos de búsqueda.</div>';
+        cont.innerHTML = '<div class="empty">No se encontró un plano catalogado con esa nomenclatura. Revisá los cuatro datos; si recién lo cargaste, todavía puede estar pendiente de revisión.</div>';
         seleccionadoId = null;
         document.getElementById('consultar-detalle').innerHTML = '<div class="empty">Los resultados de su búsqueda aparecerán acá.</div>';
         return;
@@ -50,7 +60,7 @@
           '</button>';
       }).join('');
     } catch (e) {
-      cont.innerHTML = '<div class="error">Error: ' + e.message + '</div>';
+      cont.innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
     }
   }
 
@@ -75,7 +85,7 @@
         + '<img class="thumb" src="' + API.getPreviewUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
         + '<a class="doclink" href="' + API.getArchivoUrl(d.id) + '" download="' + esc(d.nombre_original) + '" target="_blank" rel="noopener">'
         + (esPdf ? '📄 Abrir / Descargar PDF original (' + esc(d.nombre_original) + ')' : '🖼️ Ver / Descargar archivo original') + '</a>'
-        + '<div class="field"><label>Parcela</label><div>' + (d.estado === 'sin_ubicacion' ? 'Sin ubicación asignada' : esc(d.parcela)) + '</div></div>'
+        + '<div class="field"><label>Nomenclatura catastral</label><div>' + esc(window.PH.Nomenclatura.titulo(d)) + '</div></div>'
         + '<div class="field"><label>Título</label><div>' + esc(d.titulo) + '</div></div>'
         + '<div class="field"><label>Arquitecto</label><div>' + esc(d.arquitecto) + '</div></div>'
         + '<div class="field"><label>Ubicación (leída)</label><div>' + esc(d.ubicacion) + '</div></div>'
@@ -89,14 +99,14 @@
         + '<div class="field"><label>Ubicación física</label><div>' + esc(d.ubicacion_fisica) + '</div></div>'
         + historialHTML;
 
-      renderLista(document.getElementById('c-query').value.trim()); // To re-highlight selection
+      renderLista(ultimaBusqueda); // To re-highlight selection
     } catch (e) {
-      cont.innerHTML = '<div class="error">Error: ' + e.message + '</div>';
+      cont.innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
     }
   }
 
   window.PH = window.PH || {};
-  window.PH.CUConsultar = { inicializar: inicializar, renderLista: renderLista, seleccionar: seleccionar };
+  window.PH.CUConsultar = { inicializar: inicializar, buscar: buscar, renderLista: renderLista, seleccionar: seleccionar };
 
 })(window);
 

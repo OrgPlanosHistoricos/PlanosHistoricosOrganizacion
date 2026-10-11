@@ -4,7 +4,7 @@ from typing import List, Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
-from sqlalchemy import String, cast, or_
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from .database import engine, get_session
@@ -30,6 +30,7 @@ from .models import (
 )
 from .planos_worker import planos_worker
 from .preprocessing import pdf_page_to_jpeg_bytes
+from .nomenclatura import CAMPOS_NOMENCLATURA, normalizar_nomenclatura, clave_nomenclatura, normalizar_busqueda
 
 router = APIRouter(prefix="/planos", tags=["planos"])
 
@@ -45,11 +46,38 @@ def _obtener_plano(session: Session, plano_id: int) -> Plano:
     return plano
 
 
-def _aplicar_datos(plano: Plano, datos: PlanoValidar | PlanoModificar) -> None:
+def _datos_nomenclatura(circ, secc, mza, parc):
+    try:
+        return normalizar_nomenclatura(circ, secc, mza, parc)
+    except ValueError:
+        raise HTTPException(status_code=422, detail={"codigo": "nomenclatura"})
+
+
+def _comprobar_unica(session, clave, plano_id=None):
+    existente = session.exec(select(Plano).where(Plano.nomenclatura == clave)).first()
+    if existente is not None and existente.id != plano_id:
+        raise HTTPException(status_code=409, detail={"codigo": "duplicado"})
+
+
+def _commit_unico(session, clave, plano_id=None):
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        _comprobar_unica(session, clave, plano_id)
+        raise
+
+
+def _aplicar_datos(plano: Plano, datos: PlanoValidar | PlanoModificar, session) -> None:
+    nomen = _datos_nomenclatura(*(getattr(datos, c) for c in CAMPOS_NOMENCLATURA))
+    clave = clave_nomenclatura(nomen)
+    _comprobar_unica(session, clave, plano.id)
+    for campo, valor in nomen.items():
+        setattr(plano, campo, valor)
+    plano.nomenclatura = clave
     for campo in DatosPlano.model_fields:
         setattr(plano, campo, getattr(datos, campo))
-    plano.parcela = datos.parcela.strip()
-    plano.estado = EstadoPlano.validado if plano.parcela else EstadoPlano.sin_ubicacion
+    plano.estado = EstadoPlano.validado
     plano.actualizado_en = ahora()
 
 
@@ -64,11 +92,19 @@ def _insertar_plano(plano: Plano) -> PlanoRead:
 @router.post("", response_model=PlanoRead, status_code=201)
 async def crear_plano(
     archivo: UploadFile = File(...),
+    circunscripcion: str = Form(...),
+    seccion: str = Form(...),
+    manzana: str = Form(...),
+    parcela_catastral: str = Form(...),
     ubicacion_fisica: str = Form(""),
     expediente: str = Form(""),
     direccion_referencia: str = Form(""),
     usuario_id: str = Form("anonimo", description="ID del usuario que sube el plano"),
+    session: Session = Depends(get_session),
 ):
+    nomen = _datos_nomenclatura(circunscripcion, seccion, manzana, parcela_catastral)
+    clave = clave_nomenclatura(nomen)
+    _comprobar_unica(session, clave)
     if archivo.content_type not in FORMATOS_ACEPTADOS:
         raise HTTPException(
             status_code=400,
@@ -94,6 +130,8 @@ async def crear_plano(
             )
 
     nuevo_plano = Plano(
+        **nomen,
+        nomenclatura=clave,
         nombre_original=nombre,
         content_type=archivo.content_type,
         minio_path=minio_path,
@@ -104,16 +142,11 @@ async def crear_plano(
         creado_por=usuario_id,
     )
     
-    with Session(engine) as session:
-        session.add(nuevo_plano)
-        session.commit()
-        session.refresh(nuevo_plano)
-        session.add(EventoAuditoria(plano_id=nuevo_plano.id, motivo="Creación de plano", usuario_id=usuario_id))
-        
-        # Guardar el primer intento de IA
-        session.add(ProcesamientoIA(plano_id=nuevo_plano.id, intento=1, estado=EstadoIA.procesando))
-        session.commit()
-        session.refresh(nuevo_plano)
+    session.add(nuevo_plano)
+    nuevo_plano.eventos.append(EventoAuditoria(motivo="Creación de plano", usuario_id=usuario_id))
+    nuevo_plano.procesamientos.append(ProcesamientoIA(intento=1, estado=EstadoIA.procesando))
+    _commit_unico(session, clave)
+    session.refresh(nuevo_plano)
 
     # Si es PDF, encolamos los bytes renderizados de la primera página.
     # Si es imagen, encolamos el contenido original.
@@ -125,27 +158,18 @@ async def crear_plano(
 @router.get("", response_model=List[PlanoRead])
 def listar_planos(
     estado: Optional[List[EstadoPlano]] = Query(None, description="Se puede repetir: ?estado=validado&estado=sin_ubicacion"),
-    q: Optional[str] = Query(None, description="Búsqueda de texto en dirección, parcela, expediente, ubicación, arquitecto, título, año y texto extraído"),
+    q: Optional[str] = Query(None, description="Nomenclatura exacta: circunscripción-sección-manzana-parcela"),
     session: Session = Depends(get_session),
 ):
     consulta = select(Plano).order_by(Plano.creado_en.desc())
     if estado:
         consulta = consulta.where(Plano.estado.in_(estado))
     if q and q.strip():
-        patron = f"%{q.strip()}%"
-        consulta = consulta.where(
-            or_(
-                Plano.direccion_referencia.ilike(patron),
-                Plano.parcela.ilike(patron),
-                Plano.expediente.ilike(patron),
-                Plano.ubicacion_fisica.ilike(patron),
-                Plano.arquitecto.ilike(patron),
-                Plano.titulo.ilike(patron),
-                Plano.ubicacion.ilike(patron),
-                Plano.texto_extraido.ilike(patron),
-                cast(Plano.anio, String).ilike(patron),
-            )
-        )
+        try:
+            clave = normalizar_busqueda(q)
+        except ValueError:
+            raise HTTPException(status_code=422, detail={"codigo": "nomenclatura"})
+        consulta = consulta.where(Plano.nomenclatura == clave)
     return [PlanoRead.model_validate(p) for p in session.exec(consulta).all()]
 
 
@@ -200,11 +224,11 @@ def validar_plano(plano_id: int, datos: PlanoValidar, session: Session = Depends
             status_code=409,
             detail="El plano ya fue validado. Usá PUT /planos/{id}/modificar para cambiarlo.",
         )
-    _aplicar_datos(plano, datos)
+    _aplicar_datos(plano, datos, session)
     plano.validado_por = datos.usuario_id
     session.add(plano)
     session.add(EventoAuditoria(plano_id=plano.id, motivo="Validación inicial", usuario_id=datos.usuario_id))
-    session.commit()
+    _commit_unico(session, plano.nomenclatura, plano.id)
     session.refresh(plano)
     return PlanoDetalle.model_validate(plano)
 
@@ -215,10 +239,10 @@ def modificar_plano(plano_id: int, datos: PlanoModificar, session: Session = Dep
     if not motivo:
         raise HTTPException(status_code=400, detail="El motivo de la modificación es obligatorio.")
     plano = _obtener_plano(session, plano_id)
-    _aplicar_datos(plano, datos)
+    _aplicar_datos(plano, datos, session)
     session.add(plano)
     session.add(EventoAuditoria(plano_id=plano.id, motivo=motivo, usuario_id=datos.usuario_id))
-    session.commit()
+    _commit_unico(session, plano.nomenclatura, plano.id)
     session.refresh(plano)
     return PlanoDetalle.model_validate(plano)
 

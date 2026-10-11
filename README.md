@@ -254,8 +254,8 @@ http://localhost:9001.
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| `POST` | `/planos` | Multipart: `archivo` + `ubicacion_fisica`, `expediente`, `direccion_referencia` (opcionales). Sube a MinIO, crea el plano como `pendiente` y dispara la IA en segundo plano (`ia_estado=procesando`). Si es PDF, rasteriza la primera página para el análisis y la previsualización. |
-| `GET` | `/planos` | Lista. Filtros: `estado` (repetible: `?estado=validado&estado=sin_ubicacion`) y `q` (busca en dirección, parcela, expediente, ubicación física, arquitecto, título, ubicación y año). |
+| `POST` | `/planos` | Multipart: `archivo`, `circunscripcion`, `seccion`, `manzana`, `parcela_catastral` (obligatorios) + `ubicacion_fisica`, `expediente`, `direccion_referencia` (opcionales). Sube a MinIO, crea el plano como `pendiente` y dispara la IA en segundo plano (`ia_estado=procesando`). Si es PDF, rasteriza la primera página para el análisis y la previsualización. |
+| `GET` | `/planos` | Lista. Filtros: `estado` (repetible: `?estado=validado&estado=sin_ubicacion`) y `q` (coincidencia exacta de nomenclatura: `3-K-12A-5B`). |
 | `GET` | `/planos/{id}` | Detalle con historial. Sirve para consultar si la IA terminó (`ia_estado`). |
 | `GET` | `/planos/{id}/archivo` | Devuelve el archivo original (imagen o PDF original). |
 | `GET` | `/planos/{id}/preview` | Devuelve una imagen JPEG de previsualización (la imagen original o la primera página rasterizada si es PDF). |
@@ -266,7 +266,7 @@ Ejemplo:
 
 ```bash
 curl -X POST http://localhost:8000/planos \
-  -F "archivo=@plano.jpg" -F "expediente=EXP-1936-045" \
+  -F "archivo=@plano.jpg" -F "circunscripcion=3" -F "seccion=K" -F "manzana=12A" -F "parcela_catastral=5B" -F "expediente=EXP-1936-045" \
   -F "ubicacion_fisica=Estante 3, caja 12"
 
 curl -X PUT http://localhost:8000/planos/1/modificar \
@@ -311,3 +311,39 @@ el ingreso a la app debe hacerse desde http://localhost:8080 en el navegador. Si
 Formatos admitidos: JPEG, PNG, WEBP, TIFF y PDF (se analiza y previsualiza la primera página del plano).
 
 El procesamiento por CPU tarda de 60 a 90 segundos.
+
+### Nomenclatura del archivo y pruebas del frontend
+
+La carga exige archivo, circunscripción, sección, manzana y parcela catastral.
+Expediente, dirección de referencia y ubicación física siguen siendo opcionales.
+La combinación de los cuatro componentes es única para cada plano, por regla
+de este proyecto. El ID numérico interno se conserva para las relaciones.
+
+El formato del proyecto admite circunscripción numérica positiva, sección con
+letras A–Z, y manzana/parcela con número positivo y letras opcionales al final.
+Cada componente tiene un límite técnico de 64 caracteres. Estos límites no son
+una certificación de ARBA ni verifican la existencia real de la parcela.
+Se normalizan espacios, mayúsculas y ceros iniciales: `03-k-012 a-05 b`
+se guarda y busca como `3-K-12A-5B`. La consulta del catálogo es exacta;
+ya no busca por dirección, expediente o año. Las colas de carga/revisión y las
+listas de modificación siguen mostrando sus registros sin exigir una búsqueda.
+
+Al iniciar la API se agregan columnas y un índice único, conservando los planos
+anteriores. Estos quedan con nomenclatura pendiente, sin valores inventados;
+se puede completar desde Revisión o Modificar antes de guardar. En Consultar
+sólo aparecen planos catalogados. Los nuevos cambios requieren reiniciar la API:
+
+```powershell
+docker compose restart api
+```
+
+Pruebas (frontend con solicitudes simuladas; backend con SQLite temporal y
+almacenamiento/IA simulados, sin modificar los planos del proyecto):
+
+```powershell
+node --test front/tests/errors.test.cjs
+docker compose exec -T api python -m unittest api.tests.test_nomenclatura -v
+```
+
+Para probar la página usá `http://localhost:8080/planos-historicos.html`.
+Live Server no reenvía `/api` al backend.

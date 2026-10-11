@@ -25,7 +25,7 @@
   }
   function attr(s) { return String(s || '').replace(/"/g, '&quot;'); }
   function tituloDoc(d) {
-    return d.direccion_referencia || d.expediente || d.nombre_original;
+    return window.PH.Nomenclatura.titulo(d);
   }
   function respuestaInvalida(d) {
     return d.ia_error && d.ia_error.indexOf('JSON válido') !== -1;
@@ -45,17 +45,17 @@
       cont.innerHTML = pendientes.map(function(d) {
         var sel = d.id === seleccionadoId ? ' sel' : '';
         var indicador = respuestaInvalida(d)
-          ? '<span class="badge ia-error">IA: respuesta no JSON</span>'
+          ? '<span class="badge ia-error">Análisis automático incompleto</span>'
           : d.ia_estado === 'error'
-            ? '<span class="badge ia-error">Error de IA</span>'
+            ? '<span class="badge ia-error">No se pudo analizar el plano</span>'
             : '';
         return '<button class="row' + sel + '" onclick="PH.CUValidar.seleccionar(' + d.id + ')">' +
           '<div class="t">' + esc(tituloDoc(d)) + '</div>' +
-          '<div class="s">' + esc(d.expediente || 'sin expediente') + ' · ' + indicador + '</div>' +
+          '<div class="s">' + esc(d.nombre_original) + ' · ' + indicador + '</div>' +
           '</button>';
       }).join('');
     } catch (e) {
-      cont.innerHTML = '<div class="error">Error: ' + e.message + '</div>';
+      cont.innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
     }
   }
 
@@ -72,11 +72,6 @@
     renderLista();
   }
 
-  function toggleSinUbicacion(checked) {
-    var input = document.getElementById('v-vinculo');
-    input.disabled = checked;
-    if (checked) input.value = '';
-  }
 
   async function renderDetalle() {
     var cont = document.getElementById('validar-detalle');
@@ -94,7 +89,6 @@
         return;
       }
 
-      var errorMsg = (d.ia_error ? '<br><small>' + esc(d.ia_error) + '</small>' : '');
       var maxIntentos = 3;
       var intentos = d.procesamientos ? d.procesamientos.length : 0;
       var btnReintentar = '';
@@ -105,11 +99,11 @@
       }
 
       var aviso = respuestaInvalida(d)
-        ? '<div class="error"><strong>La IA devolvió una respuesta inválida.</strong> No se recibió un JSON válido. Complete o corríjalos manualmente.' +
-          errorMsg + btnReintentar + '</div>'
+        ? '<div class="error"><strong>La IA devolvió una respuesta inválida.</strong> No pudimos interpretar los datos del plano. Podés reintentar el análisis o completar los datos manualmente.' +
+          btnReintentar + '</div>'
         : d.ia_estado === 'error'
-          ? '<div class="error"><strong>La IA no pudo procesar este plano.</strong> Complete o corríjalos manualmente.' +
-            errorMsg + btnReintentar + '</div>'
+          ? '<div class="error"><strong>La IA no pudo procesar este plano.</strong> Podés reintentar el análisis o completar los datos manualmente.' +
+            btnReintentar + '</div>'
           : '<div class="confirm">Datos leídos automáticamente. Revíselos y corríjalos si hace falta.</div>';
 
       var esPdf = d.content_type === 'application/pdf' || (d.nombre_original && d.nombre_original.toLowerCase().endsWith('.pdf'));
@@ -122,6 +116,7 @@
         + '<img class="thumb" src="' + API.getPreviewUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
         + enlaceArchivo
         + aviso
+        + window.PH.Nomenclatura.formulario('v-', d)
         + CAMPOS.map(function(c) {
             var val = d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : '';
             if (c.type === 'textarea') {
@@ -132,12 +127,6 @@
             return '<div class="field"><label>' + c.label + '</label>' +
               '<input type="' + type + '" id="v-' + c.key + '" value="' + attr(val) + '"></div>';
           }).join('')
-        + '<div class="field"><label>Parcela vinculada</label>' +
-          '<input type="text" id="v-vinculo" value="' + attr(d.parcela) + '" ' + (d.estado === 'sin_ubicacion' ? 'disabled' : '') + '>' +
-          '<label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:400;">' +
-          '<input type="checkbox" id="v-sinubic" style="width:auto" ' + (d.estado === 'sin_ubicacion' ? 'checked' : '') + ' onchange="PH.CUValidar.toggleSinUbicacion(this.checked)">' +
-          'No se encuentra la parcela o dirección exacta</label>'
-        + '</div>'
         + '<div id="v-msg"></div>'
         + '<div class="actions">' +
           '<button class="ghost" onclick="PH.CUValidar.cancelar()">Cancelar</button>' +
@@ -145,7 +134,7 @@
           '</div>';
 
     } catch (e) {
-      cont.innerHTML = '<div class="error">Error: ' + e.message + '</div>';
+      cont.innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
     }
   }
 
@@ -158,15 +147,8 @@
       nuevosDatos[c.key] = v || null;
     });
 
-    var sinUbic = document.getElementById('v-sinubic').checked;
-    var vinculo = document.getElementById('v-vinculo').value.trim();
-
-    if (!sinUbic && !vinculo) {
-      document.getElementById('v-msg').innerHTML = '<div class="error">Vincule una parcela, o marque que no se encuentra.</div>';
-      return;
-    }
-
-    nuevosDatos.parcela = sinUbic ? '' : vinculo;
+    try { Object.assign(nuevosDatos, window.PH.Nomenclatura.leer('v-')); }
+    catch (e) { document.getElementById('v-msg').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>'; return; }
     nuevosDatos.usuario_id = "Validador"; // Hardcoded for now as there's no login
 
     try {
@@ -176,7 +158,7 @@
       renderDetalle();
       if (window.PH.actualizarListas) window.PH.actualizarListas();
     } catch (e) {
-      document.getElementById('v-msg').innerHTML = '<div class="error">Error: ' + e.message + '</div>';
+      document.getElementById('v-msg').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
     }
   }
 
@@ -189,7 +171,7 @@
       renderDetalle();
       if (window.PH.actualizarListas) window.PH.actualizarListas();
     } catch (e) {
-      document.getElementById('v-msg').innerHTML = '<div class="error">Error al reintentar: ' + e.message + '</div>';
+      document.getElementById('v-msg').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
     }
   }
 
@@ -199,7 +181,6 @@
     renderDetalle: renderDetalle,
     seleccionar: seleccionar,
     getSeleccionadoId: getSeleccionadoId,
-    toggleSinUbicacion: toggleSinUbicacion,
     cancelar: cancelar,
     confirmar: confirmar,
     reintentar: reintentar

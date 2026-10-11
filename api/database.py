@@ -15,6 +15,11 @@ def init_db() -> None:
     SQLModel.metadata.create_all(engine)
     with engine.connect() as conn:
         conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS texto_extraido TEXT;"))
+        # Los registros anteriores quedan sin nomenclatura hasta su revisión.
+        for campo in ("circunscripcion", "seccion", "manzana", "parcela_catastral"):
+            conn.execute(text(f"ALTER TABLE planos ADD COLUMN IF NOT EXISTS {campo} TEXT NOT NULL DEFAULT '';"))
+        conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS nomenclatura TEXT;"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_planos_nomenclatura ON planos (nomenclatura);"))
         conn.commit()
 
 
