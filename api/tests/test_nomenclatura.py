@@ -113,6 +113,32 @@ class NomenclaturaTests(unittest.TestCase):
                 db.commit()
             db.rollback()
 
+    def test_eliminar_borra_archivos_relaciones_y_libera_nomenclatura(self):
+        plano_id = self.create().json()['id']
+        with patch('api.planos_router.eliminar_archivo') as borrar:
+            res = self.client.delete(f'/planos/{plano_id}')
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual([c.args[0] for c in borrar.call_args_list],
+                         ['test/archivo.jpg.preview.jpg', 'test/archivo.jpg'])
+        self.assertEqual(self.client.get(f'/planos/{plano_id}').status_code, 404)
+        with Session(self.engine) as db:
+            self.assertEqual(db.exec(select(EventoAuditoria)).all(), [])
+            self.assertEqual(db.exec(select(ProcesamientoIA)).all(), [])
+        self.assertEqual(self.create().status_code, 201)
+
+    def test_eliminar_fallo_storage_conserva_registro(self):
+        plano_id = self.create().json()['id']
+        with patch('api.planos_router.eliminar_archivo', side_effect=RuntimeError('privado')):
+            res = self.client.delete(f'/planos/{plano_id}')
+        self.assertEqual(res.status_code, 503)
+        self.assertNotIn('privado', res.text)
+        self.assertEqual(self.client.get(f'/planos/{plano_id}').status_code, 200)
+
+    def test_eliminar_ausente_no_toca_storage(self):
+        with patch('api.planos_router.eliminar_archivo') as borrar:
+            self.assertEqual(self.client.delete('/planos/999').status_code, 404)
+            borrar.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

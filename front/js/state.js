@@ -81,6 +81,10 @@
     return await fetchJSON('/planos/' + id);
   }
 
+  async function eliminar(id) {
+    return await fetchJSON('/planos/' + id, { method: 'DELETE' });
+  }
+
   async function create(file, ubicacion_fisica, expediente, direccion_referencia, nomenclatura) {
     var formData = new FormData();
     formData.append('archivo', file);
@@ -132,6 +136,7 @@
   window.PH.API = {
     getAll: getAll,
     getById: getById,
+    eliminar: eliminar,
     create: create,
     validar: validar,
     modificar: modificar,

@@ -9,6 +9,7 @@ from sqlmodel import Session, select
 
 from .database import engine, get_session
 from .minio_client import (
+    eliminar_archivo,
     existe_archivo,
     obtener_archivo,
     obtener_preview_key,
@@ -176,6 +177,26 @@ def listar_planos(
 @router.get("/{plano_id}", response_model=PlanoDetalle)
 def obtener_plano(plano_id: int, session: Session = Depends(get_session)):
     return PlanoDetalle.model_validate(_obtener_plano(session, plano_id))
+
+
+@router.delete("/{plano_id}")
+def eliminar_plano(plano_id: int, session: Session = Depends(get_session)):
+    plano = session.exec(select(Plano).where(Plano.id == plano_id).with_for_update()).first()
+    if plano is None:
+        raise HTTPException(status_code=404, detail="Plano no encontrado")
+    try:
+        eliminar_archivo(obtener_preview_key(plano.minio_path))
+        eliminar_archivo(plano.minio_path)
+    except Exception:
+        session.rollback()
+        raise HTTPException(status_code=503, detail="No se pudo eliminar el archivo. Reintentá la operación.")
+    for evento in list(plano.eventos):
+        session.delete(evento)
+    for procesamiento in list(plano.procesamientos):
+        session.delete(procesamiento)
+    session.delete(plano)
+    session.commit()
+    return {"eliminado": True, "id": plano_id}
 
 
 @router.get("/{plano_id}/archivo")

@@ -17,7 +17,7 @@ const raw = '<script>secret stack trace SQL token</script>';
 const operations = api => [
   () => api.getAll(), () => api.getById(1),
   () => api.create(new Blob(['image']), '', '', ''),
-  () => api.validar(1, {}), () => api.modificar(1, {}), () => api.reintentarIA(1)
+  () => api.validar(1, {}), () => api.modificar(1, {}), () => api.reintentarIA(1), () => api.eliminar(1)
 ];
 
 for (const [name, fetch, expected] of [
@@ -79,6 +79,25 @@ test('éxito preserva datos y opciones de envío', async () => {
   assert.equal(calls[3].options.method, 'PUT');
   assert.equal(calls[4].options.method, 'PUT');
   assert.equal(calls[5].options.method, 'POST');
+  assert.equal(calls[6].options.method, 'DELETE');
+});
+
+test('eliminar: cancelar conserva el plano; confirmar envía DELETE y actualiza la cola', async () => {
+  const calls = [];
+  const { PH, context, elements } = setup(async (url, options) => {
+    calls.push({url, options});
+    return {ok:true, json:async () => options && options.method === 'DELETE' ? {eliminado:true} : []};
+  });
+  context.window.confirm = () => false;
+  await PH.CUCargar.eliminar(7);
+  assert.equal(calls.length, 0);
+  context.window.confirm = () => true;
+  const button = {disabled:false};
+  await PH.CUCargar.eliminar(7, button);
+  assert.equal(calls[0].url, '/api/planos/7');
+  assert.equal(calls[0].options.method, 'DELETE');
+  assert.equal(button.disabled, false);
+  assert.ok(elements['cargar-msgs'].innerHTML.includes('eliminó correctamente'));
 });
 test('carga: rechaza extensión inválida y confirma sin avisos por expediente opcional', async () => {
   let submit;

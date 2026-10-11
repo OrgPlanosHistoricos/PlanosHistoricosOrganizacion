@@ -131,6 +131,7 @@
         + '<div class="actions">' +
           '<button class="ghost" onclick="PH.CUValidar.cancelar()">Cancelar</button>' +
           '<button class="primary" onclick="PH.CUValidar.confirmar()">Confirmar e indexar</button>' +
+          '<button class="danger" onclick="PH.CUValidar.eliminar(this)">Eliminar plano</button>' +
           '</div>';
 
     } catch (e) {
@@ -175,6 +176,21 @@
     }
   }
 
+  async function eliminar(boton) {
+    if (!seleccionadoId || !window.confirm('¿Eliminar este plano, su archivo y su historial permanentemente?')) return;
+    if (boton) boton.disabled = true;
+    try {
+      await API.eliminar(seleccionadoId);
+      seleccionadoId = null;
+      await renderLista();
+      await renderDetalle();
+      document.getElementById('validar-detalle').innerHTML = '<div class="confirm">El plano se eliminó correctamente.</div>';
+      if (window.PH.actualizarListas) window.PH.actualizarListas();
+    } catch (e) {
+      document.getElementById('v-msg').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
+    } finally { if (boton) boton.disabled = false; }
+  }
+
   window.PH = window.PH || {};
   window.PH.CUValidar = {
     renderLista: renderLista,
@@ -183,7 +199,8 @@
     getSeleccionadoId: getSeleccionadoId,
     cancelar: cancelar,
     confirmar: confirmar,
-    reintentar: reintentar
+    reintentar: reintentar,
+    eliminar: eliminar
   };
 
 })(window);

@@ -96,6 +96,7 @@
         return '<div class="row" style="cursor:default">' +
           '<div class="t">' + esc(tituloDoc(d)) + '</div>' +
           '<div class="s">' + esc(d.nombre_original) + ' · ' + estadoHTML + '</div>' +
+          '<button class="danger" onclick="PH.CUCargar.eliminar(' + d.id + ', this)">Eliminar</button>' +
           '</div>';
       }).join('') + '</div>';
     } catch (e) {
@@ -103,7 +104,20 @@
     }
   }
 
+  async function eliminar(id, boton) {
+    if (!window.confirm('¿Eliminar este plano, su archivo y su historial permanentemente?')) return;
+    if (boton) boton.disabled = true;
+    try {
+      await API.eliminar(id);
+      mostrarMensaje('confirm', 'El plano se eliminó correctamente.');
+      await renderRecientes();
+      if (window.PH.actualizarListas) window.PH.actualizarListas();
+    } catch (e) {
+      mostrarMensaje('error', window.PH.Errores.mensaje(e));
+    } finally { if (boton) boton.disabled = false; }
+  }
+
   window.PH = window.PH || {};
-  window.PH.CUCargar = { inicializar: inicializar, renderRecientes: renderRecientes };
+  window.PH.CUCargar = { inicializar: inicializar, renderRecientes: renderRecientes, eliminar: eliminar };
 
 })(window);
