@@ -8,7 +8,12 @@ from . import models  # noqa: F401  (registra las tablas en SQLModel.metadata)
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_timeout=5,
+    connect_args={"connect_timeout": 3} if DATABASE_URL.startswith("postgresql") else {},
+)
 
 
 def init_db() -> None:

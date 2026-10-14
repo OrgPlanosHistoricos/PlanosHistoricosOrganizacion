@@ -18,6 +18,10 @@
       <button class="tab" data-tab="modificar">Modificar catalogación</button>
       <button class="tab" data-tab="consultar">Consultar</button>
     </nav>
+    <div id="database-status" class="database-status" data-state="checking" role="status" aria-live="polite" aria-atomic="true">
+      <span class="database-status-dot" aria-hidden="true"></span>
+      <span id="database-status-text">Verificando base de datos…</span>
+    </div>
   </aside>
   <main>
 
@@ -85,6 +89,7 @@
   <script src="js/cu-modificar.js"></script>
   <script src="js/cu-consultar.js"></script>
   <!-- Orquestador principal de la aplicación -->
+  <script src="js/database-status.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

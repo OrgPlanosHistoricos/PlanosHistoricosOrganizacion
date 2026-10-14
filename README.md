@@ -348,3 +348,25 @@ docker compose exec -T api python -m unittest api.tests.test_nomenclatura -v
 
 Para probar la página usá `http://localhost:8080/planos-historicos.html`.
 Live Server no reenvía `/api` al backend.
+
+### Indicador de conexión a la base de datos
+
+La barra lateral del módulo muestra el estado de PostgreSQL al ingresar y cada
+15 segundos: verde si está conectada, rojo si la consulta falla y amarillo si
+no se puede verificar (por ejemplo, si la API no responde o nginx devuelve 502).
+El texto acompaña al color. Al recuperarse el servicio, se actualiza automáticamente.
+
+`GET /health/database` en la API (o `/api/health/database` desde el front) ejecuta
+`SELECT 1`: devuelve 200 con `{"database":"connected"}` o 503 con
+`{"database":"disconnected"}`, sin exponer errores internos ni credenciales.
+Comprueba la base del catálogo; MongoDB y los servicios de archivos no forman
+parte de este indicador. Si la API no pudo iniciar por una falla de PostgreSQL,
+el front muestra que no se pudo verificar el estado.
+
+Para activar el endpoint, reiniciá la API y recargá la página:
+
+```powershell
+docker compose restart api
+node --test front/tests/errors.test.cjs front/tests/database-status.test.cjs
+docker compose exec -T api python -m unittest api.tests.test_health -v
+```
