@@ -92,6 +92,25 @@ class NomenclaturaTests(unittest.TestCase):
         self.assertEqual(res.json()['nomenclatura'], '3-K-20-5B')
         self.assertEqual(res.json()['estado'], 'validado')
 
+    def test_catalogacion_conserva_texto_original_omitido_o_alterado(self):
+        plano_id = self.create().json()['id']
+        original = 'Transcripción original\ncon saltos de línea.'
+        with Session(self.engine) as db:
+            plano = db.get(Plano, plano_id)
+            plano.texto_extraido = original
+            db.add(plano)
+            db.commit()
+        res = self.client.put(f'/planos/{plano_id}/validar', json=self.data)
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()['texto_extraido'], original)
+        res = self.client.put(f'/planos/{plano_id}/modificar', json={
+            **self.data, 'motivo': 'Corrección de título',
+            'titulo': 'Título corregido', 'texto_extraido': 'Texto alterado',
+        })
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()['texto_extraido'], original)
+        self.assertEqual(res.json()['titulo'], 'Título corregido')
+
     def test_registros_anteriores_se_conservan_y_se_completan(self):
         with Session(self.engine) as db:
             viejo = Plano(nombre_original='viejo.pdf', content_type='application/pdf', minio_path='test/viejo')

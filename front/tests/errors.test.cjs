@@ -204,6 +204,8 @@ test('revisión y modificación: envían nomenclatura normalizada y bloquean dat
     const {PH,context}=setup(async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>url.includes('/1')?doc:[]};});
     PH[module][select](1);
     await new Promise(resolve=>setImmediate(resolve));
+    assert.match(context.document.getElementById(prefix === 'v-' ? 'validar-detalle' : 'modificar-detalle').innerHTML,
+      new RegExp('<textarea id="' + prefix + 'texto_extraido"[^>]* readonly>'));
     for(const key of ['texto_extraido','titulo','arquitecto','ubicacion','anio','escala','tipo_de_plano','material_soporte','notas']) context.document.getElementById(prefix+key);
     if(prefix==='m-') context.document.getElementById('m-motivo').value='Corrección';
     await PH[module][save]();
@@ -212,6 +214,7 @@ test('revisión y modificación: envían nomenclatura normalizada y bloquean dat
     await PH[module][save]();
     const put=calls.find(c=>c.options?.method==='PUT');
     assert.ok(put);
+    assert.equal(Object.hasOwn(JSON.parse(put.options.body), 'texto_extraido'), false);
     assert.equal(JSON.parse(put.options.body).manzana,'12A');
     assert.equal(JSON.parse(put.options.body).parcela_catastral,'5B');
   }

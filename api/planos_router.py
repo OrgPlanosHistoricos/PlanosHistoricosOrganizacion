@@ -77,6 +77,9 @@ def _aplicar_datos(plano: Plano, datos: PlanoValidar | PlanoModificar, session) 
         setattr(plano, campo, valor)
     plano.nomenclatura = clave
     for campo in DatosPlano.model_fields:
+        # La transcripción original pertenece al análisis IA, no a la catalogación.
+        if campo == "texto_extraido":
+            continue
         setattr(plano, campo, getattr(datos, campo))
     plano.estado = EstadoPlano.validado
     plano.actualizado_en = ahora()

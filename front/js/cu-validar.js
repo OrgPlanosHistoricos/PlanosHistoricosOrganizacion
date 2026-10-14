@@ -6,7 +6,7 @@
 
   var API = window.PH.API;
   var CAMPOS = [
-    { key: 'texto_extraido', label: 'Texto extraído', type: 'textarea' },
+    { key: 'texto_extraido', label: 'Texto extraído (solo lectura)', type: 'textarea', readonly: true },
     { key: 'titulo', label: 'Título' },
     { key: 'arquitecto', label: 'Arquitecto' },
     { key: 'ubicacion', label: 'Ubicación' },
@@ -120,8 +120,8 @@
         + CAMPOS.map(function(c) {
             var val = d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : '';
             if (c.type === 'textarea') {
-              return '<div class="field"><label>' + c.label + '</label>' +
-                '<textarea id="v-' + c.key + '" rows="4">' + esc(val) + '</textarea></div>';
+              return '<div class="field"><label for="v-' + c.key + '">' + c.label + '</label>' +
+                '<textarea id="v-' + c.key + '" rows="4" readonly>' + esc(val) + '</textarea></div>';
             }
             var type = c.type === 'number' ? 'number' : 'text';
             return '<div class="field"><label>' + c.label + '</label>' +
@@ -144,6 +144,7 @@
 
     var nuevosDatos = {};
     CAMPOS.forEach(function(c) {
+      if (c.readonly) return;
       var v = document.getElementById('v-' + c.key).value.trim();
       nuevosDatos[c.key] = v || null;
     });

@@ -278,7 +278,8 @@ curl -X PUT http://localhost:8000/planos/1/modificar \
 Detalles de comportamiento:
 
 - `validar` y `modificar` reemplazan **todos** los metadatos: un campo
-  que no se manda queda en `null` (igual que el formulario del front,
+  que no se manda queda en `null`, salvo `texto_extraido`, que conserva la
+  transcripción original de la IA y se muestra como solo lectura (igual que el formulario del front,
   que siempre manda el objeto completo). `anio` acepta `""` como `null`.
 - Si una persona valida un plano mientras la IA todavía lo procesa, el
   resultado de la IA no pisa los datos cargados a mano.
