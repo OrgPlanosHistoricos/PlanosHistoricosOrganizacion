@@ -274,10 +274,15 @@ def modificar_plano(plano_id: int, datos: PlanoModificar, session: Session = Dep
 @router.post("/{plano_id}/reintentar_ia", response_model=PlanoDetalle)
 def reintentar_ia(plano_id: int, usuario_id: str = Query(..., description="ID del usuario que solicita el reintento"), session: Session = Depends(get_session)):
     plano = _obtener_plano(session, plano_id)
-    if plano.ia_estado != EstadoIA.error:
+    if plano.ia_estado == EstadoIA.no_aplica:
         raise HTTPException(
             status_code=400,
-            detail="El plano no tiene un análisis fallido para reintentar.",
+            detail="El plano no aplica para análisis automático.",
+        )
+    if plano.ia_estado == EstadoIA.procesando:
+        raise HTTPException(
+            status_code=400,
+            detail="El plano ya está siendo procesado por la IA.",
         )
     
     intentos_previos = session.exec(select(ProcesamientoIA).where(ProcesamientoIA.plano_id == plano.id)).all()

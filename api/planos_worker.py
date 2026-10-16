@@ -50,10 +50,8 @@ def _guardar_resultado(plano_id: int, datos: Optional[dict], error: Optional[str
                 ultimo_procesamiento.error = error
                 session.add(ultimo_procesamiento)
         else:
-            # Si una persona ya validó el plano mientras la IA corría, sus datos mandan
-            if plano.estado == EstadoPlano.pendiente:
-                for campo in DatosPlano.model_fields:
-                    setattr(plano, campo, datos.get(campo))
+            for campo in DatosPlano.model_fields:
+                setattr(plano, campo, datos.get(campo))
             plano.ia_estado = EstadoIA.completado
             plano.ia_error = None
             if ultimo_procesamiento:

@@ -93,6 +93,13 @@
         + (esPdf ? '📄 Abrir / Descargar PDF original (' + esc(d.nombre_original) + ')' : '🖼️ Ver / Descargar imagen original')
         + '</a></div>';
 
+      var maxIntentos = 3;
+      var intentos = (d.procesamientos && d.procesamientos.length) ? d.procesamientos.length : (d.ia_estado === 'error' ? 1 : (d.ia_estado === 'completado' ? 1 : 0));
+      var puedeReintentar = (d.ia_estado !== 'no_aplica' && d.ia_estado !== 'procesando' && intentos < maxIntentos);
+      var btnReintentar = puedeReintentar
+        ? '<button type="button" class="ghost" onclick="PH.CUModificar.reintentar(' + d.id + ')">Reintentar análisis IA (' + intentos + '/' + maxIntentos + ')</button>'
+        : '';
+
       cont.innerHTML = ''
         + '<img class="thumb" src="' + API.getPreviewUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
         + enlaceArchivo
@@ -111,11 +118,12 @@
           '<textarea id="m-motivo" rows="3" placeholder="Cuente brevemente por qué se corrige este dato"></textarea></div>'
         + '<div id="m-msg"></div>'
         + historialHTML
-        + '<div class="det-actions">' +
-          '<button class="ghost" onclick="PH.CUModificar.cancelar()">Cancelar</button>' +
-          '<button class="primary" onclick="PH.CUModificar.guardar()">Guardar cambios</button>' +
-          '<button class="danger" onclick="PH.CUModificar.eliminar(this)">Eliminar plano</button>' +
-          '</div>';
+        + '<div class="det-actions">'
+        + '<button class="ghost" onclick="PH.CUModificar.cancelar()">Cancelar</button>'
+        + btnReintentar
+        + '<button class="primary" onclick="PH.CUModificar.guardar()">Guardar cambios</button>'
+        + '<button class="danger" onclick="PH.CUModificar.eliminar(this)">Eliminar plano</button>'
+        + '</div>';
 
     } catch (e) {
       cont.innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
@@ -153,6 +161,18 @@
     }
   }
 
+  async function reintentar(id) {
+    if (!id) return;
+    try {
+      await API.reintentarIA(id, "Operador");
+      await renderDetalle();
+      document.getElementById('m-msg').innerHTML = '<div class="confirm">Reanálisis de IA iniciado. Cuando finalice se actualizarán los datos leídos.</div>';
+      if (window.PH.actualizarListas) window.PH.actualizarListas();
+    } catch (e) {
+      document.getElementById('m-msg').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
+    }
+  }
+
   async function eliminar(boton) {
     if (!seleccionadoId || !window.confirm('¿Eliminar este plano, su archivo y su historial permanentemente?')) return;
     if (boton) boton.disabled = true;
@@ -175,6 +195,7 @@
     seleccionar: seleccionar,
     cancelar: cancelar,
     guardar: guardar,
+    reintentar: reintentar,
     eliminar: eliminar
   };
 
