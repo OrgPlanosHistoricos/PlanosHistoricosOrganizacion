@@ -109,8 +109,8 @@
 
       var tieneFalla = (d.ia_estado === 'error' || d.ia_estado === 'no_aplica');
       var maxIntentos = 3;
-      var intentos = (d.procesamientos && d.procesamientos.length) ? d.procesamientos.length : (d.ia_estado === 'error' ? 1 : 0);
-      var puedeReintentar = (d.ia_estado === 'error' && intentos < maxIntentos);
+      var intentos = (d.procesamientos && d.procesamientos.length) ? d.procesamientos.length : (d.ia_estado === 'error' ? 1 : (d.ia_estado === 'completado' ? 1 : 0));
+      var puedeReintentar = (d.ia_estado !== 'no_aplica' && d.ia_estado !== 'procesando' && intentos < maxIntentos);
 
       var motivoFallaTexto = d.ia_estado === 'no_aplica'
         ? 'El análisis automático no aplica para este plano.'
@@ -144,6 +144,10 @@
           + '</div>';
       }
 
+      var btnReintentarForm = puedeReintentar
+        ? '<button type="button" class="ghost" onclick="PH.CUValidar.reintentar(' + d.id + ')">Reintentar análisis (' + intentos + '/' + maxIntentos + ')</button>'
+        : '';
+
       var displayForm = (!tieneFalla || modoCargaManual) ? 'block' : 'none';
       var formHTML = '<div id="v-form-container" style="display:' + displayForm + ';">'
         + (tieneFalla && modoCargaManual ? '<div class="confirm" style="margin-bottom:12px">Modo de carga manual: completá los datos leyendo la imagen.</div>' : '')
@@ -160,8 +164,9 @@
           }).join('')
         + '<div class="actions">'
         + '<button class="ghost" onclick="PH.CUValidar.cancelar()">Cancelar</button>'
+        + btnReintentarForm
         + '<button class="primary" onclick="PH.CUValidar.confirmar()">Confirmar e indexar</button>'
-        + (!tieneFalla ? '<button class="danger" onclick="PH.CUValidar.eliminar(this)">Eliminar plano</button>' : '')
+        + '<button class="danger" onclick="PH.CUValidar.eliminar(this)">Eliminar plano</button>'
         + '</div>'
         + '</div>';
 
