@@ -1,0 +1,426 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Mapa del proyecto G3</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: lámina técnica — rótulo de plano como encabezado, esquema de arquitectura, fichas por pieza, tablas de decisiones y fases */
+:root{
+  --paper:#F4F6F5; --sheet:#FFFFFF; --ink:#1C2733; --ink-2:#4A5866; --line:#C9D1D6; --accent:#9A5B1E;
+  --ok-bg:#E3F1E6; --ok:#25643A; --pa-bg:#FBEFD9; --pa:#86520C; --no-bg:#F8E3E1; --no:#9B2C24;
+  --box:#EEF2F4; --box-line:#7F8F9C;
+  --f-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#12181E; --sheet:#1A222A; --ink:#E4E9ED; --ink-2:#A3B0BB; --line:#33404B; --accent:#E0A365;
+  --ok-bg:#183524; --ok:#8FD3A4; --pa-bg:#3A2C12; --pa:#F0C47A; --no-bg:#3E1D1A; --no:#F1A39B;
+  --box:#212C35; --box-line:#6F8292; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#12181E; --sheet:#1A222A; --ink:#E4E9ED; --ink-2:#A3B0BB; --line:#33404B; --accent:#E0A365;
+  --ok-bg:#183524; --ok:#8FD3A4; --pa-bg:#3A2C12; --pa:#F0C47A; --no-bg:#3E1D1A; --no:#F1A39B;
+  --box:#212C35; --box-line:#6F8292; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6;padding-inline:16px;padding-block:24px 48px}
+.wrap{max-width:1040px;margin:0 auto;display:grid;gap:40px}
+h1,h2,h3{font-family:var(--f-display);font-weight:600;text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:30px}
+h2{font-size:22px;display:flex;align-items:baseline;gap:10px}
+h2 .tag{font-family:var(--f-mono);font-size:12px;font-weight:400;color:var(--accent);letter-spacing:.04em}
+h3{font-size:17px}
+p{margin:0}
+.lead{color:var(--ink-2);max-width:68ch;margin-top:6px}
+section{display:grid;gap:14px}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+
+.rotulo{border:2px solid var(--ink);background:var(--sheet);display:grid;grid-template-columns:2fr 1fr 1fr}
+.rotulo>div{border-right:1px solid var(--ink);border-bottom:1px solid var(--ink);padding:8px 12px;min-width:0}
+.rotulo .k{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.rotulo .v{font-weight:500}
+.rotulo .main{grid-row:span 2}
+.rotulo .main .v{font-family:var(--f-display);font-size:26px;font-weight:600;line-height:1.15;margin-top:4px}
+.rotulo .wide{grid-column:1/-1;border-bottom:0}
+.rotulo>div:nth-child(3n){border-right:0}
+@media (max-width:640px){.rotulo{grid-template-columns:1fr 1fr}.rotulo .main{grid-column:1/-1;grid-row:auto}.rotulo>div{border-right:1px solid var(--ink)}.rotulo>div:nth-child(even){border-right:0}}
+
+.sheet{background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:16px}
+.scroll{overflow-x:auto}
+svg text{font-family:var(--f-body)}
+.n rect{fill:var(--box);stroke:var(--box-line);stroke-width:1.2}
+.n .t{fill:var(--ink);font-size:14px;font-weight:600}
+.n .s{fill:var(--ink-2);font-size:12px}
+.n.hot rect{stroke:var(--accent);stroke-width:2}
+.edge{stroke:var(--ink-2);stroke-width:1.4;fill:none}
+.elab{fill:var(--ink-2);font-size:11.5px}
+.bound{fill:none;stroke:var(--line);stroke-width:1.4;stroke-dasharray:6 5}
+.blab{fill:var(--ink-2);font-size:12px;font-family:var(--f-mono)}
+.bound.cloud{stroke:var(--accent)}
+#arrow path{fill:var(--ink-2)}
+.er .bx{fill:var(--sheet);stroke:var(--box-line);stroke-width:1.2}
+.er .hd{fill:var(--box);stroke:var(--box-line);stroke-width:1.2}
+.er .hn{fill:var(--ink);font-family:var(--f-mono);font-size:13px;font-weight:500}
+.er .cl{fill:var(--ink);font-size:12px}
+.er .fk{fill:var(--ink-2);font-size:12px;font-style:italic}
+.er.mg .bx{stroke:var(--accent);stroke-dasharray:5 4;stroke-width:1.5}
+.er .hn2{fill:var(--ink);font-family:var(--f-mono);font-size:13px;font-weight:500}
+.er .tagm{fill:var(--accent);font-family:var(--f-mono);font-size:11px}
+
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+.step{flex:1 1 150px;min-width:0;background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.step b{font-family:var(--f-mono);font-size:12px;color:var(--accent);display:block}
+.step span{font-size:14px}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
+.card{background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:14px 16px;display:grid;gap:8px;align-content:start;min-width:0}
+.card header{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.row{display:grid;grid-template-columns:70px 1fr;gap:8px;font-size:14px}
+.row .k{font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);padding-top:2px}
+.pill{font-family:var(--f-mono);font-size:11px;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.ok{background:var(--ok-bg);color:var(--ok)} .pa{background:var(--pa-bg);color:var(--pa)} .no{background:var(--no-bg);color:var(--no)}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--ink-2);align-items:center}
+
+table{border-collapse:collapse;width:100%;min-width:720px;background:var(--sheet);font-size:14px}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line)}
+th{font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);font-weight:500;border-bottom:1.5px solid var(--ink)}
+td.prop{color:var(--accent);font-weight:500}
+
+.phases{display:grid;gap:10px}
+.phase{display:grid;grid-template-columns:110px 1fr;gap:14px;background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:12px 16px}
+.phase .id{font-family:var(--f-display);font-weight:600;font-size:18px}
+.phase .id small{display:block;font-family:var(--f-mono);font-size:11px;font-weight:400;color:var(--ink-2);letter-spacing:.04em}
+.phase ul{margin:0;padding-left:18px;font-size:14px}
+.phase.now{border-color:var(--accent);border-width:2px}
+@media (max-width:560px){.phase{grid-template-columns:1fr;gap:6px}}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+.list{margin:0;padding-left:18px;font-size:14px;display:grid;gap:4px}
+.check{list-style:none;padding:0;margin:0;display:grid;gap:6px;font-size:14px}
+.check li{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--line);padding-bottom:6px}
+footer{font-size:13px;color:var(--ink-2)}
+</style>
+
+<div class="wrap">
+
+<header style="display:grid;gap:14px">
+  <div class="rotulo">
+    <div class="main"><div class="k">Proyecto</div><div class="v">GIUOS · Línea 1<br>Digitalización de planos históricos</div></div>
+    <div><div class="k">Grupo</div><div class="v">G3</div></div>
+    <div><div class="k">Materia</div><div class="v">Ingeniería de Software II · UCALP</div></div>
+    <div><div class="k">Repo</div><div class="v mono">OrgPlanosHistoricos/<wbr>PlanosHistoricosOrganizacion</div></div>
+    <div><div class="k">Revisión</div><div class="v">4/10/2026 · rev. 5 · casos de uso ajustados</div></div>
+    <div class="wide"><div class="k">Integrantes</div><div class="v">Mariana Eduardo Egea · María Lina Jauregui Lorda · Gonzalo Francisco Lara · Agustín Ezequiel Marino · Juan Francisco Pierini · Agustina Belén Raffo</div></div>
+  </div>
+  <p class="lead">Qué estamos construyendo, con qué piezas, por qué cada una, qué hay hecho y cómo seguimos. Lo marcado como propuesta hay que decidirlo entre todos.</p>
+</header>
+
+<section>
+  <h2>Qué hace el sistema <span class="tag">EL PROBLEMA EN UNA LÍNEA</span></h2>
+  <p class="lead">Un plano en papel solo sirve si alguien sabe dónde está. Escanearlo no alcanza: hay que leerlo, sacar sus datos, que una persona los confirme y dejarlo buscable y con registro de quién hizo qué. Ese es el recorrido de un plano por el sistema:</p>
+  <div class="flow">
+    <div class="step"><b>1 · Cargar · DH-CU-01</b><span>El operador sube el escaneo (JPG, PNG o PDF) con datos de origen: expediente, caja, dirección de referencia.</span></div>
+    <div class="step"><b>2 · Leer con IA</b><span>El modelo multimodal transcribe el texto y propone arquitecto, año, escala, ubicación.</span></div>
+    <div class="step"><b>3 · Validar · DH-CU-02</b><span>El validador documental ve la imagen al lado de lo que propuso la IA, corrige, vincula el expediente con su parcela y valida. Si la IA falló, reintenta o carga a mano (DH-CU-05).</span></div>
+    <div class="step"><b>4 · Guardar y corregir · DH-CU-03</b><span>El dato validado va al catálogo. Si después hay un error, se modifica con motivo obligatorio y queda en la auditoría.</span></div>
+    <div class="step"><b>5 · Consultar · DH-CU-04</b><span>El usuario busca por calle, número, expediente, año o parcela, y ve o descarga el plano.</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>Arquitectura <span class="tag">CÓMO SE CONECTAN LAS PIEZAS</span></h2>
+  <div class="sheet scroll">
+    <svg viewBox="0 0 880 470" width="100%" style="min-width:760px" role="img" aria-label="Diagrama de arquitectura: en la PC del grupo corren el frontend, la API, el worker de IA y Ollama con Docker Compose; en la nube están Supabase (Postgres, Storage y Auth) y MongoDB Atlas. El frontend hace login con Supabase Auth y llama a la API; la API guarda en Supabase y en Mongo.">
+      <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs>
+      <rect class="bound" x="176" y="12" width="690" height="290" rx="8"/>
+      <text class="blab" x="190" y="32">pc del grupo · docker compose · solo cpu</text>
+      <rect class="bound cloud" x="176" y="322" width="690" height="130" rx="8"/>
+      <text class="blab" x="190" y="342">nube</text>
+
+      <g class="n"><rect x="16" y="56" width="140" height="64" rx="5"/><text class="t" x="86" y="84" text-anchor="middle">Agente de archivo</text><text class="s" x="86" y="104" text-anchor="middle">navegador</text></g>
+      <g class="n"><rect x="196" y="56" width="160" height="64" rx="5"/><text class="t" x="276" y="84" text-anchor="middle">Frontend web</text><text class="s" x="276" y="104" text-anchor="middle">HTML + JS · nginx</text></g>
+      <g class="n hot"><rect x="396" y="56" width="170" height="64" rx="5"/><text class="t" x="481" y="84" text-anchor="middle">API REST</text><text class="s" x="481" y="104" text-anchor="middle">FastAPI · auditoría</text></g>
+      <g class="n"><rect x="626" y="56" width="160" height="64" rx="5"/><text class="t" x="706" y="84" text-anchor="middle">Worker de IA</text><text class="s" x="706" y="104" text-anchor="middle">cola en segundo plano</text></g>
+      <g class="n"><rect x="706" y="210" width="150" height="70" rx="5"/><text class="t" x="781" y="238" text-anchor="middle">Ollama</text><text class="s" x="781" y="258" text-anchor="middle">Qwen VL en CPU</text></g>
+
+      <g class="n"><rect x="196" y="362" width="370" height="70" rx="5"/><text class="t" x="381" y="390" text-anchor="middle">Supabase</text><text class="s" x="381" y="410" text-anchor="middle">Postgres (catálogo) · Storage (archivos) · Auth (login)</text></g>
+      <g class="n"><rect x="626" y="362" width="200" height="70" rx="5"/><text class="t" x="726" y="390" text-anchor="middle">MongoDB Atlas</text><text class="s" x="726" y="410" text-anchor="middle">corridas de la IA</text></g>
+
+      <path class="edge" d="M156 88H194" marker-end="url(#arrow)"/>
+      <path class="edge" d="M356 88H394" marker-end="url(#arrow)"/><text class="elab" x="375" y="80" text-anchor="middle">HTTP</text>
+      <path class="edge" d="M566 88H624" marker-end="url(#arrow)"/><text class="elab" x="595" y="80" text-anchor="middle">encola</text>
+      <path class="edge" d="M740 120L775 208" marker-end="url(#arrow)"/><text class="elab" x="782" y="166">imagen → JSON</text>
+      <path class="edge" d="M276 120V360" marker-end="url(#arrow)" stroke-dasharray="4 4"/><text class="elab" x="284" y="240">login</text>
+      <path class="edge" d="M466 120V360" marker-end="url(#arrow)"/><text class="elab" x="474" y="200">datos y archivos</text>
+      <path class="edge" d="M540 120L690 360" marker-end="url(#arrow)"/><text class="elab" x="624" y="280" text-anchor="end">corrida IA</text>
+    </svg>
+  </div>
+  <p class="lead">La API no es una pieza aparte del backend: es la puerta por la que el frontend le habla. Todo lo de arriba corre en una PC del grupo. Las bases, los archivos y el login quedan en la nube, así que se ven igual desde cualquier máquina del equipo.</p>
+</section>
+
+<section>
+  <h2>Casos de uso <span class="tag">DH-CU-01 A 05</span></h2>
+  <p class="lead">Los cuatro primeros son los del documento "casos de uso" del grupo, y coinciden uno a uno con las cuatro pantallas del frontend (<span class="mono">cu-cargar</span>, <span class="mono">cu-validar</span>, <span class="mono">cu-modificar</span>, <span class="mono">cu-consultar</span>). Reemplazan la numeración CU-01 a CU-17 de la Actividad 1.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Caso de uso</th><th>Actor / rol</th><th>Qué toca</th><th>Estado en el código</th></tr></thead>
+    <tbody>
+      <tr><td><b>DH-CU-01</b> Cargar plano histórico</td><td>Operador</td><td>Storage, <span class="mono">archivos</span>, <span class="mono">planos</span>, <span class="mono">procesamientos_ia</span></td><td>Anda. Acepta JPG, PNG, WEBP y PDF, pero los PDF no pasan por la IA: se catalogan a mano. La conversión de PDF para la IA está en la rama <span class="mono">feature</span>. Falta hacer obligatorio el expediente.</td></tr>
+      <tr><td><b>DH-CU-02</b> Validar y catalogar</td><td>Validador documental</td><td><span class="mono">planos</span>, <span class="mono">expedientes</span>, <span class="mono">parcelas</span>, <span class="mono">eventos_auditoria</span></td><td>Anda. Incluye el estado "sin ubicación asignada" (extensión 4a). Falta vincular la parcela al expediente en vez de al plano.</td></tr>
+      <tr><td><b>DH-CU-05</b> Resolver falla del análisis automático <span class="pill pa">nuevo</span></td><td>Validador documental</td><td><span class="mono">procesamientos_ia</span>, <span class="mono">corridas_ia</span>, <span class="mono">planos</span></td><td>Falta. Hoy solo se reintenta solo al reiniciar la API; no hay botón de reintento.</td></tr>
+      <tr><td><b>DH-CU-03</b> Modificar catalogación</td><td>Validador documental</td><td><span class="mono">planos</span>, <span class="mono">eventos_auditoria</span></td><td>Anda, con motivo obligatorio. Falta registrar quién modificó y el valor anterior.</td></tr>
+      <tr><td><b>DH-CU-04</b> Consultar planos</td><td>Usuario del sistema</td><td><span class="mono">planos</span>, <span class="mono">expedientes</span>, <span class="mono">parcelas</span>, Storage</td><td>Anda con un solo campo de búsqueda. Falta buscar por calle, número, año o parcela por separado.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="two">
+  <div class="sheet" style="display:grid;gap:10px">
+    <h3>Ajustes acordados a los casos de uso</h3>
+    <ol class="list">
+      <li><b>DH-CU-01:</b> el expediente es obligatorio en el paso 3. La extensión 3c pasa a ser "el operador no ingresa el expediente: el sistema lo pide y vuelve al paso 3". Ubicación física y dirección de referencia siguen opcionales.</li>
+      <li><b>DH-CU-02:</b> en el paso 4 se vincula el expediente con su parcela, no el plano. Se saca "superficie" de los datos leídos en el paso 2.</li>
+      <li><b>DH-CU-04:</b> la consulta queda sin login por ahora. El login se suma cuando la funcionalidad ande.</li>
+      <li><b>Nuevo DH-CU-05</b> para cuando la IA falla. Extiende a DH-CU-02.</li>
+      <li><b>Pendiente:</b> cómo se registran los sellos. Hoy caen en <span class="mono">notas</span>.</li>
+    </ol>
+  </div>
+  <div class="sheet" style="display:grid;gap:8px;font-size:14px">
+    <h3>DH-CU-05: Resolver falla del análisis automático</h3>
+    <p><b>Actor principal:</b> Validador documental.<br><b>Disparador:</b> el validador selecciona un plano cuyo análisis automático falló o no se pudo hacer.<br><b>Precondición:</b> el plano está cargado y su análisis terminó con error, o no aplica (por ejemplo, un PDF).<br><b>Garantía de éxito:</b> el plano queda con datos para revisar, por un nuevo análisis o cargados a mano, y pasa a la validación.</p>
+    <p><b>Escenario principal de éxito</b></p>
+    <ol class="list">
+      <li>El sistema marca en la lista de pendientes los planos con análisis fallido y el motivo.</li>
+      <li>El validador elige un plano con falla.</li>
+      <li>El sistema muestra la imagen, el motivo de la falla y dos opciones: reintentar el análisis o cargar los datos a mano.</li>
+      <li>El validador elige reintentar.</li>
+      <li>El sistema vuelve a ejecutar el análisis y registra el nuevo intento.</li>
+      <li>El análisis termina bien y el plano queda listo para validar (DH-CU-02).</li>
+    </ol>
+    <p><b>Extensiones</b></p>
+    <ul class="list">
+      <li>4a. El validador elige cargar a mano: el sistema muestra el formulario de catalogación vacío; el validador completa los datos leyendo la imagen y continúa en DH-CU-02, paso 4.</li>
+      <li>6a. El nuevo intento también falla: el sistema informa la falla, registra el intento y vuelve al paso 3.</li>
+      <li>6b. Se llegó al máximo de intentos (a definir, por ejemplo 3): el sistema solo ofrece la carga manual (4a).</li>
+    </ul>
+  </div>
+</div>
+</section>
+
+<section>
+  <h2>Las piezas, una por una <span class="tag">QUÉ · CON QUÉ · POR QUÉ</span></h2>
+  <div class="legend"><span class="pill ok">hecho</span><span class="pill pa">parcial o desordenado</span><span class="pill no">falta</span><span>· "Marco" remite a la sección del marco teórico que lo pide.</span></div>
+  <div class="cards">
+
+    <article class="card"><header><h3>Frontend web</h3><span class="pill pa">parcial</span></header>
+      <div class="row"><span class="k">Usamos</span><span>HTML y JS sin framework, servido por nginx.</span></div>
+      <div class="row"><span class="k">Por qué</span><span>El piloto tiene cuatro pantallas, una por caso de uso (cargar, consultar, validar, modificar). Un framework suma curva de aprendizaje sin necesidad.</span></div>
+      <div class="row"><span class="k">Hay</span><span>Pantallas por CU en <span class="mono">main</span>; mejoras en <span class="mono">porsiacaso</span> sin mergear.</span></div>
+      <div class="row"><span class="k">Falta</span><span>Login, vistas por rol, búsqueda con filtros, resaltar los campos dudosos de la IA.</span></div>
+    </article>
+
+    <article class="card"><header><h3>API REST</h3><span class="pill pa">parcial</span></header>
+      <div class="row"><span class="k">Usamos</span><span>FastAPI + SQLModel (Python).</span></div>
+      <div class="row"><span class="k">Por qué</span><span>Mismo lenguaje que la parte de IA. Genera documentación OpenAPI sola: es el contrato entre front y back y la base de la interoperabilidad (Marco 9).</span></div>
+      <div class="row"><span class="k">Hay</span><span>Alta, listado, detalle, validar y modificar planos.</span></div>
+      <div class="row"><span class="k">Falta</span><span>Un solo flujo sobre Supabase y Mongo, conservando la validación y el historial de <span class="mono">/planos</span>. Verificar el token de Supabase Auth en cada pedido, roles, auditoría con usuario.</span></div>
+    </article>
+
+    <article class="card"><header><h3>Procesamiento con IA</h3><span class="pill pa">en ramas</span></header>
+      <div class="row"><span class="k">Usamos</span><span>Ollama + Qwen VL, Pillow para preprocesar, conversión de PDF a imagen.</span></div>
+      <div class="row"><span class="k">Por qué</span><span>Es un modelo multimodal: lee texto y entiende el dibujo (Marco 3 y 4). Corre en la PC del grupo, sin costo por uso. En CPU tarda 60 a 90 segundos por plano; se banca porque el proceso ya es asíncrono. Modelo: indistinto.</span></div>
+      <div class="row"><span class="k">Hay</span><span>Extracción en <span class="mono">main</span>. Transcripción completa y Qwen3 en <span class="mono">apieIA</span>, PDF en <span class="mono">feature</span>, GPU en <span class="mono">versionNVIDIA</span>.</span></div>
+      <div class="row"><span class="k">Falta</span><span>Mergear las tres ramas. Validar el JSON contra el esquema y marcar qué campos son dudosos.</span></div>
+    </article>
+
+    <article class="card"><header><h3>Supabase · Postgres</h3><span class="pill pa">parcial</span></header>
+      <div class="row"><span class="k">Guarda</span><span>El catálogo oficial: planos, expedientes, parcelas, usuarios, roles, auditoría.</span></div>
+      <div class="row"><span class="k">Por qué</span><span>Son datos estructurados con relaciones: un expediente tiene muchos planos, una parcela muchos expedientes. Lo relacional garantiza integridad (Marco 6 y 7).</span></div>
+      <div class="row"><span class="k">Hay</span><span>Tablas <span class="mono">planos</span> e <span class="mono">historial_modificaciones</span> en un Postgres local del compose.</span></div>
+      <div class="row"><span class="k">Falta</span><span>Apuntar <span class="mono">DATABASE_URL</span> a Supabase y sacar el Postgres local. Crear las tablas del modelo nuevo.</span></div>
+    </article>
+
+    <article class="card"><header><h3>MongoDB</h3><span class="pill pa">desconectado</span></header>
+      <div class="row"><span class="k">Guarda</span><span>Cada corrida de la IA tal cual salió: JSON, texto transcripto, modelo y prompt usados.</span></div>
+      <div class="row"><span class="k">Por qué</span><span>La forma de ese JSON cambia cada vez que cambiamos el prompt o el modelo. Guardarlo permite comparar lo que propuso la IA con lo que validó la persona (Marco 5 y 10).</span></div>
+      <div class="row"><span class="k">Hay</span><span>Base en Atlas, funcionando en el flujo de <span class="mono">/procesar-plano</span>. Se queda.</span></div>
+      <div class="row"><span class="k">Falta</span><span>Conectarla al flujo de <span class="mono">/planos</span>.</span></div>
+    </article>
+
+    <article class="card"><header><h3>Supabase · Storage</h3><span class="pill pa">decidido</span></header>
+      <div class="row"><span class="k">Usamos</span><span>Supabase Storage, bucket <span class="mono">planos_escaneados</span>.</span></div>
+      <div class="row"><span class="k">Por qué</span><span>Los escaneos pesan mucho y no van dentro de una base (Marco 8). Viene en el mismo paquete que la base y el login, y el código para subir ya existe.</span></div>
+      <div class="row"><span class="k">Hay</span><span><span class="mono">storage_client.py</span> funcionando. MinIO también, pero sale.</span></div>
+      <div class="row"><span class="k">Falta</span><span>Sacar MinIO del compose y del código. Guardar un hash SHA-256 de cada archivo. Revisar el límite de almacenamiento del plan gratis.</span></div>
+    </article>
+
+    <article class="card"><header><h3>Seguridad y gobierno</h3><span class="pill no">postergado</span></header>
+      <div class="row"><span class="k">Incluye</span><span>Login con Supabase Auth, roles (operador, validador documental, usuario de consulta, admin), auditoría y backups.</span></div>
+      <div class="row"><span class="k">Por qué</span><span>Lo pide el objetivo A.6 y el Marco 10. Hay datos personales en los expedientes y quedan en la nube, así que hay que justificarlo frente a la Ley 25.326.</span></div>
+      <div class="row"><span class="k">Falta</span><span>Todo. La <span class="mono">service_role</span> key nunca va al frontend: el front usa la <span class="mono">anon</span> key.</span></div>
+    </article>
+
+    <article class="card"><header><h3>Infraestructura y CI/CD</h3><span class="pill pa">parcial</span></header>
+      <div class="row"><span class="k">Usamos</span><span>Docker Compose en una PC del grupo, solo CPU. GitHub Actions para CI.</span></div>
+      <div class="row"><span class="k">Por qué</span><span>Mismo entorno en la máquina de cada uno. CI corre los tests en cada PR para que <span class="mono">main</span> nunca se rompa (objetivos A.1 y A.6).</span></div>
+      <div class="row"><span class="k">Hay</span><span>Compose con todos los servicios (todavía incluye Postgres y MinIO locales).</span></div>
+      <div class="row"><span class="k">Falta</span><span>Compose final (front, API, Ollama), CI con tests, backups. Confirmar con la cátedra que un despliegue local cumple el objetivo A.6.</span></div>
+    </article>
+
+    <article class="card"><header><h3>Gestión del equipo</h3><span class="pill no">falta</span></header>
+      <div class="row"><span class="k">Usamos</span><span>Scrum con GitHub Projects.</span></div>
+      <div class="row"><span class="k">Por qué</span><span>El código ya está en GitHub: cada tarjeta se linkea a su rama y su PR, y se ve quién hace qué sin otra herramienta (objetivos A.2 y A.5).</span></div>
+      <div class="row"><span class="k">Falta</span><span>Cargar el backlog, estimar, armar el primer sprint.</span></div>
+    </article>
+
+  </div>
+</section>
+
+<section>
+  <h2>Modelo de datos <span class="tag">EN CURSO</span></h2>
+  <p class="lead">Hoy <span class="mono">main</span> tiene dos tablas: <span class="mono">planos</span>, que mezcla todo, e <span class="mono">historial_modificaciones</span>. La propuesta separa lo que el marco pide distinguir: inmueble, expediente, plano, archivo, procesamiento de IA y auditoría. De este diagrama sale el diagrama de clases del objetivo A.4.</p>
+  <div class="sheet scroll">
+    <svg viewBox="0 0 890 600" width="100%" style="min-width:780px" role="img" aria-label="Diagrama entidad-relación: parcelas, expedientes, planos y archivos en cadena uno a muchos; archivos tiene procesamientos de IA, que apuntan a corridas en MongoDB; roles, usuarios y eventos de auditoría; los usuarios crean y validan planos.">
+      <defs><marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--ink-2)"/></marker></defs>
+
+      <g class="er"><rect class="bx" x="20" y="40" width="190" height="145" rx="4"/><rect class="hd" x="20" y="40" width="190" height="28" rx="4"/><text class="hn" x="32" y="59">parcelas</text>
+        <text class="cl" x="32" y="88">id</text><text class="cl" x="32" y="106">nomenclatura_catastral (U)</text><text class="cl" x="32" y="124">direccion</text><text class="cl" x="32" y="142">partido</text></g>
+      <g class="er"><rect class="bx" x="240" y="40" width="190" height="145" rx="4"/><rect class="hd" x="240" y="40" width="190" height="28" rx="4"/><text class="hn" x="252" y="59">expedientes</text>
+        <text class="cl" x="252" y="88">id</text><text class="cl" x="252" y="106">numero (U) · anio · tipo</text><text class="cl" x="252" y="124">caratula</text><text class="cl" x="252" y="142">ubicacion_fisica</text><text class="fk" x="252" y="160">parcela_id</text></g>
+      <g class="er"><rect class="bx" x="460" y="40" width="190" height="165" rx="4"/><rect class="hd" x="460" y="40" width="190" height="28" rx="4"/><text class="hn" x="472" y="59">planos</text>
+        <text class="cl" x="472" y="88">id · estado</text><text class="fk" x="472" y="106">expediente_id (obligatorio)</text><text class="cl" x="472" y="124">metadatos validados</text><text class="cl" x="472" y="142">texto_extraido</text><text class="fk" x="472" y="160">creado_por · validado_por</text><text class="cl" x="472" y="178">direccion_referencia</text><text class="cl" x="472" y="196">creado_en · fecha_validacion</text></g>
+      <g class="er"><rect class="bx" x="680" y="40" width="190" height="145" rx="4"/><rect class="hd" x="680" y="40" width="190" height="28" rx="4"/><text class="hn" x="692" y="59">archivos</text>
+        <text class="cl" x="692" y="88">id</text><text class="fk" x="692" y="106">plano_id</text><text class="cl" x="692" y="124">ruta_storage · content_type</text><text class="cl" x="692" y="142">sha256 · tamanio</text><text class="cl" x="692" y="160">version · es_vigente</text></g>
+
+      <g class="er"><rect class="bx" x="20" y="245" width="190" height="145" rx="4"/><rect class="hd" x="20" y="245" width="190" height="28" rx="4"/><text class="hn" x="32" y="264">roles</text>
+        <text class="cl" x="32" y="293">id</text><text class="cl" x="32" y="311">nombre</text><text class="cl" x="32" y="329">operador, validador,</text><text class="cl" x="32" y="347">consulta, admin</text></g>
+      <g class="er"><rect class="bx" x="240" y="245" width="190" height="145" rx="4"/><rect class="hd" x="240" y="245" width="190" height="28" rx="4"/><text class="hn" x="252" y="264">usuarios</text>
+        <text class="cl" x="252" y="293">id</text><text class="cl" x="252" y="311">nombre · email</text><text class="fk" x="252" y="329">rol_id</text><text class="cl" x="252" y="347">activo</text></g>
+      <g class="er"><rect class="bx" x="460" y="245" width="190" height="145" rx="4"/><rect class="hd" x="460" y="245" width="190" height="28" rx="4"/><text class="hn" x="472" y="264">eventos_auditoria</text>
+        <text class="cl" x="472" y="293">id · fecha</text><text class="fk" x="472" y="311">usuario_id</text><text class="cl" x="472" y="329">entidad · entidad_id</text><text class="cl" x="472" y="347">accion · motivo</text><text class="cl" x="472" y="365">valor_anterior / nuevo</text></g>
+      <g class="er"><rect class="bx" x="680" y="245" width="190" height="145" rx="4"/><rect class="hd" x="680" y="245" width="190" height="28" rx="4"/><text class="hn" x="692" y="264">procesamientos_ia</text>
+        <text class="cl" x="692" y="293">id</text><text class="fk" x="692" y="311">archivo_id</text><text class="cl" x="692" y="329">estado · modelo · error</text><text class="cl" x="692" y="347">fecha_inicio · fecha_fin</text><text class="fk" x="692" y="365">mongo_id</text></g>
+
+      <g class="er mg"><rect class="bx" x="680" y="450" width="190" height="125" rx="4"/><text class="hn2" x="692" y="472">corridas_ia</text><text class="tagm" x="858" y="472" text-anchor="end">MongoDB</text>
+        <text class="cl" x="692" y="496">plano_id · archivo_id</text><text class="cl" x="692" y="514">modelo · version_prompt</text><text class="cl" x="692" y="532">JSON crudo del modelo</text><text class="cl" x="692" y="550">texto_extraido original</text><text class="cl" x="692" y="568">duracion · fecha</text></g>
+
+      <path class="edge" d="M210 112H238" marker-end="url(#arrow2)"/><text class="elab" x="224" y="104" text-anchor="middle">1:N</text>
+      <path class="edge" d="M430 112H458" marker-end="url(#arrow2)"/><text class="elab" x="444" y="104" text-anchor="middle">1:N</text>
+      <path class="edge" d="M650 112H678" marker-end="url(#arrow2)"/><text class="elab" x="664" y="104" text-anchor="middle">1:N</text>
+      <path class="edge" d="M775 185V243" marker-end="url(#arrow2)"/><text class="elab" x="783" y="218">1:N</text>
+      <path class="edge" d="M210 317H238" marker-end="url(#arrow2)"/><text class="elab" x="224" y="309" text-anchor="middle">1:N</text>
+      <path class="edge" d="M430 317H458" marker-end="url(#arrow2)"/><text class="elab" x="444" y="309" text-anchor="middle">1:N</text>
+      <path class="edge" d="M775 390V448" marker-end="url(#arrow2)"/><text class="elab" x="783" y="423">mongo_id</text>
+      <path class="edge" d="M335 245L548 205" marker-end="url(#arrow2)" stroke-dasharray="4 4"/>
+
+      <text class="elab" x="20" y="430">(U) = valor único · en cursiva, claves foráneas</text>
+      <text class="elab" x="20" y="448">punteada: cada usuario crea y valida planos</text>
+      <text class="elab" x="20" y="466">"metadatos validados" = arquitecto, anio, titulo, escala,</text>
+      <text class="elab" x="20" y="484">tipo_de_plano, material_soporte, notas</text>
+    </svg>
+  </div>
+
+  <div class="scroll"><table>
+    <thead><tr><th>Tabla</th><th>Qué guarda</th><th>De dónde sale hoy</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">parcelas</td><td>El inmueble, identificado por nomenclatura catastral. Une lo histórico con lo actual (el marco pide identificadores comunes).</td><td>Campo de texto <span class="mono">parcela</span> dentro de <span class="mono">planos</span>.</td></tr>
+      <tr><td class="mono">expedientes</td><td>El trámite físico: número, año, tipo de obra, carátula y dónde está guardado (la ubicación física va acá, no en cada plano). Al validar, se vincula con su parcela.</td><td>Campos de texto <span class="mono">expediente</span> y <span class="mono">ubicacion_fisica</span>.</td></tr>
+      <tr><td class="mono">planos</td><td>La ficha validada por una persona, con su estado, quién la creó y validó, y cuándo: <span class="mono">creado_en</span> (fecha de carga en el sistema) y <span class="mono">fecha_validacion</span>. Guarda la <span class="mono">direccion_referencia</span> que se ingresa al cargar (DH-CU-01).</td><td>Tabla <span class="mono">planos</span> actual, más liviana.</td></tr>
+      <tr><td class="mono">archivos</td><td>Cada escaneo con versión, hash SHA-256 y marca de vigente. Permite saber cuál es el plano vigente y probar que no fue alterado.</td><td>Columnas <span class="mono">minio_path</span>, <span class="mono">nombre_original</span>, <span class="mono">content_type</span>.</td></tr>
+      <tr><td class="mono">procesamientos_ia</td><td>Cada vez que la IA procesó un archivo: estado, modelo, error. Es el puente con Mongo.</td><td>Columnas <span class="mono">ia_estado</span> e <span class="mono">ia_error</span>.</td></tr>
+      <tr><td class="mono">usuarios</td><td>Perfil de quien entra al sistema. El login lo maneja Supabase Auth, así que esta tabla apunta a <span class="mono">auth.users</span> de Supabase.</td><td>No existe.</td></tr>
+      <tr><td class="mono">roles</td><td>Qué puede hacer cada usuario. Salen de los actores de los casos de uso: operador (DH-CU-01), validador documental (DH-CU-02 y 03), usuario de consulta (DH-CU-04), más un admin.</td><td>No existe.</td></tr>
+      <tr><td class="mono">eventos_auditoria</td><td>Quién hizo qué, cuándo, sobre qué registro, con el valor anterior y el nuevo.</td><td><span class="mono">historial_modificaciones</span>, que hoy no guarda usuario ni valor anterior.</td></tr>
+      <tr><td class="mono">corridas_ia</td><td>En MongoDB: lo que devolvió el modelo tal cual, para comparar lo que propuso la IA con lo que validó la persona.</td><td>Colección <span class="mono">extracciones</span> del flujo viejo.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="sheet" style="display:grid;gap:10px">
+    <h3>Definido sobre el modelo</h3>
+    <ol class="list">
+      <li><b>Todo plano tiene expediente.</b> Para el MVP solo trabajamos con planos que tengan expediente: <span class="mono">expediente_id</span> es obligatorio.</li>
+      <li><b><span class="mono">texto_extraido</span>:</b> la versión corregida va en Postgres (sirve para búsqueda de texto completo) y la original de la IA queda en Mongo.</li>
+      <li><b>Tabla de profesionales:</b> queda como Could en MoSCoW, fuera del piloto.</li>
+      <li><b>Parcela y ubicación física:</b> cuelgan del expediente, no del plano.</li>
+      <li><b>Dirección de referencia:</b> campo en <span class="mono">planos</span>.</li>
+      <li><b>Superficie:</b> no se extrae ni se guarda.</li>
+    </ol>
+    <p style="font-size:14px;color:var(--ink-2)">Como la parcela cuelga del expediente, el estado <span class="mono">sin_ubicacion</span> (DH-CU-02, extensión 4a) pasa a significar "el expediente todavía no tiene parcela".</p>
+  </div>
+</section>
+
+<section>
+  <h2>Decisiones <span class="tag">TOMADAS EL 4/10</span></h2>
+  <p class="lead">Lo que el grupo ya definió. La columna naranja es lo que hay que tener en cuenta al implementarlo.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Tema</th><th>Decisión</th><th>Ojo con</th></tr></thead>
+    <tbody>
+      <tr><td>Plataforma de datos</td><td>Supabase, por simpleza y porque es más directo.</td><td class="prop">Límites del plan gratis y datos personales fuera del país (Ley 25.326): justificarlo en el documento de stack.</td></tr>
+      <tr><td>Flujo de procesamiento</td><td>Supabase + Mongo.</td><td class="prop">No perder lo que ya hace <span class="mono">/planos</span> (validar, modificar, historial, estados): mover esa lógica a Supabase en vez de volver al flujo viejo, que solo procesa.</td></tr>
+      <tr><td>Archivos</td><td>Supabase Storage.</td><td class="prop">Sale MinIO del compose y del código.</td></tr>
+      <tr><td>MongoDB</td><td>Se queda, para las corridas de la IA.</td><td class="prop">Agregar la IP de la PC del despliegue a la whitelist de Atlas.</td></tr>
+      <tr><td>Login</td><td>Supabase Auth, postergado: primero que ande la funcionalidad.</td><td class="prop">Mientras tanto, la API no debe quedar expuesta a internet. Cuando se sume, la API tiene que verificar el token en cada pedido.</td></tr>
+      <tr><td>Modelo de IA</td><td>Indistinto.</td><td class="prop">Usar el que quede en <span class="mono">main</span> después de mergear <span class="mono">apieIA</span>.</td></tr>
+      <tr><td>Despliegue</td><td>Local, en la PC que usemos, solo CPU.</td><td class="prop">Confirmar con la cátedra que cumple el objetivo A.6 ("entorno productivo institucional"). La PC tiene que estar prendida para que el sistema ande.</td></tr>
+      <tr><td>Modelo de datos</td><td>Definido salvo los sellos (ver sección).</td><td class="prop">No tocar <span class="mono">models.py</span> hasta cerrarlo.</td></tr>
+      <tr><td>Frontend en Vercel</td><td>A decidir.</td><td class="prop">Solo sirve si la API queda accesible desde internet (túnel). Si no, conviene servir el front desde el mismo compose.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Cómo seguimos <span class="tag">FASES, EN ORDEN</span></h2>
+  <div class="phases">
+    <div class="phase now"><div class="id">Fase 0<small>ordenar · ahora</small></div><ul>
+      <li>Borrar <span class="mono">fase2-postgres</span> en GitHub (ya está mergeada).</li>
+      <li>Mergear <span class="mono">feature</span>, <span class="mono">apieIA</span>, <span class="mono">porsiacaso</span> y <span class="mono">versionNVIDIA</span> a <span class="mono">main</span>, todos juntos. La GPU queda como opción del compose.</li>
+      <li>Actualizar el documento de casos de uso con los ajustes acordados y DH-CU-05. Definir los sellos y cargar el backlog en GitHub Projects.</li>
+      <li>Preguntar a la cátedra si el despliegue local cumple el objetivo A.6.</li>
+    </ul></div>
+    <div class="phase"><div class="id">Fase 1<small>un solo flujo</small></div><ul>
+      <li>Pasar la base y los archivos a Supabase: sacar Postgres local y MinIO del compose. Un solo flujo con validación e historial, guardando cada corrida en Mongo.</li>
+      <li>Prueba de concepto: medir campos correctos y tiempo por plano en CPU con planos reales.</li>
+    </ul></div>
+    <div class="phase"><div class="id">Fase 2<small>datos y seguridad</small></div><ul>
+      <li>Implementar el modelo de datos confirmado (sección "Modelo de datos") y migrar los planos existentes. De acá sale el diagrama de clases.</li>
+      <li>Reintento y carga manual cuando la IA falla (DH-CU-05). Auditoría con valor anterior y nuevo.</li>
+      <li>Después, cuando la funcionalidad ande: login con Supabase Auth, verificación del token en la API y roles.</li>
+    </ul></div>
+    <div class="phase"><div class="id">Fase 3<small>búsqueda y calidad</small></div><ul>
+      <li>Búsqueda por varios criterios a la vez. Campos dudosos resaltados en la revisión.</li>
+      <li>Tests de la API.</li>
+    </ul></div>
+    <div class="phase"><div class="id">Fase 4<small>despliegue</small></div><ul>
+      <li>Compose final en la PC de despliegue, CI con GitHub Actions, backups (Supabase + <span class="mono">mongodump</span>). Diagrama de despliegue.</li>
+    </ul></div>
+    <div class="phase"><div class="id">Fase 5<small>piloto</small></div><ul>
+      <li>Cargar un lote acotado de planos reales con usuarios, medir calidad y usabilidad, ajustar.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section class="two">
+  <div class="sheet" style="display:grid;gap:10px">
+    <h3>Reglas para trabajar con git</h3>
+    <ol class="list">
+      <li><span class="mono">main</span> siempre tiene que andar.</li>
+      <li>Una rama por tarjeta del backlog, con nombre claro: <span class="mono">feat/login</span>, <span class="mono">fix/pdf-multipagina</span>.</li>
+      <li>PR chico, revisado por otra persona antes de mergear.</li>
+      <li>Nunca subir el <span class="mono">.env</span>.</li>
+      <li>Todo mergeado antes de cerrar el sprint. Rama mergeada, rama borrada.</li>
+    </ol>
+  </div>
+  <div class="sheet" style="display:grid;gap:10px">
+    <h3>Entregables de la cátedra</h3>
+    <ul class="check">
+      <li><span>Casos de uso DH-CU-01 a 05</span><span class="pill pa">actualizar documento</span></li>
+      <li><span>Priorización MoSCoW</span><span class="pill ok">hecho</span></li>
+      <li><span>Stack y ambientes justificados (A.1)</span><span class="pill pa">esta página</span></li>
+      <li><span>Prueba de concepto (A.3)</span><span class="pill pa">en curso</span></li>
+      <li><span>UML: actividad, clases, despliegue (A.4)</span><span class="pill no">falta</span></li>
+      <li><span>Scrum con sprints (A.2, A.5)</span><span class="pill no">falta</span></li>
+      <li><span>CI/CD, backups, roles (A.6)</span><span class="pill no">falta</span></li>
+      <li><span>Piloto con usuarios (B.10)</span><span class="pill no">falta</span></li>
+    </ul>
+  </div>
+</section>
+
+<footer>Fuentes: marco teórico de GIUOS (cátedra), Actividad 1 y documento de casos de uso del grupo, y repo en GitHub al 4/10/2026. El alcance del G3 es la Línea 1: la tramitación de permisos de obra queda para otro grupo.</footer>
+</div>
+
+</body></html>
