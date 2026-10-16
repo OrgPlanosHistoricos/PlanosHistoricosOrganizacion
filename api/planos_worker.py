@@ -50,8 +50,12 @@ def _guardar_resultado(plano_id: int, datos: Optional[dict], error: Optional[str
                 ultimo_procesamiento.error = error
                 session.add(ultimo_procesamiento)
         else:
-            for campo in DatosPlano.model_fields:
-                setattr(plano, campo, datos.get(campo))
+            if plano.estado != EstadoPlano.pendiente:
+                import json
+                plano.ia_propuesta = json.dumps(datos)
+            else:
+                for campo in DatosPlano.model_fields:
+                    setattr(plano, campo, datos.get(campo))
             plano.ia_estado = EstadoIA.completado
             plano.ia_error = None
             if ultimo_procesamiento:

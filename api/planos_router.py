@@ -264,9 +264,20 @@ def modificar_plano(plano_id: int, datos: PlanoModificar, session: Session = Dep
         raise HTTPException(status_code=400, detail="El motivo de la modificación es obligatorio.")
     plano = _obtener_plano(session, plano_id)
     _aplicar_datos(plano, datos, session)
+    plano.ia_propuesta = None
     session.add(plano)
     session.add(EventoAuditoria(plano_id=plano.id, motivo=motivo, usuario_id=datos.usuario_id))
     _commit_unico(session, plano.nomenclatura, plano.id)
+    session.refresh(plano)
+    return PlanoDetalle.model_validate(plano)
+
+
+@router.post("/{plano_id}/descartar_propuesta", response_model=PlanoDetalle)
+def descartar_propuesta(plano_id: int, session: Session = Depends(get_session)):
+    plano = _obtener_plano(session, plano_id)
+    plano.ia_propuesta = None
+    session.add(plano)
+    session.commit()
     session.refresh(plano)
     return PlanoDetalle.model_validate(plano)
 
@@ -286,14 +297,16 @@ def reintentar_ia(plano_id: int, usuario_id: str = Query(..., description="ID de
         )
     
     intentos_previos = session.exec(select(ProcesamientoIA).where(ProcesamientoIA.plano_id == plano.id)).all()
+    max_intento_previo = max([p.intento for p in intentos_previos], default=0)
+    num_intentos = max(max_intento_previo, 1 if plano.ia_estado in (EstadoIA.completado, EstadoIA.error) else 0)
     max_intentos = 3
-    if len(intentos_previos) >= max_intentos:
+    if num_intentos >= max_intentos:
         raise HTTPException(
             status_code=400,
-            detail=f"Se alcanzó el límite máximo de {max_intentos} intentos.",
+            detail={"codigo": "max_intentos", "mensaje": f"Se alcanzó el límite máximo de {max_intentos} intentos."},
         )
 
-    nuevo_intento_num = len(intentos_previos) + 1
+    nuevo_intento_num = num_intentos + 1
     plano.ia_estado = EstadoIA.procesando
     session.add(plano)
     
@@ -311,3 +324,4 @@ def reintentar_ia(plano_id: int, usuario_id: str = Query(..., description="ID de
             
     planos_worker.encolar(plano.id, contenido)
     return PlanoDetalle.model_validate(plano)
+

@@ -60,6 +60,7 @@ class PlanoBase(DatosPlano):
     estado: EstadoPlano = EstadoPlano.pendiente
     ia_estado: EstadoIA = EstadoIA.procesando
     ia_error: Optional[str] = None
+    ia_propuesta: Optional[str] = None
     creado_por: Optional[str] = None
     validado_por: Optional[str] = None
 

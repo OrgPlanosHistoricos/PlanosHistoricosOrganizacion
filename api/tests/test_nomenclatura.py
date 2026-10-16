@@ -158,6 +158,69 @@ class NomenclaturaTests(unittest.TestCase):
             self.assertEqual(self.client.delete('/planos/999').status_code, 404)
             borrar.assert_not_called()
 
+    def test_reintentar_ia_limite_3_intentos(self):
+        with patch('api.planos_router.obtener_archivo', return_value=b'fake-image'):
+            plano_id = self.create().json()['id']
+            # El plano recién creado ya tiene intento 1
+            with Session(self.engine) as db:
+                plano = db.get(Plano, plano_id)
+                plano.ia_estado = plano.ia_estado.completado
+                db.add(plano)
+                db.commit()
+
+            # Reintento 1 (segundo intento total)
+            res1 = self.client.post(f'/planos/{plano_id}/reintentar_ia?usuario_id=Operador')
+            self.assertEqual(res1.status_code, 200)
+
+            with Session(self.engine) as db:
+                plano = db.get(Plano, plano_id)
+                plano.ia_estado = plano.ia_estado.completado
+                db.add(plano)
+                db.commit()
+
+            # Reintento 2 (tercer intento total)
+            res2 = self.client.post(f'/planos/{plano_id}/reintentar_ia?usuario_id=Operador')
+            self.assertEqual(res2.status_code, 200)
+
+            with Session(self.engine) as db:
+                plano = db.get(Plano, plano_id)
+                plano.ia_estado = plano.ia_estado.completado
+                db.add(plano)
+                db.commit()
+
+            # Reintento 3 (cuarto intento total) -> Debe fallar por límite alcanzado
+            res3 = self.client.post(f'/planos/{plano_id}/reintentar_ia?usuario_id=Operador')
+            self.assertEqual(res3.status_code, 400)
+            self.assertEqual(res3.json()['detail']['codigo'], 'max_intentos')
+
+    def test_ia_propuesta_en_modificar_y_descartar(self):
+        plano_id = self.create().json()['id']
+        self.assertEqual(self.client.put(f'/planos/{plano_id}/validar', json=self.data).status_code, 200)
+
+        # Simular propuesta guardada
+        with Session(self.engine) as db:
+            plano = db.get(Plano, plano_id)
+            plano.ia_propuesta = '{"titulo": "Propuesta IA"}'
+            db.add(plano)
+            db.commit()
+
+        # Descartar propuesta
+        res_desc = self.client.post(f'/planos/{plano_id}/descartar_propuesta')
+        self.assertEqual(res_desc.status_code, 200)
+        self.assertIsNone(res_desc.json().get('ia_propuesta'))
+
+        # Modificar plano también debe limpiar ia_propuesta
+        with Session(self.engine) as db:
+            plano = db.get(Plano, plano_id)
+            plano.ia_propuesta = '{"titulo": "Otra propuesta"}'
+            db.add(plano)
+            db.commit()
+
+        res_mod = self.client.put(f'/planos/{plano_id}/modificar', json={**self.data, 'motivo': 'Ajuste manual'})
+        self.assertEqual(res_mod.status_code, 200)
+        self.assertIsNone(res_mod.json().get('ia_propuesta'))
+
 
 if __name__ == '__main__':
     unittest.main()
+

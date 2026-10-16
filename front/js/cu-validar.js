@@ -109,7 +109,10 @@
 
       var tieneFalla = (d.ia_estado === 'error' || d.ia_estado === 'no_aplica');
       var maxIntentos = 3;
-      var intentos = (d.procesamientos && d.procesamientos.length) ? d.procesamientos.length : (d.ia_estado === 'error' ? 1 : (d.ia_estado === 'completado' ? 1 : 0));
+      var maxIntentoPrevio = (d.procesamientos && d.procesamientos.length)
+        ? Math.max.apply(null, d.procesamientos.map(function(p) { return p.intento || 0; }))
+        : 0;
+      var intentos = Math.max(maxIntentoPrevio, (d.ia_estado === 'error' || d.ia_estado === 'completado') ? 1 : 0);
       var puedeReintentar = (d.ia_estado !== 'no_aplica' && d.ia_estado !== 'procesando' && intentos < maxIntentos);
 
       var motivoFallaTexto = d.ia_estado === 'no_aplica'

@@ -219,3 +219,34 @@ test('revisión y modificación: envían nomenclatura normalizada y bloquean dat
     assert.equal(JSON.parse(put.options.body).parcela_catastral,'5B');
   }
 });
+
+test('max_intentos: reintentar_ia explica límite sin texto técnico', async () => {
+  const { PH } = setup(async () => ({ ok: false, status: 400, json: async () => ({ detail: { codigo: 'max_intentos' } }) }));
+  await assert.rejects(PH.API.reintentarIA(1), e => e.codigo === 'max_intentos' && e.message === PH.Errores.mensajes.max_intentos);
+});
+
+test('modificar catalogación: propuesta de IA renderiza banner y tabla de antes y después', async () => {
+  const doc = {
+    id: 1,
+    estado: 'validado',
+    ia_estado: 'completado',
+    titulo: 'Original',
+    ia_propuesta: JSON.stringify({ titulo: 'Propuesto por IA' }),
+    procesamientos: [{ intento: 1, estado: 'completado' }],
+    eventos: []
+  };
+  const { PH, context } = setup(async url => ({ ok: true, json: async () => url.includes('/1') ? doc : [doc] }));
+  PH.CUModificar.seleccionar(1);
+  await new Promise(resolve => setImmediate(resolve));
+  const html = context.document.getElementById('modificar-detalle').innerHTML;
+  assert.ok(html.includes('Hay una nueva propuesta de la IA disponible'));
+  assert.ok(html.includes('Ver Antes y Después'));
+  assert.ok(html.includes('Descartar propuesta'));
+
+  PH.CUModificar.abrirComparacion();
+  const modalHtml = context.document.getElementById('m-modal-comparacion').innerHTML;
+  assert.ok(modalHtml.includes('Original'));
+  assert.ok(modalHtml.includes('Propuesto por IA'));
+  assert.ok(modalHtml.includes('Aplicar cambios de la IA'));
+});
+
