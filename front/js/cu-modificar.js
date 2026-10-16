@@ -8,7 +8,7 @@
   var seleccionadoId = null;
 
   var CAMPOS = [
-    { key: 'texto_extraido', label: 'Texto extraído', type: 'textarea' },
+    { key: 'texto_extraido', label: 'Texto extraído (solo lectura)', type: 'textarea', readonly: true },
     { key: 'titulo', label: 'Título' },
     { key: 'arquitecto', label: 'Arquitecto' },
     { key: 'ubicacion', label: 'Ubicación' },
@@ -25,7 +25,7 @@
   }
   function attr(s) { return String(s || '').replace(/"/g, '&quot;'); }
   function tituloDoc(d) {
-    return d.direccion_referencia || d.expediente || d.nombre_original;
+    return window.PH.Nomenclatura.titulo(d);
   }
 
   async function renderLista() {
@@ -51,7 +51,7 @@
           '</button>';
       }).join('');
     } catch (e) {
-      cont.innerHTML = '<div class="error">Error: ' + e.message + '</div>';
+      cont.innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
     }
   }
 
@@ -95,17 +95,17 @@
       cont.innerHTML = ''
         + '<img class="thumb" src="' + API.getPreviewUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
         + enlaceArchivo
+        + window.PH.Nomenclatura.formulario('m-', d)
         + CAMPOS.map(function(c) {
             var val = d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : '';
             if (c.type === 'textarea') {
-              return '<div class="field"><label>' + c.label + '</label>' +
-                '<textarea id="m-' + c.key + '" rows="4">' + esc(val) + '</textarea></div>';
+              return '<div class="field"><label for="m-' + c.key + '">' + c.label + '</label>' +
+                '<textarea id="m-' + c.key + '" rows="4" readonly>' + esc(val) + '</textarea></div>';
             }
             var type = c.type === 'number' ? 'number' : 'text';
             return '<div class="field"><label>' + c.label + '</label>' +
               '<input type="' + type + '" id="m-' + c.key + '" value="' + attr(val) + '"></div>';
           }).join('')
-        + '<div class="field"><label>Parcela</label><input type="text" id="m-parcela" value="' + attr(d.parcela) + '"></div>'
         + '<div class="field"><label>Motivo del cambio</label>' +
           '<textarea id="m-motivo" rows="3" placeholder="Cuente brevemente por qué se corrige este dato"></textarea></div>'
         + '<div id="m-msg"></div>'
@@ -113,10 +113,11 @@
         + '<div class="det-actions">' +
           '<button class="ghost" onclick="PH.CUModificar.cancelar()">Cancelar</button>' +
           '<button class="primary" onclick="PH.CUModificar.guardar()">Guardar cambios</button>' +
+          '<button class="danger" onclick="PH.CUModificar.eliminar(this)">Eliminar plano</button>' +
           '</div>';
 
     } catch (e) {
-      cont.innerHTML = '<div class="error">Error: ' + e.message + '</div>';
+      cont.innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
     }
   }
 
@@ -131,21 +132,38 @@
 
     var datos = {};
     CAMPOS.forEach(function(c) {
+      if (c.readonly) return;
       var v = document.getElementById('m-' + c.key).value.trim();
       datos[c.key] = v || null;
     });
-    datos.parcela = document.getElementById('m-parcela').value.trim();
+    try { Object.assign(datos, window.PH.Nomenclatura.leer('m-')); }
+    catch (e) { document.getElementById('m-msg').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>'; return; }
     datos.motivo = motivo;
 
     try {
       await API.modificar(seleccionadoId, datos);
       renderLista();
-      renderDetalle();
+      await renderDetalle();
       document.getElementById('m-msg').innerHTML = '<div class="confirm">Los cambios se guardaron correctamente.</div>';
       if (window.PH.actualizarListas) window.PH.actualizarListas();
     } catch (e) {
-      document.getElementById('m-msg').innerHTML = '<div class="error">Error: ' + e.message + '</div>';
+      document.getElementById('m-msg').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
     }
+  }
+
+  async function eliminar(boton) {
+    if (!seleccionadoId || !window.confirm('¿Eliminar este plano, su archivo y su historial permanentemente?')) return;
+    if (boton) boton.disabled = true;
+    try {
+      await API.eliminar(seleccionadoId);
+      seleccionadoId = null;
+      await renderLista();
+      await renderDetalle();
+      document.getElementById('modificar-detalle').innerHTML = '<div class="confirm">El plano se eliminó correctamente.</div>';
+      if (window.PH.actualizarListas) window.PH.actualizarListas();
+    } catch (e) {
+      document.getElementById('m-msg').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
+    } finally { if (boton) boton.disabled = false; }
   }
 
   window.PH = window.PH || {};
@@ -154,7 +172,8 @@
     renderDetalle: renderDetalle,
     seleccionar: seleccionar,
     cancelar: cancelar,
-    guardar: guardar
+    guardar: guardar,
+    eliminar: eliminar
   };
 
 })(window);

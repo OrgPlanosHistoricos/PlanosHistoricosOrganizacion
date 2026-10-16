@@ -68,3 +68,8 @@ def existe_archivo(key: str) -> bool:
 def obtener_preview_key(minio_path: str) -> str:
     """Calcula la key correspondiente a la miniatura/preview de un archivo."""
     return f"{minio_path}.preview.jpg"
+
+
+def eliminar_archivo(key: str) -> None:
+    """Eliminar es idempotente: un objeto ausente también cuenta como eliminado."""
+    _client.remove_object(BUCKET, key)

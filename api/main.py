@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .database import init_db
+from .health_router import router as health_router
 from .planos_router import router as planos_router
 from .planos_worker import planos_worker
 from .tasks import task_manager, procesar_directo, ExtraccionError
@@ -30,6 +31,7 @@ app = FastAPI(
 )
 
 app.include_router(planos_router)
+app.include_router(health_router)
 
 # El front se sirve en un origen distinto (nginx en :8080) a la API (:8000),
 # así que el navegador bloquea las llamadas sin estos headers.
