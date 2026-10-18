@@ -11,7 +11,7 @@
       String(s).replace(/[&<>]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
   }
   function tituloDoc(d) {
-    return d.direccion_referencia || d.expediente || d.nombre_original;
+    return window.PH.Nomenclatura.titulo(d);
   }
   function respuestaInvalida(d) {
     return d.ia_error && d.ia_error.indexOf('JSON válido') !== -1;
@@ -26,6 +26,7 @@
 
 
   function inicializar() {
+    document.getElementById('cargar-nomenclatura').innerHTML = window.PH.Nomenclatura.formulario('f-');
     var form = document.getElementById('form-cargar');
     form.addEventListener('submit', function(ev) {
       ev.preventDefault();
@@ -48,19 +49,23 @@
       return;
     }
 
+    var nomenclatura;
+    try { nomenclatura = window.PH.Nomenclatura.leer('f-'); }
+    catch (e) { mostrarMensaje('error', window.PH.Errores.mensaje(e)); return; }
+
     var ubicacion = document.getElementById('f-ubic').value.trim();
     var expediente = document.getElementById('f-exp').value.trim();
     var direccion = document.getElementById('f-dir').value.trim();
 
     try {
       mostrarMensaje('pulse', 'Subiendo archivo e iniciando procesamiento...');
-      var doc = await API.create(file, ubicacion, expediente, direccion);
+      var doc = await API.create(file, ubicacion, expediente, direccion, nomenclatura);
       document.getElementById('form-cargar').reset();
       mostrarMensaje('confirm', 'El plano se guardó correctamente. Estará disponible en la cola de revisión en breve.');
       renderRecientes();
       if (window.PH.actualizarListas) window.PH.actualizarListas();
     } catch (e) {
-      mostrarMensaje('error', 'Error al cargar: ' + e.message);
+      mostrarMensaje('error', window.PH.Errores.mensaje(e));
     }
   }
 
@@ -84,21 +89,35 @@
         var estadoHTML = d.ia_estado === 'procesando'
           ? '<span class="pulse"></span><span class="badge pendiente">Analizando…</span>'
           : respuestaInvalida(d)
-            ? '<span class="badge ia-error">Respuesta IA inválida (no JSON)</span>'
+            ? '<span class="badge ia-error">Análisis automático incompleto</span>'
             : d.ia_estado === 'error'
-              ? '<span class="badge ia-error">Error de IA</span>'
+              ? '<span class="badge ia-error">No se pudo analizar el plano</span>'
           : '<span class="badge pendiente">Pendiente de revisión</span>';
         return '<div class="row" style="cursor:default">' +
           '<div class="t">' + esc(tituloDoc(d)) + '</div>' +
           '<div class="s">' + esc(d.nombre_original) + ' · ' + estadoHTML + '</div>' +
+          '<button class="danger" onclick="PH.CUCargar.eliminar(' + d.id + ', this)">Eliminar</button>' +
           '</div>';
       }).join('') + '</div>';
     } catch (e) {
-      cont.innerHTML = '<div class="error">Error al cargar recientes: ' + e.message + '</div>';
+      cont.innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
     }
   }
 
+  async function eliminar(id, boton) {
+    if (!window.confirm('¿Eliminar este plano, su archivo y su historial permanentemente?')) return;
+    if (boton) boton.disabled = true;
+    try {
+      await API.eliminar(id);
+      mostrarMensaje('confirm', 'El plano se eliminó correctamente.');
+      await renderRecientes();
+      if (window.PH.actualizarListas) window.PH.actualizarListas();
+    } catch (e) {
+      mostrarMensaje('error', window.PH.Errores.mensaje(e));
+    } finally { if (boton) boton.disabled = false; }
+  }
+
   window.PH = window.PH || {};
-  window.PH.CUCargar = { inicializar: inicializar, renderRecientes: renderRecientes };
+  window.PH.CUCargar = { inicializar: inicializar, renderRecientes: renderRecientes, eliminar: eliminar };
 
 })(window);

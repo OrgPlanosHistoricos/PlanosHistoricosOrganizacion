@@ -318,6 +318,36 @@ button.ghost:hover {
    Badges e Indicadores
    ========================================================================== */
 
+.database-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.database-status[data-state="connected"] {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.database-status[data-state="disconnected"] {
+  color: var(--brick);
+  background: var(--brick-soft);
+}
+
+.database-status-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 .badge {
   display: inline-block;
   font-size: 11.5px;
@@ -367,9 +397,13 @@ button.ghost:hover {
 
 .split {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 260px minmax(0, 1fr);
   gap: 20px;
   align-items: start;
+}
+
+.split > * {
+  min-width: 0;
 }
 
 .list {
@@ -381,6 +415,9 @@ button.ghost:hover {
 }
 
 .row {
+  min-width: 0;
+  flex-shrink: 0;
+  overflow-wrap: anywhere;
   text-align: left;
   width: 100%;
   background: var(--card);
@@ -431,6 +468,8 @@ button.ghost:hover {
 }
 
 .doclink {
+  max-width: 100%;
+  overflow-wrap: anywhere;
   display: inline-block;
   margin-bottom: 14px;
   font-size: 13.5px;
@@ -443,6 +482,12 @@ button.ghost:hover {
 
 .doclink:hover {
   text-decoration: underline;
+}
+
+textarea[readonly] {
+  background: var(--paper-2);
+  color: var(--ink-soft);
+  resize: vertical;
 }
 
 .hist {
@@ -621,3 +666,9 @@ button.ghost:hover {
     grid-template-columns: 1fr;
   }
 }
+
+.nomenclatura { border: 1px solid var(--line, #ddd); border-radius: 8px; padding: 16px; margin: 16px 0; min-width: 0; }
+.nomenclatura legend { font-weight: 600; padding: 0 6px; }
+.nomenclatura p { font-size: 13px; margin: 0 0 12px; }
+button.danger { background: #a92323; color: #fff; border: 1px solid #a92323; }
+button.danger:disabled { opacity: .55; cursor: wait; }
