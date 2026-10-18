@@ -18,9 +18,13 @@ from .schemas import PlanoHistorico
 
 logger = logging.getLogger("planos.vision")
 
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://ollama:11434").rstrip("/")
 MODEL_NAME = os.environ.get("VISION_MODEL", "qwen2.5vl:3b")
 OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "300"))
+OLLAMA_HEADERS = {
+    "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true",
+}
 
 # Bounding box por defecto basada en normas IRAM 4504 / ISO 7200 (cuadrante inferior derecho)
 FALLBACK_BBOX_IRAM = [600, 500, 1000, 1000]
@@ -132,7 +136,7 @@ def detectar_cajetin_bbox(image_bytes: bytes) -> List[int]:
 
     try:
         response = requests.post(
-            f"{OLLAMA_HOST}/api/chat", json=payload, timeout=OLLAMA_TIMEOUT
+            f"{OLLAMA_HOST}/api/chat", json=payload, headers=OLLAMA_HEADERS, timeout=OLLAMA_TIMEOUT
         )
         response.raise_for_status()
         data = response.json()
@@ -169,7 +173,7 @@ def extraer_datos_cajetin(cajetin_bytes: bytes) -> PlanoHistorico:
 
     try:
         response = requests.post(
-            f"{OLLAMA_HOST}/api/chat", json=payload, timeout=OLLAMA_TIMEOUT
+            f"{OLLAMA_HOST}/api/chat", json=payload, headers=OLLAMA_HEADERS, timeout=OLLAMA_TIMEOUT
         )
         response.raise_for_status()
     except requests.RequestException as exc:
@@ -186,7 +190,7 @@ def extraer_datos_cajetin(cajetin_bytes: bytes) -> PlanoHistorico:
         )
         try:
             response = requests.post(
-                f"{OLLAMA_HOST}/api/chat", json=payload, timeout=OLLAMA_TIMEOUT
+                f"{OLLAMA_HOST}/api/chat", json=payload, headers=OLLAMA_HEADERS, timeout=OLLAMA_TIMEOUT
             )
             response.raise_for_status()
         except requests.RequestException as exc:
