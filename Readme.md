@@ -1,155 +1,78 @@
-# API y Sistema de Reconocimiento de Planos Históricos
+# API de Reconocimiento de Planos Históricos
 
-Sistema integral para la gestión, procesamiento, extracción de metadatos, catálogo y consulta de planos históricos utilizando FastAPI, Qwen2.5-VL 3B (vía Ollama), MinIO, PostgreSQL, Supabase, MongoDB y un frontend servido con Nginx.
+Extrae datos (arquitecto, año, ubicación, etc.) de planos históricos
+escaneados usando el modelo de visión Qwen2.5-VL 3B servido por Ollama,
+y los devuelve en JSON estructurado.
 
----
+## Uso
 
-## Información Importante y Requisitos Previos
-
-- Acceso a la Aplicación Web: Se debe ingresar desde http://localhost:8080 en el navegador. De lo contrario, las peticiones pueden ser bloqueadas por políticas CORS o restricción de acceso a la API.
-- Formatos Admitidos: JPEG, PNG, WEBP, TIFF y PDF (para archivos PDF se analiza y previsualiza la primera página del plano).
-- Modelo de Visión: El sistema descarga automáticamente el modelo qwen2.5vl:3b mediante Ollama al levantar el contenedor.
-- Tiempos de Inferencia: En ejecuciones por CPU, la inferencia de cada plano toma habitualmente entre 60 y 90 segundos.
-
----
-
-## Arquitectura del Sistema
-
-El proyecto está diseñado bajo una arquitectura modular desacoplada containerizada mediante Docker Compose:
-
-```text
-├── api/                    # Backend en Python (FastAPI)
-│   ├── main.py             # Punto de entrada de la API
-│   ├── planos_router.py    # Endpoints para operaciones sobre planos y catálogo
-│   ├── planos_worker.py    # Procesamiento asíncrono y workers en segundo plano
-│   ├── tasks.py            # Gestión de tareas y persistencia
-│   ├── preprocessing.py    # Preprocesamiento, recorte HD y mejora con Pillow
-│   ├── vision_client.py   # Integración con Ollama (Qwen2.5-VL 3B)
-│   ├── storage_client.py  # Cliente para Supabase Storage
-│   ├── minio_client.py    # Cliente para MinIO (almacenamiento de objetos S3)
-│   ├── db_client.py       # Conexión e inserción en MongoDB
-│   ├── database.py         # Configuración y ORM para PostgreSQL
-│   ├── models.py           # Modelos de datos / ORM
-│   └── schemas.py          # Esquemas Pydantic y DTOs
-│
-├── front/                  # Frontend Web y Servidor Web
-│   ├── js/                 # Flujos de uso (cu-cargar, cu-consultar, cu-validar, cu-modificar)
-│   ├── nginx.conf          # Configuración del servidor Nginx
-│   └── *.html / *.css      # Vistas e interfaz de usuario
-│
-├── docker-compose.yml      # Orquestación de servicios (API, Ollama, Postgres, MinIO, Front)
-├── Dockerfile              # Construcción de la imagen del backend
-└── requirements.txt        # Dependencias de Python
+```bash
+docker compose up -d
 ```
 
----
+La API espera hasta 300 segundos por la respuesta de Ollama, ya que la
+inferencia puede tardar más cuando se ejecuta con CPU. Este valor se puede
+ajustar mediante la variable `OLLAMA_TIMEOUT`.
 
-## Tecnologías Utilizadas
+La primera vez, el servicio `ollama-pull` descarga el modelo
+(~2-3 GB) automáticamente. Puede tardar varios minutos según tu
+conexión. Podés seguir el progreso con:
 
-- Backend: Python 3.14+, FastAPI, Pydantic, SQLAlchemy.
-- IA / Visión por Computadora: Qwen2.5-VL 3B servido por Ollama, Pillow (autocontrast y sharpness).
-- Bases de Datos y Almacenamiento:
-  - PostgreSQL: Catálogo general de planos, estados e historial de modificaciones.
-  - MinIO: Almacenamiento interno de objetos S3 (bucket planos).
-  - Supabase Storage: Almacenamiento público de planos escaneados (bucket planos_escaneados).
-  - MongoDB: Registro documental de extracciones completas por IA (planos_db).
-- Frontend: HTML5, CSS3, JavaScript (Vanilla Modular), Nginx.
-- Despliegue: Docker y Docker Compose.
+```bash
+docker compose logs -f ollama-pull
+```
 
----
+Una vez levantado todo:
 
-## Despliegue Rápido con Docker Compose
+### Modo asíncrono (predeterminado y recomendado para la app web):
+```bash
+curl -X POST http://localhost:8000/procesar-plano \
+  -F "archivo=@/ruta/a/tu/plano.jpg"
+```
 
-1. Clonar el repositorio:
-   ```bash
-   git clone <URL_DEL_REPOSITORIO>
-   cd PlanosHistoricosOrganizacion
-   ```
+Respuesta inmediata (HTTP 202 Accepted):
+```json
+{
+  "task_id": "e1c97abb-85b4-4ab3-ba57-86858af023da",
+  "status": "pending",
+  "mensaje": "Plano recibido. El procesamiento con IA se está ejecutando en segundo plano."
+}
+```
 
-2. Configurar variables de entorno:
-   Copiar el archivo de ejemplo .env.example para crear la configuración local .env:
-   ```bash
-   cp .env.example .env
-   ```
+Consultar estado y resultado de la tarea:
+```bash
+curl http://localhost:8000/tareas/e1c97abb-85b4-4ab3-ba57-86858af023da
+```
 
-3. Iniciar los servicios:
-   ```bash
-   docker compose up -d
-   ```
+Respuesta cuando finaliza (`status: "completed"`):
+```json
+{
+  "task_id": "e1c97abb-85b4-4ab3-ba57-86858af023da",
+  "status": "completed",
+  "filename": "plano.jpg",
+  "resultado": {
+    "arquitecto": "Francisco Salamone",
+    "anio": 1936,
+    "titulo": "Palacio Municipal de Azul",
+    "ubicacion": "Azul, Buenos Aires",
+    "escala": "1:50",
+    "tipo_de_plano": "fachada principal",
+    "material_soporte": "papel tela",
+    "notas": null
+  },
+  "error": null,
+  "supabase_url": "https://<proyecto>.supabase.co/storage/v1/object/public/planos_escaneados/<uuid>.jpg"
+}
+```
 
-4. Verificar descarga del modelo de visión:
-   La primera vez, el servicio ollama-pull descarga automáticamente el modelo (~2-3 GB). Se puede verificar el estado ejecutando:
-   ```bash
-   docker exec -it ollama ollama list
-   ```
-   O monitorear los logs del proceso:
-   ```bash
-   docker compose logs -f ollama-pull
-   ```
+## Funcionamiento del Procesamiento con IA (Pipeline en 2 Pasos con Grounding)
 
-5. URLs de Acceso:
-   - Aplicación Web: http://localhost:8080
-   - Documentación de la API (Swagger UI): http://localhost:8000/docs
-   - Consola de MinIO: http://localhost:9001
-   - PostgreSQL: localhost:5432
+El procesamiento de planos combina las normas de dibujo técnico (**IRAM 4504** en Argentina e **ISO 7200** a nivel internacional) con las capacidades de **Grounding y Detección de Objetos** del modelo **Qwen2.5-VL 3B**.
 
----
+### El desafío en planos de gran formato
+Los planos arquitectónicos digitalizados suelen tener resoluciones gigantescas (ej. 4000×3000 px o más). Si se envía el plano completo comprimido a 1600 px a un modelo de visión, los textos críticos (año, cotas, firmas a mano, escalas y nomenclatura catastral) quedan reducidos a un puñado de píxeles borrosos e ilegibles.
 
-## Uso de la API
-
-La API aguarda hasta 300 segundos por la respuesta de Ollama (OLLAMA_TIMEOUT).
-
-### Procesamiento Asíncrono (Recomendado)
-
-1. Enviar un plano a procesar:
-   ```bash
-   curl -X POST http://localhost:8000/procesar-plano \
-     -F "archivo=@/ruta/a/tu/plano.jpg"
-   ```
-   Respuesta inmediata (HTTP 202 Accepted):
-   ```json
-   {
-     "task_id": "e1c97abb-85b4-4ab3-ba57-86858af023da",
-     "status": "pending",
-     "mensaje": "Plano recibido. El procesamiento con IA se está ejecutando en segundo plano."
-   }
-   ```
-
-2. Consultar estado y resultado de la tarea:
-   ```bash
-   curl http://localhost:8000/tareas/e1c97abb-85b4-4ab3-ba57-86858af023da
-   ```
-   Respuesta completada (status: "completed"):
-   ```json
-   {
-     "task_id": "e1c97abb-85b4-4ab3-ba57-86858af023da",
-     "status": "completed",
-     "filename": "plano.jpg",
-     "resultado": {
-       "arquitecto": "Francisco Salamone",
-       "anio": 1936,
-       "titulo": "Palacio Municipal de Azul",
-       "ubicacion": "Azul, Buenos Aires",
-       "escala": "1:50",
-       "tipo_de_plano": "fachada principal",
-       "material_soporte": "papel tela",
-       "notas": null
-     },
-     "error": null,
-     "supabase_url": "https://<proyecto>.supabase.co/storage/v1/object/public/planos_escaneados/<uuid>.jpg"
-   }
-   ```
-
----
-
-## Pipeline de Procesamiento con IA (2 Pasos con Grounding)
-
-El procesamiento de planos combina las normas de dibujo técnico (IRAM 4504 e ISO 7200) con las capacidades de Grounding y Detección de Objetos del modelo Qwen2.5-VL 3B.
-
-### El Desafío en Planos de Gran Formato
-Los planos digitalizados suelen tener resoluciones elevadas (ej. 4000×3000 px). Si se envía la imagen completa reducida a un modelo de visión, las tipografías pequeñas (año, cotas, firmas, escala y nomenclatura catastral) pierden definición e inteligibilidad.
-
-Por norma técnica, la información legal y catastral se ubica reglamentariamente en el cajetín, carimbo o rótulo, ubicado en la esquina inferior derecha. Por ende, el sistema realiza un procesamiento estratégico en dos pasos:
+Por norma técnica, la información legal, catastral y de autoría se concentra siempre en el **cajetín, carimbo o rótulo**, ubicado reglamentariamente en la **esquina inferior derecha**. Por eso, el sistema no analiza todo el plano de una sola vez: divide la tarea en **dos pasos estratégicos**.
 
 ```
 [ Plano Original en Alta Resolución ]
@@ -174,79 +97,217 @@ Por norma técnica, la información legal y catastral se ubica reglamentariament
 
 ### Paso 1: Detección y Grounding del Cajetín
 
-Se genera una vista previa optimizada y se solicita al modelo detectar la caja delimitadora (Bounding Box) del cuadro técnico.
+Se genera una vista previa optimizada del plano para no sobrecargar la memoria de la GPU ni dilatar el tiempo de inferencia, y se le pide al modelo que localice la caja delimitadora (**Bounding Box**) del cuadro técnico.
 
-- Prompt utilizado:
+- **Prompt utilizado en el Paso 1:**
   ```text
   Detecta el cajetín, carimbo o cuadro de datos técnicos del plano.
   Devuelve únicamente un JSON con la bounding box en formato [ymin, xmin, ymax, xmax] normalizado de 0 a 1000.
   Por normas técnicas IRAM e ISO, el cajetín suele encontrarse en la zona inferior derecha del plano.
   Ejemplo de respuesta: {"bbox_2d": [750, 700, 990, 990]}
   ```
-- Structured Output: Forzado mediante el esquema Pydantic en Ollama (`format: CajetinBBoxSchema.model_json_schema()`).
-- Fallback IRAM 4504: Si la detección falla o la caja es anómala, el sistema aplica automáticamente la norma IRAM 4504 (`[600, 500, 1000, 1000]`).
+
+- **Structured Output:** Se fuerza mediante Ollama (`format: CajetinBBoxSchema.model_json_schema()`) asegurando que la salida sea un JSON estrictamente tipado.
+- **Validación y Fallback IRAM:** El sistema valida que las coordenadas cumplan `0 <= ymin < ymax <= 1000` y `0 <= xmin < xmax <= 1000`. Si la detección falla, el modelo no responde o la caja es anómala, se activa automáticamente el **fallback por norma técnica IRAM 4504** (`[600, 500, 1000, 1000]`), garantizando que la tubería nunca se interrumpa.
 
 ---
 
-### Recorte en Alta Resolución (Crop y Preprocesamiento)
+### Recorte en Alta Resolución (Crop & Preprocesamiento)
 
-Implementado en `api/preprocessing.py` (`crop_cajetin_from_bbox`):
+Implementado en `api/preprocessing.py` con la función `crop_cajetin_from_bbox`:
 
-1. Desnormalización: Conversión de coordenadas `[0..1000]` a píxeles exactos de la imagen original en alta resolución.
-2. Padding: Expansión del 2% en ancho y alto para evitar cortar sellos o márgenes.
-3. Optimización con Pillow (`preprocess_cajetin`):
-   - Autocontraste (`ImageOps.autocontrast`): Recupera trazos en tinta descolorida o papel oxidado.
-   - Realce de Nitidez (`ImageEnhance.Sharpness`): Resalta números catastrales, detalles finos y firmas.
+1. **Desnormalización:** Las coordenadas `[0..1000]` se convierten a píxeles exactos de la **imagen original sin comprimir**.
+2. **Margen de seguridad (*Padding*):** Se expande la caja un 2% en ancho y alto para evitar cortar palabras o sellos que rocen los márgenes del cajetín.
+3. **Optimización con Pillow (`preprocess_cajetin`):**
+   - **Autocontraste:** Recupera trazos en tinta descolorida o papel amarillento (`ImageOps.autocontrast`).
+   - **Realce de nitidez:** Aplica un filtro de nitidez (`ImageEnhance.Sharpness.enhance(1.5)`) para destacar tipografías pequeñas, números catastrales y firmas caligráficas.
 
 ---
 
 ### Paso 2: Extracción Estructurada de Datos Técnicos en HD
 
-Se envía únicamente el recorte del cajetín en máxima resolución a Qwen2.5-VL con el esquema JSON completo de `PlanoHistorico` (`api/schemas.py`).
+Se envía **únicamente el recorte del cajetín en máxima resolución** a Qwen2.5-VL con el esquema JSON completo de `PlanoHistorico` (`api/schemas.py`). Al tener solo el rótulo en primer plano, el modelo dispone del 100% de su capacidad atencional y de resolución óptica en el texto que importa.
 
-- Campos del Esquema (`PlanoHistorico`):
-  - `texto_extraido`: Transcripción integral del texto legible visible (OCR).
-  - `arquitecto`: Autor, proyectista o profesional firmante.
-  - `anio`: Año del proyecto o confección (4 dígitos).
+- **Prompt utilizado en el Paso 2:**
+  ```text
+  Respondé únicamente con el objeto JSON solicitado, sin explicaciones ni razonamiento.
+  Analizá este recorte en alta resolución del cajetín / carimbo / rótulo de datos técnicos del plano histórico y respondé en español basándote solo en lo visible.
+
+  Completá estos campos:
+  - texto_extraido: transcripción fiel y completa de todo el texto legible visible en este cajetín (rótulos, firmas, sellos, datos catastrales, fechas, notas y escalas).
+  - arquitecto: autor o proyectista (arquitecto, ingeniero o profesional firmante), sin el título profesional.
+  - anio: año del plano o proyecto como número de cuatro dígitos (ej. 1936).
+  - titulo: obra, edificio, proyecto o descripción de la vista.
+  - ubicacion: datos de ubicación o catastrales (ciudad, dirección, circunscripción, sección, manzana, parcela).
+  - escala: escala indicada en el rótulo (ej. 1:100, 1:50).
+  - tipo_de_plano: planta, corte, fachada, relevamiento, detalle, etc.
+  - material_soporte: solo si aparece escrito en el plano, no lo deduzcas.
+  - notas: números de expediente, sellos municipales, aprobaciones o datos técnicos que no encajen en otro campo.
+
+  Transcribí fielmente. No inventes ni corrijas datos. Usá null si un dato no aparece o es ilegible. Devolvé JSON válido y ningún texto fuera del JSON.
+  ```
+
+- **Campos del Esquema Resultante (`PlanoHistorico`):**
+  - `texto_extraido`: Transcripción integral de texto (OCR del cajetín).
+  - `arquitecto`: Nombre del proyectista o profesional firmante.
+  - `anio`: Año de confección o visado (4 dígitos).
   - `titulo`: Nombre de la obra, proyecto o designación de la lámina.
-  - `ubicacion`: Localidad, dirección o datos catastrales.
-  - `escala`: Relación de escala métrica (ej. 1:100).
-  - `tipo_de_plano`: Planta, corte, fachada, relevamiento, etc.
-  - `material_soporte`: Sustrato explícito (papel vegetal, tela, etc.).
-  - `notas`: Referencias a expedientes, sellos municipales o aprobaciones.
+  - `ubicacion`: Localidad, calle o nomenclatura catastral.
+  - `escala`: Relación de escala métrica (ej. `1:100`).
+  - `tipo_de_plano`: Tipología gráfica (planta, corte, fachada, etc.).
+  - `material_soporte`: Sustrato indicado explícitamente (papel vegetal, tela, etc.).
+  - `notas`: Referencias a expedientes, números de archivo o sellos.
 
 ---
 
-## Gestión del Catálogo y Endpoints
+### Resiliencia y Manejo de Errores
 
-### Endpoints del Catálogo (PostgreSQL + MinIO)
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| `POST` | `/planos` | Multipart: `archivo` + datos opcionales. Sube a MinIO, crea el plano en estado `pendiente` y dispara la IA en segundo plano (`ia_estado=procesando`). |
-| `GET` | `/planos` | Listado con filtros por `estado` (`?estado=validado&estado=sin_ubicacion`) y búsqueda por texto `q`. |
-| `GET` | `/planos/{id}` | Detalle completo del plano e historial de modificaciones. |
-| `GET` | `/planos/{id}/archivo` | Descarga el archivo original (imagen o PDF). |
-| `GET` | `/planos/{id}/preview` | Devuelve la imagen de previsualización (JPEG). |
-| `PUT` | `/planos/{id}/validar` | Valida metadatos revisados + `parcela`. Asigna estado `validado` o `sin_ubicacion`. |
-| `PUT` | `/planos/{id}/modificar` | Actualiza metadatos + `parcela` + `motivo` (obligatorio). Registra el cambio en el historial. |
+- **Reintentos automáticos:** Tanto `tasks.py` como `planos_worker.py` ejecutan reintentos automáticos si la llamada al modelo no responde en el primer intento.
+- **Doble Fallback:** Si por algún caso extremo la extracción sobre el recorte del cajetín fallase, el sistema reintenta la extracción sobre el plano completo para no dejar la petición en error.
+- **Concurrencia no bloqueante:** Toda la inferencia pesada corre en hilos separados (`asyncio.to_thread`) para mantener ágil el event loop de FastAPI.
 
 ---
 
-## Variables de Entorno (`.env`)
+## Almacenamiento: Supabase + MongoDB
 
-```env
-# MongoDB
+_Agregado: 2026-09-29_
+
+Cada plano procesado (tanto en modo asíncrono como con `?sync=true`)
+se persiste en dos lugares:
+
+
+- **Supabase Storage** (bucket `planos_escaneados`): guarda el archivo
+  original que subió el usuario y expone su URL pública (`supabase_url`
+  en la respuesta de `/tareas/{task_id}`).
+- **MongoDB** (base `planos_db`, colección `extracciones`): guarda el
+  documento completo (fecha de procesamiento, datos del archivo y la
+  extracción de Qwen) con el esquema `DocumentoExtraccion`
+  (`api/schemas.py`).
+
+Esta lógica vive en `api/tasks.py` (función `_guardar_extraccion`),
+que se llama tanto desde el worker asíncrono como desde
+`procesar_directo` (modo `sync`), después de que Qwen devuelve el
+resultado. La subida a Supabase usa `api/storage_client.py` y el
+insert a Mongo usa `api/db_client.py`.
+
+### Variables de entorno
+
+Están en `.env` (no se commitea, ver `.env.example`):
+
+```
 MONGODB_URI=mongodb+srv://usuario:password@cluster.mongodb.net/?appName=...
-
-# Supabase
 SUPABASE_URL=https://<proyecto>.supabase.co
-SUPABASE_KEY=<service_role_key>
+SUPABASE_KEY=<service_role key>
+```
 
-# PostgreSQL
+`docker-compose.yml` las toma del `.env` de la raíz y se las pasa al
+contenedor `api`.
+
+**Importante sobre `SUPABASE_KEY`**: tiene que ser la **service_role
+key** (Supabase Dashboard → Settings → API), no la `anon`/`publishable`.
+El bucket tiene Row Level Security activado, así que la key anónima no
+tiene permiso de `INSERT` y el upload falla con
+`403 new row violates row-level security policy`. La service_role
+bypasea RLS y nunca se expone al frontend - solo la usa este backend.
+
+**Importante sobre `MONGODB_URI`**: la IP desde la que corre la API
+tiene que estar en la whitelist de Atlas (Network Access → Add IP
+Address). Si no, las operaciones se cuelgan con
+`ServerSelectionTimeoutError`.
+
+## Catálogo: PostgreSQL + MinIO (Fase 2)
+
+_Agregado: 2026-09-29_
+
+El catálogo de planos (datos de origen, estado de validación e
+historial) se guarda en **PostgreSQL**, y los archivos originales en
+**MinIO** (bucket `planos`). Ambos corren como servicios del
+`docker-compose.yml`: no hace falta crear cuentas ni instalar nada,
+las tablas se crean solas al arrancar la API.
+
+Variables en `.env` (ver `.env.example`; si no están, se usan esos
+mismos valores por defecto):
+
+```
 POSTGRES_USER=planos
 POSTGRES_PASSWORD=planos
 POSTGRES_DB=planos_db
 ```
 
-Nota: La clave `SUPABASE_KEY` debe ser la **service_role key** para omitir las políticas RLS durante la subida desde el backend.
+Postgres queda expuesto en `localhost:5432` para inspeccionarlo con
+cualquier cliente (DBeaver, pgAdmin, `psql`), y la consola de MinIO en
+http://localhost:9001.
+
+### Tablas
+
+- **`planos`**: archivo (`nombre_original`, `content_type`,
+  `minio_path`), datos de origen (`ubicacion_fisica`, `expediente`,
+  `direccion_referencia`, `parcela`), `estado` (`pendiente` |
+  `validado` | `sin_ubicacion`), estado de la IA (`ia_estado`:
+  `procesando` | `completado` | `error` | `no_aplica`, más `ia_error`),
+  los metadatos del plano (`arquitecto`, `anio`, `titulo`, `ubicacion`,
+  `escala`, `tipo_de_plano`, `material_soporte`, `notas`) y fechas de
+  creación/actualización.
+- **`historial_modificaciones`**: `plano_id` (FK), `fecha`, `motivo`.
+
+### Endpoints
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `POST` | `/planos` | Multipart: `archivo` + `ubicacion_fisica`, `expediente`, `direccion_referencia` (opcionales). Sube a MinIO, crea el plano como `pendiente` y dispara la IA en segundo plano (`ia_estado=procesando`). Si es PDF, rasteriza la primera página para el análisis y la previsualización. |
+| `GET` | `/planos` | Lista. Filtros: `estado` (repetible: `?estado=validado&estado=sin_ubicacion`) y `q` (busca en dirección, parcela, expediente, ubicación física, arquitecto, título, ubicación y año). |
+| `GET` | `/planos/{id}` | Detalle con historial. Sirve para consultar si la IA terminó (`ia_estado`). |
+| `GET` | `/planos/{id}/archivo` | Devuelve el archivo original (imagen o PDF original). |
+| `GET` | `/planos/{id}/preview` | Devuelve una imagen JPEG de previsualización (la imagen original o la primera página rasterizada si es PDF). |
+| `PUT` | `/planos/{id}/validar` | JSON con los metadatos revisados + `parcela`. Queda `validado` si hay parcela, si no `sin_ubicacion`. Agrega "Validación inicial" al historial. Devuelve 409 si el plano ya fue validado. |
+| `PUT` | `/planos/{id}/modificar` | JSON con los metadatos + `parcela` + `motivo` (obligatorio, 400 si falta). Actualiza el plano y agrega el motivo al historial. |
+
+Ejemplo:
+
+```bash
+curl -X POST http://localhost:8000/planos \
+  -F "archivo=@plano.jpg" -F "expediente=EXP-1936-045" \
+  -F "ubicacion_fisica=Estante 3, caja 12"
+
+curl -X PUT http://localhost:8000/planos/1/modificar \
+  -H "Content-Type: application/json" \
+  -d '{"arquitecto": "Francisco Salamone", "anio": 1936, "parcela": "Lote 4", "motivo": "Corrección de año"}'
+```
+
+Detalles de comportamiento:
+
+- `validar` y `modificar` reemplazan **todos** los metadatos: un campo
+  que no se manda queda en `null` (igual que el formulario del front,
+  que siempre manda el objeto completo). `anio` acepta `""` como `null`.
+- Si una persona valida un plano mientras la IA todavía lo procesa, el
+  resultado de la IA no pisa los datos cargados a mano.
+- Si la API se reinicia con planos en `procesando`, los vuelve a
+  encolar al arrancar.
+- Esto convive con `/procesar-plano` y `/tareas` (y su persistencia en
+  Supabase/MongoDB), que siguen funcionando igual.
+
+## Notas
+
+- El esquema de campos a extraer está en `app/schemas.py` (Pydantic).
+  Agregá o quitá campos ahí y se propagan automáticamente al modelo.
+- Sin GPU, cada plano puede tardar entre 20 y 90 segundos según
+  resolución. Con GPU (ver comentario en `docker-compose.yml`) baja
+  drásticamente.
+- `app/preprocessing.py` redimensiona y mejora el contraste de la
+  imagen antes de mandarla al modelo - ajustá `MAX_DIMENSION` si tus
+  planos tienen mucho detalle fino.
+# planosHistoricos
+# planosHistoricos
+# planosHistoricos
+
+IMPORTANTE
+Se debe desacargar un modelo en ollama (configurado actualmente qwen2.5vl:3b) se peude consultar el estado de la descarga en cualquier momento con:
+
+```bash
+docker exec -it ollama ollama list
+```
+
+el ingreso a la app debe hacerse desde http://localhost:8080 en el navegador. Sino se bloquea el uso de la API de reconocimiento de imagenes.
+Formatos admitidos: JPEG, PNG, WEBP, TIFF y PDF (se analiza y previsualiza la primera página del plano).
+
+El procesamiento por CPU tarda de 60 a 90 segundos.
