@@ -2,6 +2,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
+    profiles: ["local-ai"]
     volumes:
       - ollama_data:/root/.ollama
     ports:
@@ -18,14 +19,11 @@ services:
 
   ollama-pull:
     image: ollama/ollama:latest
+    profiles: ["local-ai"]
     depends_on:
       - ollama
     entrypoint: >
       sh -c "
-        if [ -n \"$$EXTERNAL_OLLAMA\" ] && [ \"$$EXTERNAL_OLLAMA\" != \"http://ollama:11434\" ]; then
-          echo 'Usando Ollama externo (Google Colab), omitiendo descarga local.';
-          exit 0;
-        fi &&
         until ollama list > /dev/null 2>&1; do
           echo 'Esperando a Ollama...'; sleep 2;
         done &&
@@ -33,7 +31,6 @@ services:
       "
     environment:
       - OLLAMA_HOST=ollama:11434
-      - EXTERNAL_OLLAMA=${OLLAMA_HOST:-http://ollama:11434}
 
   minio:
     image: cgr.dev/chainguard/minio:latest
@@ -69,10 +66,6 @@ services:
     build: .
     container_name: planos-api
     depends_on:
-      ollama:
-        condition: service_started
-      ollama-pull:
-        condition: service_started
       minio:
         condition: service_started
       # La API crea las tablas al arrancar, así que necesita Postgres aceptando conexiones

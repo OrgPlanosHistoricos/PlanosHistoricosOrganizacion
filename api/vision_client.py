@@ -4,14 +4,16 @@ Cliente HTTP hacia Ollama con soporte para extracción en dos pasos:
 2. Recorte del cajetín en alta resolución y extracción estructurada con JSON Schema.
 """
 import base64
+import io
 import json
 import logging
 import os
 from pathlib import Path
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from dotenv import dotenv_values
+from PIL import Image
 from pydantic import BaseModel, Field
 import requests
 
@@ -248,17 +250,49 @@ def _validar_bbox(bbox: object) -> Optional[List[int]]:
     return [ymin, xmin, ymax, xmax]
 
 
-def _extraer_bbox_de_texto(contenido: str) -> Optional[List[int]]:
+def _normalizar_coords_raw(
+    coords: object, image_size: Optional[Tuple[int, int]] = None
+) -> Optional[List[int]]:
+    """Convierte coordenadas crudas a [ymin, xmin, ymax, xmax] normalizadas (0..1000).
+
+    Soporta tanto [ymin, xmin, ymax, xmax] ya normalizadas (0..1000) como la salida
+    nativa de Qwen2.5-VL en píxeles [xmin, ymin, xmax, ymax] sobre las dimensiones de la imagen.
+    """
+    if not isinstance(coords, (list, tuple)) or len(coords) != 4:
+        return None
+    try:
+        vals = [int(v) for v in coords]
+    except (ValueError, TypeError):
+        return None
+
+    # Si alguna coordenada supera 1000 y conocemos el tamaño (width, height),
+    # el modelo devolvió píxeles reales en formato [xmin, ymin, xmax, ymax] (estándar Qwen2.5-VL)
+    if image_size and image_size[0] > 0 and image_size[1] > 0 and any(v > 1000 for v in vals):
+        det_w, det_h = image_size
+        xmin, ymin, xmax, ymax = vals
+        vals = [
+            int(round(ymin * 1000 / det_h)),
+            int(round(xmin * 1000 / det_w)),
+            int(round(ymax * 1000 / det_h)),
+            int(round(xmax * 1000 / det_w)),
+        ]
+
+    return _validar_bbox(vals)
+
+
+def _extraer_bbox_de_texto(
+    contenido: str, image_size: Optional[Tuple[int, int]] = None
+) -> Optional[List[int]]:
     if not contenido:
         return None
     try:
         parsed = json.loads(contenido)
         if isinstance(parsed, dict) and "bbox_2d" in parsed:
-            valida = _validar_bbox(parsed["bbox_2d"])
+            valida = _normalizar_coords_raw(parsed["bbox_2d"], image_size=image_size)
             if valida:
                 return valida
         elif isinstance(parsed, list):
-            valida = _validar_bbox(parsed)
+            valida = _normalizar_coords_raw(parsed, image_size=image_size)
             if valida:
                 return valida
     except (json.JSONDecodeError, ValueError):
@@ -267,7 +301,7 @@ def _extraer_bbox_de_texto(contenido: str) -> Optional[List[int]]:
     match = re.search(r"\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]", contenido)
     if match:
         coords = [int(match.group(i)) for i in range(1, 5)]
-        valida = _validar_bbox(coords)
+        valida = _normalizar_coords_raw(coords, image_size=image_size)
         if valida:
             return valida
 
@@ -280,6 +314,13 @@ def detectar_cajetin_bbox(image_bytes: bytes, model: Optional[str] = None) -> Li
     timeout = obtener_ollama_timeout()
     modelo = model or obtener_modelo_activo(host)
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+
+    image_size: Optional[Tuple[int, int]] = None
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as img_obj:
+            image_size = img_obj.size
+    except Exception:
+        image_size = None
 
     payload = {
         "model": modelo,
@@ -303,7 +344,7 @@ def detectar_cajetin_bbox(image_bytes: bytes, model: Optional[str] = None) -> Li
         response.raise_for_status()
         data = response.json()
         contenido = data.get("message", {}).get("content", "")
-        bbox = _extraer_bbox_de_texto(contenido)
+        bbox = _extraer_bbox_de_texto(contenido, image_size=image_size)
         if bbox:
             logger.info(f"Cajetín detectado con éxito ({modelo}): {bbox}")
             return bbox

@@ -158,6 +158,20 @@ class VisionColabTests(unittest.TestCase):
         self.assertIn("túnel de Ngrok", str(ctx.exception))
         self.assertIn("Google Colab", str(ctx.exception))
 
+    def test_conversion_bbox_en_pixeles_nativos_qwen(self):
+        """Convierte correctamente bbox_2d en píxeles [xmin, ymin, xmax, ymax] de Qwen2.5-VL a [ymin, xmin, ymax, xmax] 0..1000."""
+        img_bytes = _crear_imagen_prueba(1600, 1200)
+        mock_bbox_resp = MagicMock()
+        mock_bbox_resp.json.return_value = {
+            "message": {"content": json.dumps({"bbox_2d": [939, 798, 1546, 1126]})}
+        }
+        with patch.object(vision_client, "obtener_ollama_host", return_value=self.test_host), \
+             patch("api.vision_client.requests.post", return_value=mock_bbox_resp):
+            bbox = vision_client.detectar_cajetin_bbox(img_bytes, model="qwen2.5vl:7b")
+
+        # ymin=798/1200=665, xmin=939/1600=587, ymax=1126/1200=938, xmax=1546/1600=966
+        self.assertEqual(bbox, [665, 587, 938, 966])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,21 +6,19 @@ y los devuelve en JSON estructurado.
 
 ## Uso
 
+Para levantar el entorno local (PostgreSQL, MinIO, API y Frontend) usando Google Colab como motor de IA:
+
 ```bash
 docker compose up -d
 ```
 
-La API espera hasta 300 segundos por la respuesta de Ollama, ya que la
-inferencia puede tardar más cuando se ejecuta con CPU. Este valor se puede
-ajustar mediante la variable `OLLAMA_TIMEOUT`.
+> **Nota sobre Ollama local:** Los contenedores locales `ollama` y `ollama-pull` están bajo el perfil opcional `local-ai`, por lo que `docker compose up -d` **no los levanta ni descarga modelos localmente**. Si en algún momento querés correr Ollama localmente en Docker en lugar de usar Google Colab, ejecutá:
+> ```bash
+> docker compose --profile local-ai up -d
+> ```
+> y podés seguir la descarga inicial con `docker compose logs -f ollama-pull`.
 
-La primera vez, el servicio `ollama-pull` descarga el modelo
-(~2-3 GB) automáticamente. Puede tardar varios minutos según tu
-conexión. Podés seguir el progreso con:
-
-```bash
-docker compose logs -f ollama-pull
-```
+La API espera hasta 300 segundos por la respuesta de Ollama (ajustable mediante la variable `OLLAMA_TIMEOUT`).
 
 Una vez levantado todo:
 
