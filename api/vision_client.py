@@ -223,7 +223,14 @@ def _verificar_respuesta_ollama(response: requests.Response, host: str, modelo: 
     try:
         response.raise_for_status()
     except requests.RequestException as exc:
-        raise ExtraccionError(f"No se pudo contactar a Ollama ({host}): {exc}") from exc
+        detalle = ""
+        try:
+            err_json = response.json().get("error")
+            if err_json:
+                detalle = f" - Detalle Ollama: {err_json}"
+        except Exception:
+            pass
+        raise ExtraccionError(f"No se pudo contactar a Ollama ({host}): {exc}{detalle}") from exc
 
 
 def _validar_bbox(bbox: object) -> Optional[List[int]]:
@@ -334,7 +341,7 @@ def detectar_cajetin_bbox(image_bytes: bytes, model: Optional[str] = None) -> Li
         "format": CajetinBBoxSchema.model_json_schema(),
         "stream": False,
         "think": False,
-        "options": {"temperature": 0.1, "think": False, "num_predict": 512},
+        "options": {"temperature": 0.1, "num_predict": 512},
     }
 
     try:
@@ -374,7 +381,7 @@ def extraer_datos_cajetin(cajetin_bytes: bytes, model: Optional[str] = None) -> 
         "format": PlanoHistorico.model_json_schema(),
         "stream": False,
         "think": False,
-        "options": {"temperature": 0.1, "think": False, "num_predict": 8192},
+        "options": {"temperature": 0.1, "num_predict": 8192},
     }
 
     try:

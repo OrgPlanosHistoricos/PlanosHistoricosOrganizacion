@@ -92,7 +92,7 @@ Si no contás con una placa de video NVIDIA local, podés ejecutar **Ollama en G
    ```
 
 ### Paso 4: Elegir y activar el modelo de visión desde Google Colab
-1. En la **Celda 3** (`🎯 Seleccionar y activar modelo de visión`), elegí el modelo que querés utilizar desde el selector desplegable `MODELO` (por ejemplo `qwen2.5vl:3b`, `qwen2.5vl:7b`, `gemma3:4b`, `gemma3:12b`, `llama3.2-vision:11b`) o escribí cualquier otro modelo de visión compatible con Ollama.
+1. En la **Celda 3** (`🎯 Seleccionar y activar modelo de visión`), elegí el modelo que querés utilizar desde el selector desplegable `MODELO` (por ejemplo `qwen2.5vl:3b`, `qwen2.5vl:7b`, `qwen2.5vl:32b`, `gemma3:12b`, `gemma3:27b`, `mistral-small3.1:24b`, `minicpm-v:8b`) o escribí cualquier otro modelo de visión compatible con Ollama.
 2. Ejecutá la celda. El notebook descargará el modelo en Colab y lo registrará automáticamente con el alias interno `colab-activo`.
 3. **No hace falta modificar `VISION_MODEL` en tu `.env` local ni reiniciar Docker**: antes de procesar cada plano, el backend consulta los modelos de la instancia de Colab y utiliza automáticamente el que hayas dejado activo en esta celda.
 4. Si en cualquier momento querés probar otro modelo, simplemente cambialo en el desplegable de la **Celda 3** y volvé a ejecutarla.
