@@ -4,12 +4,16 @@ Cliente HTTP hacia Ollama con soporte para extracción en dos pasos:
 2. Recorte del cajetín en alta resolución y extracción estructurada con JSON Schema.
 """
 import base64
+import io
 import json
 import logging
 import os
+from pathlib import Path
 import re
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
+from dotenv import dotenv_values
+from PIL import Image
 from pydantic import BaseModel, Field
 import requests
 
@@ -18,9 +22,146 @@ from .schemas import PlanoHistorico
 
 logger = logging.getLogger("planos.vision")
 
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
+_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://ollama:11434").rstrip("/")
 MODEL_NAME = os.environ.get("VISION_MODEL", "qwen2.5vl:3b")
 OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "300"))
+
+_INITIAL_OLLAMA_HOST = OLLAMA_HOST
+_INITIAL_MODEL_NAME = MODEL_NAME
+_INITIAL_OLLAMA_TIMEOUT = OLLAMA_TIMEOUT
+
+OLLAMA_HEADERS = {
+    "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true",
+}
+COLAB_ACTIVE_ALIAS = "colab-activo"
+
+
+def _leer_env_actualizado() -> Dict[str, str]:
+    """Lee las variables definidas en el archivo .env si existe en disco."""
+    if _ENV_FILE.is_file():
+        try:
+            return {k: v for k, v in dotenv_values(_ENV_FILE).items() if v is not None}
+        except Exception:
+            return {}
+    return {}
+
+
+def obtener_ollama_host() -> str:
+    """Devuelve el host de Ollama actual, recargando .env si fue actualizado."""
+    if OLLAMA_HOST != _INITIAL_OLLAMA_HOST:
+        return OLLAMA_HOST.rstrip("/")
+    env_file_vars = _leer_env_actualizado()
+    host = env_file_vars.get("OLLAMA_HOST") or os.environ.get("OLLAMA_HOST", "http://ollama:11434")
+    return host.strip().rstrip("/")
+
+
+def obtener_modelo_configurado() -> str:
+    """Devuelve el modelo por defecto configurado localmente (fallback)."""
+    if MODEL_NAME != _INITIAL_MODEL_NAME:
+        return MODEL_NAME.strip()
+    env_file_vars = _leer_env_actualizado()
+    modelo = env_file_vars.get("VISION_MODEL") or os.environ.get("VISION_MODEL", "qwen2.5vl:3b")
+    return modelo.strip()
+
+
+def obtener_ollama_timeout() -> int:
+    """Devuelve el timeout configurado para llamadas a Ollama."""
+    if OLLAMA_TIMEOUT != _INITIAL_OLLAMA_TIMEOUT:
+        return OLLAMA_TIMEOUT
+    env_file_vars = _leer_env_actualizado()
+    raw_timeout = env_file_vars.get("OLLAMA_TIMEOUT") or os.environ.get("OLLAMA_TIMEOUT", "300")
+    try:
+        return int(raw_timeout)
+    except ValueError:
+        return 300
+
+
+def obtener_modelo_activo(ollama_host: Optional[str] = None) -> str:
+    """Detecta dinámicamente el modelo de visión activo en el servidor Ollama (Google Colab o local).
+
+    Prioridad:
+    1. Si en Ollama existe el alias 'colab-activo' (creado al elegir modelo en el notebook de Colab),
+       resuelve el nombre real del modelo mediante su digest (o usa 'colab-activo:latest').
+    2. Si el modelo configurado en VISION_MODEL está disponible en el servidor, lo utiliza.
+    3. Si hay otros modelos descargados en el servidor (ej. usuario descargó otro modelo en Colab),
+       selecciona el más reciente.
+    4. Si no se puede consultar /api/tags, usa el fallback configurado en VISION_MODEL.
+    """
+    host = (ollama_host or obtener_ollama_host()).rstrip("/")
+    fallback_model = obtener_modelo_configurado()
+
+    try:
+        response = requests.get(
+            f"{host}/api/tags",
+            headers=OLLAMA_HEADERS,
+            timeout=10,
+        )
+        response.raise_for_status()
+        models = response.json().get("models", [])
+        if not isinstance(models, list) or not models:
+            return fallback_model
+
+        # 1. Buscar alias 'colab-activo' configurado desde Google Colab
+        colab_entry = next(
+            (
+                m for m in models
+                if isinstance(m, dict)
+                and str(m.get("name", "")).split(":")[0] == COLAB_ACTIVE_ALIAS
+            ),
+            None,
+        )
+        if colab_entry is not None:
+            target_digest = colab_entry.get("digest")
+            if target_digest:
+                real_model = next(
+                    (
+                        m["name"] for m in models
+                        if isinstance(m, dict)
+                        and m.get("digest") == target_digest
+                        and str(m.get("name", "")).split(":")[0] != COLAB_ACTIVE_ALIAS
+                    ),
+                    None,
+                )
+                if real_model:
+                    logger.info(f"Modelo seleccionado en Google Colab detectado: {real_model}")
+                    return real_model
+            return str(colab_entry.get("name", f"{COLAB_ACTIVE_ALIAS}:latest"))
+
+        # 2. Lista de modelos disponibles en el servidor
+        disponibles = [
+            m for m in models
+            if isinstance(m, dict)
+            and m.get("name")
+            and str(m.get("name", "")).split(":")[0] != COLAB_ACTIVE_ALIAS
+        ]
+        nombres_disponibles = [str(m["name"]) for m in disponibles]
+
+        if fallback_model in nombres_disponibles:
+            return fallback_model
+
+        # Coincidencia sin tag ':latest'
+        for nombre in nombres_disponibles:
+            if nombre.split(":")[0] == fallback_model.split(":")[0] and fallback_model.endswith(":latest"):
+                return nombre
+
+        # 3. Si el servidor tiene modelos pero no el fallback local, elegir el modificado más recientemente
+        if disponibles:
+            disponibles_ordenados = sorted(
+                disponibles,
+                key=lambda m: str(m.get("modified_at", "")),
+                reverse=True,
+            )
+            elegido = str(disponibles_ordenados[0]["name"])
+            logger.info(f"Usando modelo disponible en servidor Ollama: {elegido}")
+            return elegido
+
+    except Exception as exc:
+        logger.debug(f"No se pudo consultar /api/tags en {host} ({exc}); usando modelo {fallback_model}")
+
+    return fallback_model
 
 # Bounding box por defecto basada en normas IRAM 4504 / ISO 7200 (cuadrante inferior derecho)
 FALLBACK_BBOX_IRAM = [600, 500, 1000, 1000]
@@ -61,6 +202,30 @@ class ExtraccionError(Exception):
     pass
 
 
+def _verificar_respuesta_ollama(response: requests.Response, host: str, modelo: str) -> None:
+    """Valida el estado HTTP de Ollama / Ngrok y lanza errores descriptivos en caso de fallo."""
+    if response.status_code == 404:
+        texto = getattr(response, "text", "") or ""
+        if "ngrok" in texto.lower() or "<!doctype html" in texto.lower():
+            raise ExtraccionError(
+                f"El túnel de Ngrok ({host}) está inactivo o desconectado. "
+                "Verificá que el notebook ollama_colab.ipynb esté en ejecución en Google Colab."
+            )
+        try:
+            err_msg = response.json().get("error", "")
+        except Exception:
+            err_msg = ""
+        if "model" in err_msg.lower() and "not found" in err_msg.lower():
+            raise ExtraccionError(
+                f"El modelo '{modelo}' no está descargado en Ollama ({host}). "
+                "Seleccioná y descargá el modelo desde la Celda 3 de Google Colab."
+            )
+    try:
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise ExtraccionError(f"No se pudo contactar a Ollama ({host}): {exc}") from exc
+
+
 def _validar_bbox(bbox: object) -> Optional[List[int]]:
     """Valida y ajusta coordenadas normalizadas [ymin, xmin, ymax, xmax] entre 0 y 1000."""
     if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
@@ -85,17 +250,49 @@ def _validar_bbox(bbox: object) -> Optional[List[int]]:
     return [ymin, xmin, ymax, xmax]
 
 
-def _extraer_bbox_de_texto(contenido: str) -> Optional[List[int]]:
+def _normalizar_coords_raw(
+    coords: object, image_size: Optional[Tuple[int, int]] = None
+) -> Optional[List[int]]:
+    """Convierte coordenadas crudas a [ymin, xmin, ymax, xmax] normalizadas (0..1000).
+
+    Soporta tanto [ymin, xmin, ymax, xmax] ya normalizadas (0..1000) como la salida
+    nativa de Qwen2.5-VL en píxeles [xmin, ymin, xmax, ymax] sobre las dimensiones de la imagen.
+    """
+    if not isinstance(coords, (list, tuple)) or len(coords) != 4:
+        return None
+    try:
+        vals = [int(v) for v in coords]
+    except (ValueError, TypeError):
+        return None
+
+    # Si alguna coordenada supera 1000 y conocemos el tamaño (width, height),
+    # el modelo devolvió píxeles reales en formato [xmin, ymin, xmax, ymax] (estándar Qwen2.5-VL)
+    if image_size and image_size[0] > 0 and image_size[1] > 0 and any(v > 1000 for v in vals):
+        det_w, det_h = image_size
+        xmin, ymin, xmax, ymax = vals
+        vals = [
+            int(round(ymin * 1000 / det_h)),
+            int(round(xmin * 1000 / det_w)),
+            int(round(ymax * 1000 / det_h)),
+            int(round(xmax * 1000 / det_w)),
+        ]
+
+    return _validar_bbox(vals)
+
+
+def _extraer_bbox_de_texto(
+    contenido: str, image_size: Optional[Tuple[int, int]] = None
+) -> Optional[List[int]]:
     if not contenido:
         return None
     try:
         parsed = json.loads(contenido)
         if isinstance(parsed, dict) and "bbox_2d" in parsed:
-            valida = _validar_bbox(parsed["bbox_2d"])
+            valida = _normalizar_coords_raw(parsed["bbox_2d"], image_size=image_size)
             if valida:
                 return valida
         elif isinstance(parsed, list):
-            valida = _validar_bbox(parsed)
+            valida = _normalizar_coords_raw(parsed, image_size=image_size)
             if valida:
                 return valida
     except (json.JSONDecodeError, ValueError):
@@ -104,19 +301,29 @@ def _extraer_bbox_de_texto(contenido: str) -> Optional[List[int]]:
     match = re.search(r"\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]", contenido)
     if match:
         coords = [int(match.group(i)) for i in range(1, 5)]
-        valida = _validar_bbox(coords)
+        valida = _normalizar_coords_raw(coords, image_size=image_size)
         if valida:
             return valida
 
     return None
 
 
-def detectar_cajetin_bbox(image_bytes: bytes) -> List[int]:
+def detectar_cajetin_bbox(image_bytes: bytes, model: Optional[str] = None) -> List[int]:
     """Paso 1: Detecta las coordenadas del cajetín [ymin, xmin, ymax, xmax] normalizadas de 0 a 1000."""
+    host = obtener_ollama_host()
+    timeout = obtener_ollama_timeout()
+    modelo = model or obtener_modelo_activo(host)
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
+    image_size: Optional[Tuple[int, int]] = None
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as img_obj:
+            image_size = img_obj.size
+    except Exception:
+        image_size = None
+
     payload = {
-        "model": MODEL_NAME,
+        "model": modelo,
         "messages": [
             {
                 "role": "user",
@@ -132,14 +339,14 @@ def detectar_cajetin_bbox(image_bytes: bytes) -> List[int]:
 
     try:
         response = requests.post(
-            f"{OLLAMA_HOST}/api/chat", json=payload, timeout=OLLAMA_TIMEOUT
+            f"{host}/api/chat", json=payload, headers=OLLAMA_HEADERS, timeout=timeout
         )
         response.raise_for_status()
         data = response.json()
         contenido = data.get("message", {}).get("content", "")
-        bbox = _extraer_bbox_de_texto(contenido)
+        bbox = _extraer_bbox_de_texto(contenido, image_size=image_size)
         if bbox:
-            logger.info(f"Cajetín detectado con éxito: {bbox}")
+            logger.info(f"Cajetín detectado con éxito ({modelo}): {bbox}")
             return bbox
     except Exception as exc:
         logger.warning(f"Fallo en detección automática de cajetín: {exc}")
@@ -148,12 +355,15 @@ def detectar_cajetin_bbox(image_bytes: bytes) -> List[int]:
     return FALLBACK_BBOX_IRAM
 
 
-def extraer_datos_cajetin(cajetin_bytes: bytes) -> PlanoHistorico:
+def extraer_datos_cajetin(cajetin_bytes: bytes, model: Optional[str] = None) -> PlanoHistorico:
     """Paso 2: Extrae los datos técnicos directamente del recorte en alta resolución."""
+    host = obtener_ollama_host()
+    timeout = obtener_ollama_timeout()
+    modelo = model or obtener_modelo_activo(host)
     image_b64 = base64.b64encode(cajetin_bytes).decode("utf-8")
 
     payload = {
-        "model": MODEL_NAME,
+        "model": modelo,
         "messages": [
             {
                 "role": "user",
@@ -169,9 +379,11 @@ def extraer_datos_cajetin(cajetin_bytes: bytes) -> PlanoHistorico:
 
     try:
         response = requests.post(
-            f"{OLLAMA_HOST}/api/chat", json=payload, timeout=OLLAMA_TIMEOUT
+            f"{host}/api/chat", json=payload, headers=OLLAMA_HEADERS, timeout=timeout
         )
-        response.raise_for_status()
+        _verificar_respuesta_ollama(response, host, modelo)
+    except ExtraccionError:
+        raise
     except requests.RequestException as exc:
         raise ExtraccionError(f"No se pudo contactar a Ollama: {exc}") from exc
 
@@ -186,9 +398,11 @@ def extraer_datos_cajetin(cajetin_bytes: bytes) -> PlanoHistorico:
         )
         try:
             response = requests.post(
-                f"{OLLAMA_HOST}/api/chat", json=payload, timeout=OLLAMA_TIMEOUT
+                f"{host}/api/chat", json=payload, headers=OLLAMA_HEADERS, timeout=timeout
             )
-            response.raise_for_status()
+            _verificar_respuesta_ollama(response, host, modelo)
+        except ExtraccionError:
+            raise
         except requests.RequestException as exc:
             raise ExtraccionError(f"No se pudo contactar a Ollama: {exc}") from exc
         data = response.json()
@@ -216,14 +430,16 @@ def extraer_datos_plano(
 ) -> PlanoHistorico:
     """Pipeline completo en 2 pasos:
     
-    1. Detecta la bounding box del cajetín con Qwen2.5-VL.
+    1. Detecta la bounding box del cajetín con el modelo de visión activo.
     2. Recorta el cajetín de la imagen original en alta resolución.
     3. Extrae la información técnica del recorte con JSON estructurado.
     """
-    logger.info("Iniciando detección del cajetín en el plano...")
+    host = obtener_ollama_host()
+    modelo = obtener_modelo_activo(host)
+    logger.info(f"Iniciando detección del cajetín en {host} con modelo '{modelo}'...")
     # Preprocesar versión ligera para no saturar memoria durante la detección geométrica
     imagen_deteccion = preprocess_image(image_bytes)
-    bbox = detectar_cajetin_bbox(imagen_deteccion)
+    bbox = detectar_cajetin_bbox(imagen_deteccion, model=modelo)
 
     logger.info(f"Recortando cajetín en alta resolución usando bbox {bbox}...")
     cajetin_img = crop_cajetin_from_bbox(
@@ -231,12 +447,12 @@ def extraer_datos_plano(
     )
     cajetin_hd_bytes = preprocess_cajetin(cajetin_img)
 
-    logger.info("Extrayendo datos estructurados desde el recorte del cajetín...")
+    logger.info(f"Extrayendo datos estructurados desde el recorte del cajetín con '{modelo}'...")
     try:
-        return extraer_datos_cajetin(cajetin_hd_bytes)
+        return extraer_datos_cajetin(cajetin_hd_bytes, model=modelo)
     except ExtraccionError as exc:
         logger.warning(
             f"Extracción sobre el recorte falló ({exc}), reintentando con plano completo..."
         )
-        return extraer_datos_cajetin(imagen_deteccion)
+        return extraer_datos_cajetin(imagen_deteccion, model=modelo)
 
