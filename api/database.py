@@ -24,6 +24,8 @@ def init_db() -> None:
         for campo in ("circunscripcion", "seccion", "manzana", "parcela_catastral"):
             conn.execute(text(f"ALTER TABLE planos ADD COLUMN IF NOT EXISTS {campo} TEXT NOT NULL DEFAULT '';"))
         conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS nomenclatura TEXT;"))
+        conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS creado_por TEXT;"))
+        conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS validado_por TEXT;"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_planos_nomenclatura ON planos (nomenclatura);"))
         conn.commit()
 
