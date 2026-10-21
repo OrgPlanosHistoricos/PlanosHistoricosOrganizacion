@@ -1,13 +1,16 @@
 import io
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from PIL import Image
 
-from api import vision_client
+from src.compartido import vision_client
 
 
 def _crear_imagen_prueba(ancho: int = 800, alto: int = 600) -> bytes:
@@ -31,7 +34,7 @@ class VisionColabTests(unittest.TestCase):
                 {"name": "colab-activo:latest", "digest": "sha256:bbb222", "modified_at": "2026-10-19T11:01:00Z"},
             ]
         }
-        with patch("api.vision_client.requests.get", return_value=mock_tags_response) as mock_get:
+        with patch("src.compartido.vision_client.requests.get", return_value=mock_tags_response) as mock_get:
             modelo = vision_client.obtener_modelo_activo(self.test_host)
 
         self.assertEqual(modelo, "qwen2.5vl:7b")
@@ -43,7 +46,6 @@ class VisionColabTests(unittest.TestCase):
 
     def test_cambio_de_modelo_en_caliente_desde_colab(self):
         """Cambiar el modelo en Colab actualiza inmediatamente el modelo usado sin tocar .env."""
-        # Primero el usuario elige qwen2.5vl:3b en Colab
         resp_3b = MagicMock()
         resp_3b.json.return_value = {
             "models": [
@@ -52,7 +54,6 @@ class VisionColabTests(unittest.TestCase):
                 {"name": "colab-activo:latest", "digest": "sha256:111"},
             ]
         }
-        # Luego el usuario cambia a gemma3:12b en Colab
         resp_gemma = MagicMock()
         resp_gemma.json.return_value = {
             "models": [
@@ -61,7 +62,7 @@ class VisionColabTests(unittest.TestCase):
                 {"name": "colab-activo:latest", "digest": "sha256:222"},
             ]
         }
-        with patch("api.vision_client.requests.get", side_effect=[resp_3b, resp_gemma]):
+        with patch("src.compartido.vision_client.requests.get", side_effect=[resp_3b, resp_gemma]):
             primero = vision_client.obtener_modelo_activo(self.test_host)
             segundo = vision_client.obtener_modelo_activo(self.test_host)
 
@@ -77,7 +78,7 @@ class VisionColabTests(unittest.TestCase):
             ]
         }
         with patch.object(vision_client, "obtener_modelo_configurado", return_value="qwen2.5vl:3b"), \
-             patch("api.vision_client.requests.get", return_value=mock_tags):
+             patch("src.compartido.vision_client.requests.get", return_value=mock_tags):
             modelo = vision_client.obtener_modelo_activo(self.test_host)
 
         self.assertEqual(modelo, "llama3.2-vision:11b")
@@ -126,8 +127,8 @@ class VisionColabTests(unittest.TestCase):
         }
 
         with patch.object(vision_client, "obtener_ollama_host", return_value=self.test_host), \
-             patch("api.vision_client.requests.get", return_value=mock_tags) as mock_get, \
-             patch("api.vision_client.requests.post", side_effect=[mock_bbox_resp, mock_extract_resp]) as mock_post:
+             patch("src.compartido.vision_client.requests.get", return_value=mock_tags) as mock_get, \
+             patch("src.compartido.vision_client.requests.post", side_effect=[mock_bbox_resp, mock_extract_resp]) as mock_post:
             resultado = vision_client.extraer_datos_plano(img_bytes)
 
         self.assertEqual(resultado.arquitecto, "Francisco Salamone")
@@ -151,7 +152,7 @@ class VisionColabTests(unittest.TestCase):
         resp_ngrok_404.text = "<!DOCTYPE html><html>ngrok ERR_NGROK_3200</html>"
 
         with patch.object(vision_client, "obtener_ollama_host", return_value=self.test_host), \
-             patch("api.vision_client.requests.post", return_value=resp_ngrok_404):
+             patch("src.compartido.vision_client.requests.post", return_value=resp_ngrok_404):
             with self.assertRaises(vision_client.ExtraccionError) as ctx:
                 vision_client.extraer_datos_cajetin(img_bytes, model="qwen2.5vl:7b")
 
@@ -166,7 +167,7 @@ class VisionColabTests(unittest.TestCase):
             "message": {"content": json.dumps({"bbox_2d": [939, 798, 1546, 1126]})}
         }
         with patch.object(vision_client, "obtener_ollama_host", return_value=self.test_host), \
-             patch("api.vision_client.requests.post", return_value=mock_bbox_resp):
+             patch("src.compartido.vision_client.requests.post", return_value=mock_bbox_resp):
             bbox = vision_client.detectar_cajetin_bbox(img_bytes, model="qwen2.5vl:7b")
 
         # ymin=798/1200=665, xmin=939/1600=587, ymax=1126/1200=938, xmax=1546/1600=966
@@ -175,3 +176,4 @@ class VisionColabTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

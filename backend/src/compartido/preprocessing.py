@@ -51,7 +51,7 @@ def crop_cajetin_from_bbox(
     padding_pct: float = 0.02,
 ) -> Image.Image:
     """Recorta el cajetín de un plano usando una bounding box [ymin, xmin, ymax, xmax] normalizada de 0 a 1000.
-    
+
     Acepta una ruta de archivo (str), bytes en memoria o una instancia PIL.Image.
     Si se proporciona output_path, guarda el recorte en el archivo especificado.
     Añade un margen de seguridad (padding_pct) para evitar recortar bordes de texto.

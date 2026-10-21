@@ -8,11 +8,11 @@ from typing import Optional
 
 from sqlmodel import Session, select
 
-from .database import engine
-from .minio_client import existe_archivo, obtener_archivo, obtener_preview_key
-from .models import DatosPlano, EstadoIA, EstadoPlano, Plano, ahora
-from .preprocessing import pdf_page_to_jpeg_bytes, preprocess_image
-from .vision_client import ExtraccionError, extraer_datos_plano
+from src.compartido.minio_client import existe_archivo, obtener_archivo, obtener_preview_key
+from src.compartido.preprocessing import pdf_page_to_jpeg_bytes
+from src.compartido.sesion import engine
+from src.compartido.vision_client import ExtraccionError, extraer_datos_plano
+from src.models import DatosPlano, EstadoIA, EstadoPlano, Plano, ahora
 
 logger = logging.getLogger("planos.worker")
 
@@ -26,7 +26,6 @@ def _extraer(image_bytes: bytes) -> dict:
         except ExtraccionError as exc:
             ultimo_error = exc
     raise ExtraccionError(f"No se pudo extraer la información del plano: {ultimo_error}")
-
 
 
 def _guardar_resultado(plano_id: int, datos: Optional[dict], error: Optional[str]) -> None:
@@ -123,3 +122,4 @@ class PlanosWorker:
 
 
 planos_worker = PlanosWorker()
+

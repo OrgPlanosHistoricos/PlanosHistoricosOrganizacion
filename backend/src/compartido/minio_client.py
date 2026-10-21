@@ -8,9 +8,9 @@ from minio import Minio
 BUCKET = os.environ.get("MINIO_BUCKET", "planos")
 
 _client = Minio(
-    os.environ["MINIO_ENDPOINT"],
-    access_key=os.environ["MINIO_ACCESS_KEY"],
-    secret_key=os.environ["MINIO_SECRET_KEY"],
+    os.environ.get("MINIO_ENDPOINT", "localhost:9000"),
+    access_key=os.environ.get("MINIO_ACCESS_KEY", "minioadmin"),
+    secret_key=os.environ.get("MINIO_SECRET_KEY", "minioadmin123"),
     secure=os.environ.get("MINIO_SECURE", "false").lower() == "true",
 )
 
@@ -73,3 +73,4 @@ def obtener_preview_key(minio_path: str) -> str:
 def eliminar_archivo(key: str) -> None:
     """Eliminar es idempotente: un objeto ausente también cuenta como eliminado."""
     _client.remove_object(BUCKET, key)
+

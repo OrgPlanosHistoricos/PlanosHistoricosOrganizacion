@@ -65,6 +65,94 @@ Respuesta cuando finaliza (`status: "completed"`):
 
 ---
 
+## Estructura del Backend
+
+El backend sigue una arquitectura organizada por recursos y capas (`routes → controllers → services → models`), manteniendo separada la infraestructura compartida de la lógica de cada dominio.
+
+```text
+backend/
+├── Dockerfile
+├── requirements.txt
+├── tests/
+│   ├── test_health.py
+│   ├── test_nomenclatura.py
+│   └── test_vision_colab.py
+└── src/
+    ├── __init__.py
+    ├── main.py                  # Instancia FastAPI, lifespan y registro de routers
+    ├── config.py                # Configuración central (CORS y formatos aceptados)
+    ├── models.py                # Tablas SQLModel y motor/sesión de PostgreSQL
+    ├── schemas.py               # Reexportación central de esquemas
+    ├── errors.py                # Excepciones de dominio (ExtraccionError, ErrorServicio)
+    ├── routes.py                # Rutas generales de salud (/health y /health/database)
+    ├── controllers.py           # Controladores de salud
+    ├── services.py              # Servicios de salud y verificación de base de datos
+    ├── compartido/              # Infraestructura común a los recursos
+    │   ├── __init__.py
+    │   ├── sesion.py            # Motor y sesión de PostgreSQL
+    │   ├── minio_client.py      # Cliente MinIO
+    │   ├── storage_client.py    # Cliente Supabase Storage
+    │   ├── db_client.py         # Cliente MongoDB
+    │   ├── preprocessing.py     # Preprocesamiento y recorte de imágenes/PDF
+    │   └── vision_client.py     # Cliente HTTP hacia Ollama (pipeline en 2 pasos)
+    ├── planos/                  # Recurso /planos (CRUD, validación, preview y worker IA)
+    │   ├── __init__.py
+    │   ├── routes.py
+    │   ├── controllers.py
+    │   ├── services.py
+    │   ├── schemas.py
+    │   ├── nomenclatura.py
+    │   └── worker.py
+    └── tareas/                  # Recurso /tareas y /procesar-plano
+        ├── __init__.py
+        ├── routes.py
+        ├── controllers.py
+        ├── services.py
+        └── schemas.py
+```
+
+### Capas dentro de cada recurso (`<recurso>/`)
+
+Cada subcarpeta de recurso en `backend/src/` se organiza en las mismas cuatro capas:
+
+```text
+<recurso>/
+├── routes.py       Define los endpoints HTTP (APIRouter con su prefijo) sin lógica de negocio
+├── controllers.py  Adapta la petición HTTP <-> servicio y construye las respuestas HTTP
+├── services.py     Contiene las reglas de negocio, validaciones y el acceso a base de datos/almacenamiento
+└── schemas.py      Modelos Pydantic/SQLModel para validación de entrada y serialización de salida
+```
+
+### Detalle de carpetas y módulos
+
+- **`backend/` (raíz del servicio)**:
+  - `Dockerfile` y `requirements.txt`: imagen Docker de Python y dependencias necesarias para levantar el contenedor de la API.
+- **`backend/src/` (núcleo de la aplicación)**:
+  - `main.py`: punto de entrada de FastAPI; inicializa la base de datos y los workers en segundo plano durante el ciclo de vida (`lifespan`), configura CORS y registra los routers de cada recurso.
+  - `config.py`: centraliza variables de entorno y constantes transversales (orígenes CORS, formatos de imagen y PDF soportados).
+  - `models.py`: define las tablas relacionales con SQLModel (`Plano`, `EventoAuditoria`, `ProcesamientoIA`), sus relaciones y la inicialización del esquema en PostgreSQL (`init_db`).
+  - `schemas.py`: punto único de reexportación de los esquemas de `planos` y `tareas`.
+  - `errors.py`: define las excepciones de dominio (`ExtraccionError`, `ErrorServicio`) y su conversión a respuestas HTTP.
+  - `routes.py`, `controllers.py` y `services.py`: implementan los endpoints generales de estado del servicio (`GET /health`) y comprobación de conexión a PostgreSQL (`GET /health/database`).
+- **`backend/src/compartido/` (infraestructura y clientes externos)**:
+  - `sesion.py`: provee el `engine` y el generador de sesiones (`get_session`) de PostgreSQL para inyección de dependencias.
+  - `minio_client.py`: subida, descarga, verificación y borrado de planos originales y previsualizaciones en el bucket de MinIO.
+  - `storage_client.py` y `db_client.py`: clientes de Supabase Storage y MongoDB utilizados por el flujo de extracción directa/asíncrona.
+  - `preprocessing.py`: rasterización de páginas PDF (`pypdfium2`), recorte de alta resolución del cajetín técnico según coordenadas normalizadas y mejora de contraste/nitidez (`Pillow`).
+  - `vision_client.py`: cliente HTTP hacia Ollama (local o Google Colab vía Ngrok) que ejecuta la detección de bounding box del cajetín (Paso 1) y la extracción JSON estructurada (Paso 2), incluyendo detección automática del modelo activo en Colab.
+- **`backend/src/planos/` (catálogo de planos históricos — `/planos`)**:
+  - `routes.py`, `controllers.py`, `services.py` y `schemas.py`: alta de planos con archivo y nomenclatura, listado con filtros, consulta de detalle con historial, descarga de archivo original y vista previa, validación inicial, modificación con auditoría, reintento de IA y baja física.
+  - `nomenclatura.py`: normalización y validación del formato catastral (`circunscripción-sección-manzana-parcela`) y generación de su clave única.
+  - `worker.py`: cola asíncrona (`planos_worker`) que procesa con IA los planos recién creados o reintentados y persiste los metadatos extraídos en PostgreSQL, retomando pendientes tras un reinicio.
+- **`backend/src/tareas/` (procesamiento por cola de tareas — `/procesar-plano` y `/tareas`)**:
+  - `routes.py`, `controllers.py`, `services.py` y `schemas.py`: gestor en memoria (`task_manager`) para procesar archivos de forma asíncrona (`POST /procesar-plano` y consulta en `GET /tareas/{task_id}`) o síncrona (`?sync=true`), definiendo el esquema `PlanoHistorico` que guía la salida JSON del modelo de visión.
+- **`backend/tests/` (pruebas unitarias y de integración)**:
+  - `test_health.py`: pruebas del endpoint `/health/database` ante conexión exitosa o fallo de PostgreSQL.
+  - `test_nomenclatura.py`: pruebas de normalización catastral, unicidad, ciclo de validación/modificación, preservación de transcripción original y borrado.
+  - `test_vision_colab.py`: pruebas del cliente de visión, selección dinámica de modelo en Google Colab (`colab-activo`), recarga de `.env` y pipeline en 2 pasos.
+
+---
+
 ## Procesamiento acelerado con GPU en Google Colab (Paso a Paso)
 
 Si no contás con una placa de video NVIDIA local, podés ejecutar **Ollama en Google Colab** aprovechando su GPU **NVIDIA T4 gratuita (16 GB VRAM)** y conectarlo a tu backend local mediante un túnel seguro de **Ngrok**. Esto reduce el tiempo de procesamiento de 60–90 segundos en CPU a unos pocos segundos por plano y permite elegir modelos más grandes (como `qwen2.5vl:7b` o `gemma3:12b`) directamente desde el notebook.
@@ -77,7 +165,7 @@ Si no contás con una placa de video NVIDIA local, podés ejecutar **Ollama en G
 ### Paso 2: Abrir el notebook en Google Colab y activar la GPU
 1. Subí o abrí el archivo `ollama_colab.ipynb` incluido en la raíz de este repositorio en [Google Colab](https://colab.research.google.com/).
 2. En el menú superior de Colab, entrá en **Entorno de ejecución** → **Cambiar tipo de entorno de ejecución**.
-3. Seleccioná **GPU T4** en "Acelerador por hardware" y guardá los cambios.
+3. Seleccioná **GPU T4 (para los modelos de hasta 7b) o GPU L4 (para los modelos mas grandes, este no esta disponible con google colab gratis solo con planes de pago)** en "Acelerador por hardware" y guardá los cambios.
 
 ### Paso 3: Instalar e iniciar Ollama + Túnel Ngrok
 1. Ejecutá la **Celda 1** (`📦 1. Instalar dependencias, Ollama y pyngrok`) y esperá a que finalice la instalación (~30–60 segundos).
@@ -115,7 +203,7 @@ Si no contás con una placa de video NVIDIA local, podés ejecutar **Ollama en G
 ### Paso 7: Ejecutar las pruebas de integración con Colab
 Para verificar el funcionamiento del cliente de visión y la selección dinámica de modelos:
 ```bash
-docker compose exec -T api python -m unittest api.tests.test_vision_colab -v
+docker compose exec -T api python -m unittest tests.test_vision_colab -v
 ```
 
 ---
@@ -169,7 +257,7 @@ Se genera una vista previa optimizada del plano para no sobrecargar la memoria d
 
 ### Recorte en Alta Resolución (Crop & Preprocesamiento)
 
-Implementado en `api/preprocessing.py` con la función `crop_cajetin_from_bbox`:
+Implementado en `backend/src/compartido/preprocessing.py` con la función `crop_cajetin_from_bbox`:
 
 1. **Desnormalización:** Las coordenadas `[0..1000]` se convierten a píxeles exactos de la **imagen original sin comprimir**.
 2. **Margen de seguridad (*Padding*):** Se expande la caja un 2% en ancho y alto para evitar cortar palabras o sellos que rocen los márgenes del cajetín.
@@ -181,7 +269,7 @@ Implementado en `api/preprocessing.py` con la función `crop_cajetin_from_bbox`:
 
 ### Paso 2: Extracción Estructurada de Datos Técnicos en HD
 
-Se envía **únicamente el recorte del cajetín en máxima resolución** a Qwen2.5-VL con el esquema JSON completo de `PlanoHistorico` (`api/schemas.py`). Al tener solo el rótulo en primer plano, el modelo dispone del 100% de su capacidad atencional y de resolución óptica en el texto que importa.
+Se envía **únicamente el recorte del cajetín en máxima resolución** a Qwen2.5-VL con el esquema JSON completo de `PlanoHistorico` (`backend/src/tareas/schemas.py`). Al tener solo el rótulo en primer plano, el modelo dispone del 100% de su capacidad atencional y de resolución óptica en el texto que importa.
 
 - **Prompt utilizado en el Paso 2:**
   ```text
@@ -237,13 +325,13 @@ se persiste en dos lugares:
 - **MongoDB** (base `planos_db`, colección `extracciones`): guarda el
   documento completo (fecha de procesamiento, datos del archivo y la
   extracción de Qwen) con el esquema `DocumentoExtraccion`
-  (`api/schemas.py`).
+  (`backend/src/tareas/schemas.py`).
 
-Esta lógica vive en `api/tasks.py` (función `_guardar_extraccion`),
+Esta lógica vive en `backend/src/tareas/services.py` (función `_guardar_extraccion`),
 que se llama tanto desde el worker asíncrono como desde
 `procesar_directo` (modo `sync`), después de que Qwen devuelve el
-resultado. La subida a Supabase usa `api/storage_client.py` y el
-insert a Mongo usa `api/db_client.py`.
+resultado. La subida a Supabase usa `backend/src/compartido/storage_client.py` y el
+insert a Mongo usa `backend/src/compartido/db_client.py`.
 
 ### Variables de entorno
 
@@ -345,12 +433,12 @@ Detalles de comportamiento:
 
 ## Notas
 
-- El esquema de campos a extraer está en `app/schemas.py` (Pydantic).
+- El esquema de campos a extraer está en `backend/src/tareas/schemas.py` (Pydantic).
   Agregá o quitá campos ahí y se propagan automáticamente al modelo.
 - Sin GPU, cada plano puede tardar entre 20 y 90 segundos según
   resolución. Con GPU (ver comentario en `docker-compose.yml`) baja
   drásticamente.
-- `app/preprocessing.py` redimensiona y mejora el contraste de la
+- `backend/src/compartido/preprocessing.py` redimensiona y mejora el contraste de la
   imagen antes de mandarla al modelo - ajustá `MAX_DIMENSION` si tus
   planos tienen mucho detalle fino.
 # planosHistoricos
@@ -399,7 +487,7 @@ almacenamiento/IA simulados, sin modificar los planos del proyecto):
 
 ```powershell
 node --test front/tests/errors.test.cjs
-docker compose exec -T api python -m unittest api.tests.test_nomenclatura -v
+docker compose exec -T api python -m unittest tests.test_nomenclatura -v
 ```
 
 Para probar la página usá `http://localhost:8080/planos-historicos.html`.
@@ -424,5 +512,5 @@ Para activar el endpoint, reiniciá la API y recargá la página:
 ```powershell
 docker compose restart api
 node --test front/tests/errors.test.cjs front/tests/database-status.test.cjs
-docker compose exec -T api python -m unittest api.tests.test_health -v
+docker compose exec -T api python -m unittest tests.test_health -v
 ```

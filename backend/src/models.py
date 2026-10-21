@@ -1,11 +1,12 @@
-"""Modelos relacionales del catálogo de planos (tablas + esquemas de request/response)."""
+"""Modelos relacionales del catálogo de planos y conexión a PostgreSQL con SQLModel."""
 from datetime import datetime, timezone
 from enum import Enum
+import os
 from typing import List, Optional
 
 from pydantic import field_validator
-from sqlalchemy import DateTime, Index
-from sqlmodel import Field, Relationship, SQLModel
+from sqlalchemy import DateTime, Index, text
+from sqlmodel import Field, Relationship, Session, SQLModel, create_engine
 
 
 def ahora() -> datetime:
@@ -26,7 +27,7 @@ class EstadoIA(str, Enum):
 
 
 class DatosPlano(SQLModel):
-    """Metadatos leídos del plano: mismos campos que PlanoHistorico (api/schemas.py)."""
+    """Metadatos leídos del plano: mismos campos que PlanoHistorico."""
 
     texto_extraido: Optional[str] = None
     arquitecto: Optional[str] = None
@@ -109,45 +110,32 @@ class ProcesamientoIA(SQLModel, table=True):
     plano: Optional[Plano] = Relationship(back_populates="procesamientos")
 
 
-class EventoRead(SQLModel):
-    id: int
-    fecha: datetime
-    motivo: str
-    usuario_id: str
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://planos:planos@localhost:5432/planos_db")
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_timeout=5,
+    connect_args={"connect_timeout": 3} if DATABASE_URL.startswith("postgresql") else {},
+)
 
 
-class ProcesamientoRead(SQLModel):
-    id: int
-    intento: int
-    estado: EstadoIA
-    error: Optional[str] = None
-    fecha: datetime
+def init_db() -> None:
+    SQLModel.metadata.create_all(engine)
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS texto_extraido TEXT;"))
+        # Los registros anteriores quedan sin nomenclatura hasta su revisión.
+        for campo in ("circunscripcion", "seccion", "manzana", "parcela_catastral"):
+            conn.execute(text(f"ALTER TABLE planos ADD COLUMN IF NOT EXISTS {campo} TEXT NOT NULL DEFAULT '';"))
+        conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS nomenclatura TEXT;"))
+        conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS creado_por TEXT;"))
+        conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS validado_por TEXT;"))
+        conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS ia_propuesta TEXT;"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_planos_nomenclatura ON planos (nomenclatura);"))
+        conn.commit()
 
 
-class PlanoRead(PlanoBase):
-    id: int
-    creado_en: datetime
-    actualizado_en: datetime
+def get_session():
+    with Session(engine) as session:
+        yield session
 
-
-class PlanoDetalle(PlanoRead):
-    eventos: List[EventoRead] = []
-    procesamientos: List[ProcesamientoRead] = []
-
-
-class NomenclaturaEntrada(SQLModel):
-    circunscripcion: str
-    seccion: str
-    manzana: str
-    parcela_catastral: str
-
-
-class PlanoValidar(DatosPlano, NomenclaturaEntrada):
-    parcela: str = ""
-    usuario_id: str = "anonimo"
-
-
-class PlanoModificar(DatosPlano, NomenclaturaEntrada):
-    parcela: str = ""
-    motivo: str
-    usuario_id: str = "anonimo"

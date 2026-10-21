@@ -1,20 +1,26 @@
 """
-Gestor de tareas en segundo plano para el procesamiento asíncrono de planos con IA.
+Servicio y gestor de tareas en segundo plano para el procesamiento asíncrono de planos con IA.
 Permite encolar trabajos, ejecutarlos en un hilo separado sin bloquear el bucle de
 eventos de FastAPI, y consultar el estado y resultado mediante un ID de tarea.
 """
 import asyncio
 from datetime import datetime
-from enum import Enum
 import logging
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 import uuid
 
-from .db_client import coleccion_extracciones
-from .preprocessing import pdf_page_to_jpeg_bytes, preprocess_image
-from .schemas import ArchivoInfo, DocumentoExtraccion, PlanoHistorico
-from .storage_client import subir_plano
-from .vision_client import ExtraccionError, extraer_datos_plano
+from src.compartido.db_client import coleccion_extracciones
+from src.compartido.preprocessing import pdf_page_to_jpeg_bytes
+from src.compartido.storage_client import subir_plano
+from src.compartido.vision_client import extraer_datos_plano
+from src.errors import ExtraccionError
+from src.tareas.schemas import (
+    ArchivoInfo,
+    DocumentoExtraccion,
+    PlanoHistorico,
+    TareaInfo,
+    TaskStatus,
+)
 
 logger = logging.getLogger("planos.tasks")
 logging.basicConfig(level=logging.INFO)
@@ -35,47 +41,6 @@ def _guardar_extraccion(
     if coleccion_extracciones is not None:
         coleccion_extracciones.insert_one(documento.model_dump())
     return supabase_url
-
-
-class TaskStatus(str, Enum):
-    PENDING = "pending"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    ERROR = "error"
-
-
-class TareaInfo:
-    def __init__(
-        self,
-        task_id: str,
-        status: TaskStatus,
-        filename: Optional[str] = None,
-        created_at: Optional[str] = None,
-        updated_at: Optional[str] = None,
-        resultado: Optional[Dict[str, Any]] = None,
-        error: Optional[str] = None,
-        supabase_url: Optional[str] = None,
-    ):
-        self.task_id = task_id
-        self.status = status
-        self.filename = filename
-        self.created_at = created_at or datetime.utcnow().isoformat()
-        self.updated_at = updated_at or datetime.utcnow().isoformat()
-        self.resultado = resultado
-        self.error = error
-        self.supabase_url = supabase_url
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "task_id": self.task_id,
-            "status": self.status.value,
-            "filename": self.filename,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-            "resultado": self.resultado,
-            "error": self.error,
-            "supabase_url": self.supabase_url,
-        }
 
 
 class TaskManager:
@@ -225,5 +190,4 @@ async def procesar_directo(
     raise ExtraccionError(
         f"No se pudo extraer la información del plano: {ultimo_error}"
     )
-
 

@@ -5,8 +5,10 @@ CAMPOS_NOMENCLATURA = ("circunscripcion", "seccion", "manzana", "parcela_catastr
 
 
 def normalizar_nomenclatura(circunscripcion, seccion, manzana, parcela_catastral):
-    valores = [str(v or "").strip().upper() for v in
-               (circunscripcion, seccion, manzana, parcela_catastral)]
+    valores = [
+        str(v or "").strip().upper()
+        for v in (circunscripcion, seccion, manzana, parcela_catastral)
+    ]
     if any(not v or len(v) > 64 for v in valores):
         raise ValueError("nomenclatura_invalida")
     if not re.fullmatch(r"[0-9]+", valores[0]) or int(valores[0]) == 0:
@@ -31,3 +33,4 @@ def normalizar_busqueda(valor):
     if len(partes) != 4:
         raise ValueError("nomenclatura_invalida")
     return clave_nomenclatura(normalizar_nomenclatura(*partes))
+

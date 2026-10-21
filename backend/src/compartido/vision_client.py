@@ -17,12 +17,17 @@ from PIL import Image
 from pydantic import BaseModel, Field
 import requests
 
-from .preprocessing import crop_cajetin_from_bbox, preprocess_cajetin, preprocess_image
-from .schemas import PlanoHistorico
+from src.compartido.preprocessing import crop_cajetin_from_bbox, preprocess_cajetin, preprocess_image
+from src.errors import ExtraccionError
+from src.tareas.schemas import PlanoHistorico
 
 logger = logging.getLogger("planos.vision")
 
-_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+_ENV_CANDIDATES = (
+    Path(__file__).resolve().parents[2] / ".env",  # /app/.env en Docker
+    Path(__file__).resolve().parents[3] / ".env",  # raíz del repo en entorno local
+)
+_ENV_FILE = next((p for p in _ENV_CANDIDATES if p.is_file()), _ENV_CANDIDATES[0])
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://ollama:11434").rstrip("/")
 MODEL_NAME = os.environ.get("VISION_MODEL", "qwen2.5vl:3b")
@@ -163,6 +168,7 @@ def obtener_modelo_activo(ollama_host: Optional[str] = None) -> str:
 
     return fallback_model
 
+
 # Bounding box por defecto basada en normas IRAM 4504 / ISO 7200 (cuadrante inferior derecho)
 FALLBACK_BBOX_IRAM = [600, 500, 1000, 1000]
 
@@ -196,10 +202,6 @@ class CajetinBBoxSchema(BaseModel):
     bbox_2d: List[int] = Field(
         description="Bounding box del cajetín [ymin, xmin, ymax, xmax] normalizado de 0 a 1000."
     )
-
-
-class ExtraccionError(Exception):
-    pass
 
 
 def _verificar_respuesta_ollama(response: requests.Response, host: str, modelo: str) -> None:
@@ -436,7 +438,7 @@ def extraer_datos_plano(
     image_bytes: bytes, output_cajetin_path: Optional[str] = None
 ) -> PlanoHistorico:
     """Pipeline completo en 2 pasos:
-    
+
     1. Detecta la bounding box del cajetín con el modelo de visión activo.
     2. Recorta el cajetín de la imagen original en alta resolución.
     3. Extrae la información técnica del recorte con JSON estructurado.

@@ -10,3 +10,4 @@ sqlmodel==0.0.22
 psycopg2-binary==2.9.10
 minio==7.2.10
 pypdfium2==5.14.0
+

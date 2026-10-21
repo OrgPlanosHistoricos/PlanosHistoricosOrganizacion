@@ -42,3 +42,4 @@ def subir_plano(contenido: bytes, nombre_original: str, content_type: str) -> st
         nombre_storage, contenido, {"content-type": content_type}
     )
     return client.storage.from_(BUCKET_NAME).get_public_url(nombre_storage)
+

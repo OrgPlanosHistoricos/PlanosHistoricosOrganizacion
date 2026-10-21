@@ -1,14 +1,12 @@
-"""Endpoints CRUD del catálogo de planos (Postgres + MinIO)."""
+"""Servicios y reglas de negocio del catálogo de planos (Postgres + MinIO)."""
 import asyncio
-from typing import List, Optional
-from urllib.parse import quote
+from typing import List, Optional, Tuple, Union
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
+from fastapi import HTTPException, UploadFile
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from .database import engine, get_session
-from .minio_client import (
+from src.compartido.minio_client import (
     eliminar_archivo,
     existe_archivo,
     obtener_archivo,
@@ -16,28 +14,30 @@ from .minio_client import (
     subir_archivo,
     subir_archivo_con_key,
 )
-from .models import (
+from src.compartido.preprocessing import pdf_page_to_jpeg_bytes
+from src.compartido.sesion import engine
+from src.config import settings
+from src.models import (
     DatosPlano,
     EstadoIA,
     EstadoPlano,
     EventoAuditoria,
-    ProcesamientoIA,
     Plano,
-    PlanoDetalle,
-    PlanoModificar,
-    PlanoRead,
-    PlanoValidar,
+    ProcesamientoIA,
     ahora,
 )
-from .planos_worker import planos_worker
-from .preprocessing import pdf_page_to_jpeg_bytes
-from .nomenclatura import CAMPOS_NOMENCLATURA, normalizar_nomenclatura, clave_nomenclatura, normalizar_busqueda
+from src.planos.nomenclatura import (
+    CAMPOS_NOMENCLATURA,
+    clave_nomenclatura,
+    normalizar_busqueda,
+    normalizar_nomenclatura,
+)
+from src.planos.schemas import PlanoDetalle, PlanoModificar, PlanoRead, PlanoValidar
+from src.planos.worker import planos_worker
 
-router = APIRouter(prefix="/planos", tags=["planos"])
-
-FORMATOS_IMAGEN = {"image/jpeg", "image/png", "image/webp", "image/tiff"}
-FORMATOS_PDF = {"application/pdf"}
-FORMATOS_ACEPTADOS = FORMATOS_IMAGEN | FORMATOS_PDF
+FORMATOS_IMAGEN = settings.FORMATOS_IMAGEN
+FORMATOS_PDF = settings.FORMATOS_PDF
+FORMATOS_ACEPTADOS = settings.FORMATOS_ACEPTADOS
 
 
 def _obtener_plano(session: Session, plano_id: int) -> Plano:
@@ -54,13 +54,13 @@ def _datos_nomenclatura(circ, secc, mza, parc):
         raise HTTPException(status_code=422, detail={"codigo": "nomenclatura"})
 
 
-def _comprobar_unica(session, clave, plano_id=None):
+def _comprobar_unica(session: Session, clave: str, plano_id: Optional[int] = None):
     existente = session.exec(select(Plano).where(Plano.nomenclatura == clave)).first()
     if existente is not None and existente.id != plano_id:
         raise HTTPException(status_code=409, detail={"codigo": "duplicado"})
 
 
-def _commit_unico(session, clave, plano_id=None):
+def _commit_unico(session: Session, clave: str, plano_id: Optional[int] = None):
     try:
         session.commit()
     except IntegrityError:
@@ -69,7 +69,7 @@ def _commit_unico(session, clave, plano_id=None):
         raise
 
 
-def _aplicar_datos(plano: Plano, datos: PlanoValidar | PlanoModificar, session) -> None:
+def _aplicar_datos(plano: Plano, datos: Union[PlanoValidar, PlanoModificar], session: Session) -> None:
     nomen = _datos_nomenclatura(*(getattr(datos, c) for c in CAMPOS_NOMENCLATURA))
     clave = clave_nomenclatura(nomen)
     _comprobar_unica(session, clave, plano.id)
@@ -93,19 +93,18 @@ def _insertar_plano(plano: Plano) -> PlanoRead:
         return PlanoRead.model_validate(plano)
 
 
-@router.post("", response_model=PlanoRead, status_code=201)
 async def crear_plano(
-    archivo: UploadFile = File(...),
-    circunscripcion: str = Form(...),
-    seccion: str = Form(...),
-    manzana: str = Form(...),
-    parcela_catastral: str = Form(...),
-    ubicacion_fisica: str = Form(""),
-    expediente: str = Form(""),
-    direccion_referencia: str = Form(""),
-    usuario_id: str = Form("anonimo", description="ID del usuario que sube el plano"),
-    session: Session = Depends(get_session),
-):
+    archivo: UploadFile,
+    circunscripcion: str,
+    seccion: str,
+    manzana: str,
+    parcela_catastral: str,
+    ubicacion_fisica: str,
+    expediente: str,
+    direccion_referencia: str,
+    usuario_id: str,
+    session: Session,
+) -> PlanoRead:
     nomen = _datos_nomenclatura(circunscripcion, seccion, manzana, parcela_catastral)
     clave = clave_nomenclatura(nomen)
     _comprobar_unica(session, clave)
@@ -145,7 +144,7 @@ async def crear_plano(
         ia_estado=EstadoIA.procesando,
         creado_por=usuario_id,
     )
-    
+
     session.add(nuevo_plano)
     nuevo_plano.eventos.append(EventoAuditoria(motivo="Creación de plano", usuario_id=usuario_id))
     nuevo_plano.procesamientos.append(ProcesamientoIA(intento=1, estado=EstadoIA.procesando))
@@ -159,12 +158,11 @@ async def crear_plano(
     return PlanoRead.model_validate(nuevo_plano)
 
 
-@router.get("", response_model=List[PlanoRead])
 def listar_planos(
-    estado: Optional[List[EstadoPlano]] = Query(None, description="Se puede repetir: ?estado=validado&estado=sin_ubicacion"),
-    q: Optional[str] = Query(None, description="Nomenclatura exacta: circunscripción-sección-manzana-parcela"),
-    session: Session = Depends(get_session),
-):
+    estado: Optional[List[EstadoPlano]],
+    q: Optional[str],
+    session: Session,
+) -> List[PlanoRead]:
     consulta = select(Plano).order_by(Plano.creado_en.desc())
     if estado:
         consulta = consulta.where(Plano.estado.in_(estado))
@@ -177,13 +175,11 @@ def listar_planos(
     return [PlanoRead.model_validate(p) for p in session.exec(consulta).all()]
 
 
-@router.get("/{plano_id}", response_model=PlanoDetalle)
-def obtener_plano(plano_id: int, session: Session = Depends(get_session)):
+def obtener_plano(plano_id: int, session: Session) -> PlanoDetalle:
     return PlanoDetalle.model_validate(_obtener_plano(session, plano_id))
 
 
-@router.delete("/{plano_id}")
-def eliminar_plano(plano_id: int, session: Session = Depends(get_session)):
+def eliminar_plano(plano_id: int, session: Session) -> dict:
     plano = session.exec(select(Plano).where(Plano.id == plano_id).with_for_update()).first()
     if plano is None:
         raise HTTPException(status_code=404, detail="Plano no encontrado")
@@ -202,27 +198,17 @@ def eliminar_plano(plano_id: int, session: Session = Depends(get_session)):
     return {"eliminado": True, "id": plano_id}
 
 
-@router.get("/{plano_id}/archivo")
-def descargar_archivo(plano_id: int, session: Session = Depends(get_session)):
+def obtener_archivo_plano(plano_id: int, session: Session) -> Tuple[bytes, str, str]:
     plano = _obtener_plano(session, plano_id)
     contenido = obtener_archivo(plano.minio_path)
-    return Response(
-        content=contenido,
-        media_type=plano.content_type,
-        headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(plano.nombre_original)}"},
-    )
+    return contenido, plano.content_type, plano.nombre_original
 
 
-@router.get("/{plano_id}/preview")
-def obtener_preview(plano_id: int, session: Session = Depends(get_session)):
+def obtener_preview_plano(plano_id: int, session: Session) -> Tuple[bytes, str]:
     plano = _obtener_plano(session, plano_id)
     if plano.content_type in FORMATOS_IMAGEN:
         contenido = obtener_archivo(plano.minio_path)
-        return Response(
-            content=contenido,
-            media_type=plano.content_type,
-            headers={"Cache-Control": "public, max-age=86400"},
-        )
+        return contenido, plano.content_type
 
     # Si es PDF, buscar o generar la vista previa JPEG en MinIO
     preview_key = obtener_preview_key(plano.minio_path)
@@ -233,15 +219,10 @@ def obtener_preview(plano_id: int, session: Session = Depends(get_session)):
         contenido = pdf_page_to_jpeg_bytes(pdf_bytes, page_index=0)
         subir_archivo_con_key(contenido, preview_key, "image/jpeg")
 
-    return Response(
-        content=contenido,
-        media_type="image/jpeg",
-        headers={"Cache-Control": "public, max-age=86400"},
-    )
+    return contenido, "image/jpeg"
 
 
-@router.put("/{plano_id}/validar", response_model=PlanoDetalle)
-def validar_plano(plano_id: int, datos: PlanoValidar, session: Session = Depends(get_session)):
+def validar_plano(plano_id: int, datos: PlanoValidar, session: Session) -> PlanoDetalle:
     plano = _obtener_plano(session, plano_id)
     if plano.estado != EstadoPlano.pendiente:
         raise HTTPException(
@@ -257,8 +238,7 @@ def validar_plano(plano_id: int, datos: PlanoValidar, session: Session = Depends
     return PlanoDetalle.model_validate(plano)
 
 
-@router.put("/{plano_id}/modificar", response_model=PlanoDetalle)
-def modificar_plano(plano_id: int, datos: PlanoModificar, session: Session = Depends(get_session)):
+def modificar_plano(plano_id: int, datos: PlanoModificar, session: Session) -> PlanoDetalle:
     motivo = datos.motivo.strip()
     if not motivo:
         raise HTTPException(status_code=400, detail="El motivo de la modificación es obligatorio.")
@@ -272,8 +252,7 @@ def modificar_plano(plano_id: int, datos: PlanoModificar, session: Session = Dep
     return PlanoDetalle.model_validate(plano)
 
 
-@router.post("/{plano_id}/descartar_propuesta", response_model=PlanoDetalle)
-def descartar_propuesta(plano_id: int, session: Session = Depends(get_session)):
+def descartar_propuesta(plano_id: int, session: Session) -> PlanoDetalle:
     plano = _obtener_plano(session, plano_id)
     plano.ia_propuesta = None
     session.add(plano)
@@ -282,8 +261,7 @@ def descartar_propuesta(plano_id: int, session: Session = Depends(get_session)):
     return PlanoDetalle.model_validate(plano)
 
 
-@router.post("/{plano_id}/reintentar_ia", response_model=PlanoDetalle)
-def reintentar_ia(plano_id: int, usuario_id: str = Query(..., description="ID del usuario que solicita el reintento"), session: Session = Depends(get_session)):
+def reintentar_ia(plano_id: int, usuario_id: str, session: Session) -> PlanoDetalle:
     plano = _obtener_plano(session, plano_id)
     if plano.ia_estado == EstadoIA.no_aplica:
         raise HTTPException(
@@ -295,7 +273,7 @@ def reintentar_ia(plano_id: int, usuario_id: str = Query(..., description="ID de
             status_code=400,
             detail="El plano ya está siendo procesado por la IA.",
         )
-    
+
     intentos_previos = session.exec(select(ProcesamientoIA).where(ProcesamientoIA.plano_id == plano.id)).all()
     max_intento_previo = max([p.intento for p in intentos_previos], default=0)
     num_intentos = max(max_intento_previo, 1 if plano.ia_estado in (EstadoIA.completado, EstadoIA.error) else 0)
@@ -309,19 +287,18 @@ def reintentar_ia(plano_id: int, usuario_id: str = Query(..., description="ID de
     nuevo_intento_num = num_intentos + 1
     plano.ia_estado = EstadoIA.procesando
     session.add(plano)
-    
+
     session.add(EventoAuditoria(plano_id=plano.id, motivo="Reintento de análisis IA", usuario_id=usuario_id))
     session.add(ProcesamientoIA(plano_id=plano.id, intento=nuevo_intento_num, estado=EstadoIA.procesando))
     session.commit()
     session.refresh(plano)
-    
+
     contenido = obtener_archivo(plano.minio_path)
     if plano.content_type in FORMATOS_PDF:
         try:
             contenido = pdf_page_to_jpeg_bytes(contenido, 0)
         except Exception:
             pass
-            
+
     planos_worker.encolar(plano.id, contenido)
     return PlanoDetalle.model_validate(plano)
-

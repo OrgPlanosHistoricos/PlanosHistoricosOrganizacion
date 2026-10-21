@@ -63,7 +63,7 @@ services:
       retries: 10
 
   api:
-    build: .
+    build: ./backend
     container_name: planos-api
     depends_on:
       minio:
@@ -85,7 +85,8 @@ services:
       - SUPABASE_KEY=${SUPABASE_KEY}
       - MONGODB_URI=${MONGODB_URI}
     volumes:
-      - ./api:/app/api
+      - ./backend/src:/app/src
+      - ./backend/tests:/app/tests
       - ./.env:/app/.env:ro
     ports:
       - "8000:8000"
