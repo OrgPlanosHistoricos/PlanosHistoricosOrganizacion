@@ -672,3 +672,115 @@ textarea[readonly] {
 .nomenclatura p { font-size: 13px; margin: 0 0 12px; }
 button.danger { background: #a92323; color: #fff; border: 1px solid #a92323; }
 button.danger:disabled { opacity: .55; cursor: wait; }
+
+/* Modal de comparación Antes y Después */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  backdrop-filter: blur(2px);
+}
+.modal-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 100%;
+  max-width: 820px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-family: var(--font-serif);
+}
+.modal-close {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--ink-soft);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.modal-close:hover {
+  background: var(--paper-2);
+  color: var(--ink);
+}
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  font-size: 14px;
+}
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--paper-2);
+}
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+.diff-table th, .diff-table td {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.diff-table th {
+  background: var(--paper-2);
+  font-weight: 600;
+  font-size: 13px;
+}
+.diff-table tr.diff-changed {
+  background: rgba(63, 107, 71, 0.08);
+}
+.diff-tag-changed {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.diff-tag-same {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.badge.limite {
+  background: var(--ink-soft);
+  color: #fff;
+}
+.banner-propuesta {
+  background: var(--amber-soft);
+  border: 1px solid var(--amber);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+

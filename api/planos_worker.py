@@ -38,8 +38,10 @@ def _guardar_resultado(plano_id: int, datos: Optional[dict], error: Optional[str
             plano.ia_estado = EstadoIA.error
             plano.ia_error = error
         else:
-            # Si una persona ya validó el plano mientras la IA corría, sus datos mandan
-            if plano.estado == EstadoPlano.pendiente:
+            if plano.estado != EstadoPlano.pendiente:
+                import json
+                plano.ia_propuesta = json.dumps(datos)
+            else:
                 for campo in DatosPlano.model_fields:
                     setattr(plano, campo, datos.get(campo))
             plano.ia_estado = EstadoIA.completado

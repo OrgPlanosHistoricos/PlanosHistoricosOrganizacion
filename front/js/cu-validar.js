@@ -18,6 +18,7 @@
   ];
   
   var seleccionadoId = null;
+  var modoCargaManual = false;
 
   function esc(s) {
     return (s === undefined || s === null || s === '') ? '' :
@@ -44,14 +45,16 @@
       }
       cont.innerHTML = pendientes.map(function(d) {
         var sel = d.id === seleccionadoId ? ' sel' : '';
-        var indicador = respuestaInvalida(d)
-          ? '<span class="badge ia-error">Análisis automático incompleto</span>'
-          : d.ia_estado === 'error'
-            ? '<span class="badge ia-error">No se pudo analizar el plano</span>'
-            : '';
+        var indicador = d.ia_estado === 'no_aplica'
+          ? '<span class="badge ia-error">No aplica</span>'
+          : respuestaInvalida(d)
+            ? '<span class="badge ia-error">Respuesta incompleta</span>'
+            : d.ia_estado === 'error'
+              ? '<span class="badge ia-error">Error de análisis</span>'
+              : '';
         return '<button class="row' + sel + '" onclick="PH.CUValidar.seleccionar(' + d.id + ')">' +
           '<div class="t">' + esc(tituloDoc(d)) + '</div>' +
-          '<div class="s">' + esc(d.nombre_original) + ' · ' + indicador + '</div>' +
+          '<div class="s">' + esc(d.nombre_original) + (indicador ? ' · ' + indicador : '') + '</div>' +
           '</button>';
       }).join('');
     } catch (e) {
@@ -61,6 +64,7 @@
 
   function seleccionar(id) {
     seleccionadoId = id;
+    modoCargaManual = false;
     renderDetalle();
     renderLista(); // Para actualizar selección visual
   }
@@ -68,10 +72,24 @@
 
   function cancelar() {
     seleccionadoId = null;
+    modoCargaManual = false;
     renderDetalle();
     renderLista();
   }
 
+  function cargarAMano() {
+    modoCargaManual = true;
+    var formCont = document.getElementById('v-form-container');
+    if (formCont) formCont.style.display = 'block';
+    var opcFalla = document.getElementById('v-opciones-falla');
+    if (opcFalla) opcFalla.style.display = 'none';
+    CAMPOS.forEach(function(c) {
+      var el = document.getElementById('v-' + c.key);
+      if (el && !c.readonly) {
+        el.value = '';
+      }
+    });
+  }
 
   async function renderDetalle() {
     var cont = document.getElementById('validar-detalle');
@@ -89,22 +107,29 @@
         return;
       }
 
+      var tieneFalla = (d.ia_estado === 'error' || d.ia_estado === 'no_aplica');
       var maxIntentos = 3;
-      var intentos = d.procesamientos ? d.procesamientos.length : 0;
-      var btnReintentar = '';
-      if (intentos < maxIntentos) {
-          btnReintentar = '<br><button class="ghost" style="margin-top:8px" onclick="PH.CUValidar.reintentar(' + d.id + ')">Reintentar análisis IA (' + intentos + '/' + maxIntentos + ')</button>';
-      } else {
-          btnReintentar = '<br><span style="color:red; font-size: 0.9em; margin-top:8px; display:inline-block;">Se alcanzó el límite de reintentos (' + maxIntentos + '). Cargue a mano.</span>';
-      }
+      var maxIntentoPrevio = (d.procesamientos && d.procesamientos.length)
+        ? Math.max.apply(null, d.procesamientos.map(function(p) { return p.intento || 0; }))
+        : 0;
+      var intentos = Math.max(maxIntentoPrevio, (d.ia_estado === 'error' || d.ia_estado === 'completado') ? 1 : 0);
+      var puedeReintentar = (d.ia_estado !== 'no_aplica' && d.ia_estado !== 'procesando' && intentos < maxIntentos);
 
-      var aviso = respuestaInvalida(d)
-        ? '<div class="error"><strong>La IA devolvió una respuesta inválida.</strong> No pudimos interpretar los datos del plano. Podés reintentar el análisis o completar los datos manualmente.' +
-          btnReintentar + '</div>'
-        : d.ia_estado === 'error'
-          ? '<div class="error"><strong>La IA no pudo procesar este plano.</strong> Podés reintentar el análisis o completar los datos manualmente.' +
-            btnReintentar + '</div>'
-          : '<div class="confirm">Datos leídos automáticamente. Revíselos y corríjalos si hace falta.</div>';
+      var motivoFallaTexto = d.ia_estado === 'no_aplica'
+        ? 'El análisis automático no aplica para este plano.'
+        : respuestaInvalida(d)
+          ? 'No pudimos interpretar los datos del plano.'
+          : 'El análisis automático no pudo completarse.';
+
+      var aviso = tieneFalla
+        ? '<div class="error"><strong>' + esc(motivoFallaTexto) + '</strong> '
+          + (d.ia_estado === 'no_aplica'
+              ? 'Podés cargar los datos manualmente.'
+              : puedeReintentar
+                ? 'Podés reintentar el análisis o cargar los datos manualmente.'
+                : 'Se alcanzó el límite máximo de ' + maxIntentos + ' intentos. Cargá los datos manualmente.')
+          + '</div>'
+        : '<div class="confirm">Datos leídos automáticamente. Revíselos y corríjalos si hace falta.</div>';
 
       var esPdf = d.content_type === 'application/pdf' || (d.nombre_original && d.nombre_original.toLowerCase().endsWith('.pdf'));
       var enlaceArchivo = '<div style="margin: 6px 0 12px 0;">'
@@ -112,13 +137,26 @@
         + (esPdf ? '📄 Abrir / Descargar PDF original (' + esc(d.nombre_original) + ')' : '🖼️ Ver / Descargar imagen original')
         + '</a></div>';
 
-      cont.innerHTML = ''
-        + '<img class="thumb" src="' + API.getPreviewUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
-        + enlaceArchivo
-        + aviso
+      var opcionesFallaHTML = '';
+      if (tieneFalla) {
+        var displayOpc = modoCargaManual ? 'none' : 'flex';
+        opcionesFallaHTML = '<div id="v-opciones-falla" style="display:' + displayOpc + '; gap:8px; flex-wrap:wrap; margin:12px 0 16px 0;">'
+          + (puedeReintentar ? '<button class="primary" onclick="PH.CUValidar.reintentar(' + d.id + ')">Reintentar análisis (' + intentos + '/' + maxIntentos + ')</button>' : '')
+          + '<button class="' + (puedeReintentar ? 'ghost' : 'primary') + '" onclick="PH.CUValidar.cargarAMano()">Cargar datos a mano</button>'
+          + '<button class="danger" onclick="PH.CUValidar.eliminar(this)">Eliminar plano</button>'
+          + '</div>';
+      }
+
+      var btnReintentarForm = puedeReintentar
+        ? '<button type="button" class="ghost" onclick="PH.CUValidar.reintentar(' + d.id + ')">Reintentar análisis (' + intentos + '/' + maxIntentos + ')</button>'
+        : '';
+
+      var displayForm = (!tieneFalla || modoCargaManual) ? 'block' : 'none';
+      var formHTML = '<div id="v-form-container" style="display:' + displayForm + ';">'
+        + (tieneFalla && modoCargaManual ? '<div class="confirm" style="margin-bottom:12px">Modo de carga manual: completá los datos leyendo la imagen.</div>' : '')
         + window.PH.Nomenclatura.formulario('v-', d)
         + CAMPOS.map(function(c) {
-            var val = d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : '';
+            var val = (tieneFalla && modoCargaManual) ? '' : (d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : '');
             if (c.type === 'textarea') {
               return '<div class="field"><label for="v-' + c.key + '">' + c.label + '</label>' +
                 '<textarea id="v-' + c.key + '" rows="4" readonly>' + esc(val) + '</textarea></div>';
@@ -127,12 +165,21 @@
             return '<div class="field"><label>' + c.label + '</label>' +
               '<input type="' + type + '" id="v-' + c.key + '" value="' + attr(val) + '"></div>';
           }).join('')
+        + '<div class="actions">'
+        + '<button class="ghost" onclick="PH.CUValidar.cancelar()">Cancelar</button>'
+        + btnReintentarForm
+        + '<button class="primary" onclick="PH.CUValidar.confirmar()">Confirmar e indexar</button>'
+        + '<button class="danger" onclick="PH.CUValidar.eliminar(this)">Eliminar plano</button>'
+        + '</div>'
+        + '</div>';
+
+      cont.innerHTML = ''
+        + '<img class="thumb" src="' + API.getPreviewUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
+        + enlaceArchivo
+        + aviso
+        + opcionesFallaHTML
         + '<div id="v-msg"></div>'
-        + '<div class="actions">' +
-          '<button class="ghost" onclick="PH.CUValidar.cancelar()">Cancelar</button>' +
-          '<button class="primary" onclick="PH.CUValidar.confirmar()">Confirmar e indexar</button>' +
-          '<button class="danger" onclick="PH.CUValidar.eliminar(this)">Eliminar plano</button>' +
-          '</div>';
+        + formHTML;
 
     } catch (e) {
       cont.innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
@@ -156,6 +203,7 @@
     try {
       await API.validar(seleccionadoId, nuevosDatos);
       seleccionadoId = null;
+      modoCargaManual = false;
       renderLista();
       renderDetalle();
       if (window.PH.actualizarListas) window.PH.actualizarListas();
@@ -169,8 +217,12 @@
     try {
       await API.reintentarIA(id, "Validador");
       seleccionadoId = null;
-      renderLista();
-      renderDetalle();
+      modoCargaManual = false;
+      await renderLista();
+      var cont = document.getElementById('validar-detalle');
+      if (cont) {
+        cont.innerHTML = '<div class="confirm">Reanálisis iniciado. El plano volverá a aparecer en la lista cuando finalice el procesamiento.</div>';
+      }
       if (window.PH.actualizarListas) window.PH.actualizarListas();
     } catch (e) {
       document.getElementById('v-msg').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
@@ -183,6 +235,7 @@
     try {
       await API.eliminar(seleccionadoId);
       seleccionadoId = null;
+      modoCargaManual = false;
       await renderLista();
       await renderDetalle();
       document.getElementById('validar-detalle').innerHTML = '<div class="confirm">El plano se eliminó correctamente.</div>';
@@ -201,6 +254,7 @@
     cancelar: cancelar,
     confirmar: confirmar,
     reintentar: reintentar,
+    cargarAMano: cargarAMano,
     eliminar: eliminar
   };
 

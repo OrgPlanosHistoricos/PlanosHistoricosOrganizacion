@@ -16,6 +16,7 @@
     respuesta: 'No pudimos interpretar la respuesta del servidor. Intentá nuevamente en unos momentos.',
     servidor: 'El servicio no está disponible en este momento. Intentá nuevamente más tarde.',
     ia: 'El análisis automático no pudo completarse. Podés reintentarlo o completar los datos manualmente.',
+    max_intentos: 'Se alcanzó el límite máximo de 3 intentos de análisis para este plano.',
     nomenclatura: 'Completá la nomenclatura: circunscripción con un número, sección con letras, y manzana y parcela con un número y letras opcionales. Los números deben ser mayores que cero.',
     duplicado: 'Ya existe un plano con esa nomenclatura. Revisá los cuatro datos o consultá el plano existente.',
     inesperado: 'No pudimos completar la operación. Intentá nuevamente; si el problema continúa, contactá al administrador.'
@@ -50,11 +51,11 @@
         : url.indexOf('/reintentar_ia') !== -1 ? 'ia'
         : res.status === 400 || res.status === 422 ? 'datos' : 'inesperado';
       // Sólo se reconocen códigos acordados. Nunca se muestra texto recibido del servidor.
-      if (res.status === 409 || res.status === 422) {
+      if (res.status === 400 || res.status === 409 || res.status === 422) {
         try {
           var cuerpo = await res.json();
           var codigoAPI = cuerpo && cuerpo.detail && cuerpo.detail.codigo;
-          if (codigoAPI === 'nomenclatura' || codigoAPI === 'duplicado') codigo = codigoAPI;
+          if (codigoAPI === 'nomenclatura' || codigoAPI === 'duplicado' || codigoAPI === 'max_intentos') codigo = codigoAPI;
           else if (res.status === 422 && Array.isArray(cuerpo.detail) && cuerpo.detail.some(function(d) {
             return Array.isArray(d.loc) && ['circunscripcion', 'seccion', 'manzana', 'parcela_catastral'].indexOf(d.loc[d.loc.length - 1]) !== -1;
           })) codigo = 'nomenclatura';
@@ -123,6 +124,12 @@
     });
   }
 
+  async function descartarPropuesta(id) {
+    return await fetchJSON('/planos/' + id + '/descartar_propuesta', {
+      method: 'POST'
+    });
+  }
+
   function getArchivoUrl(id) {
     return API_BASE + '/planos/' + id + '/archivo';
   }
@@ -141,6 +148,7 @@
     validar: validar,
     modificar: modificar,
     reintentarIA: reintentarIA,
+    descartarPropuesta: descartarPropuesta,
     getArchivoUrl: getArchivoUrl,
     getPreviewUrl: getPreviewUrl
   };
