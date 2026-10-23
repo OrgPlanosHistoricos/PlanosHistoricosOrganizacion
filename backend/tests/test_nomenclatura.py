@@ -1,7 +1,8 @@
+import asyncio
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -12,9 +13,12 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from src.compartido.sesion import get_session
-from src.models import EventoAuditoria, Plano, ProcesamientoIA
+from src.errors import ExtraccionError
+from src.models import EstadoIA, EventoAuditoria, Plano, ProcesamientoIA
+from src.planos import worker as planos_worker_mod
 from src.planos.nomenclatura import clave_nomenclatura, normalizar_nomenclatura
 from src.planos.routes import router
+from src.tareas.schemas import PlanoHistorico
 
 
 class NomenclaturaTests(unittest.TestCase):
@@ -83,6 +87,15 @@ class NomenclaturaTests(unittest.TestCase):
         self.assertEqual(res.json()["detail"]["codigo"], "duplicado")
         self.assertEqual(self.upload_mock.call_count, 1)
 
+    def test_no_permite_subir_mas_de_un_plano_a_analizar_a_la_vez(self):
+        res1 = self.create()
+        self.assertEqual(res1.status_code, 201)
+        # Intentar subir otro plano distinto mientras el primero sigue con ia_estado == 'procesando'
+        res2 = self.create({**self.data, "manzana": "15"})
+        self.assertEqual(res2.status_code, 409)
+        self.assertEqual(res2.json()["detail"]["codigo"], "procesando_ia")
+        self.assertEqual(self.upload_mock.call_count, 1)
+
     def test_busqueda_exacta_no_busca_expediente(self):
         self.create({**self.data, "expediente": "EXP-123"})
         res = self.client.get("/planos", params={"q": "03-k-012a-05b"})
@@ -92,6 +105,11 @@ class NomenclaturaTests(unittest.TestCase):
 
     def test_validar_modificar_y_duplicados(self):
         first = self.create().json()["id"]
+        with Session(self.engine) as db:
+            plano1 = db.get(Plano, first)
+            plano1.ia_estado = EstadoIA.completado
+            db.add(plano1)
+            db.commit()
         second = self.create({**self.data, "manzana": "15"}).json()["id"]
         self.assertEqual(self.client.put(f"/planos/{first}/validar", json=self.data).status_code, 200)
         res = self.client.put(f"/planos/{second}/validar", json=self.data)
@@ -253,7 +271,46 @@ class NomenclaturaTests(unittest.TestCase):
         self.assertEqual(res_mod.status_code, 200)
         self.assertIsNone(res_mod.json().get("ia_propuesta"))
 
+    def test_worker_guarda_corrida_ia_en_mongo_exitosa_y_fallida(self):
+        plano_id = self.create().json()["id"]
+        mock_coleccion = MagicMock()
+        resultado_fake = PlanoHistorico(
+            texto_extraido="OBRA MUNICIPAL 1938",
+            arquitecto="Salamone",
+            anio=1938,
+            titulo="Palacio",
+        )
+
+        with patch.object(planos_worker_mod, "engine", self.engine), \
+             patch.object(planos_worker_mod.db_client, "coleccion_corridas_ia", mock_coleccion), \
+             patch.object(planos_worker_mod, "extraer_datos_plano", return_value=resultado_fake):
+            asyncio.run(planos_worker_mod.planos_worker._procesar(plano_id, b"img"))
+
+        self.assertEqual(mock_coleccion.insert_one.call_count, 1)
+        doc_exito = mock_coleccion.insert_one.call_args[0][0]
+        self.assertEqual(doc_exito["plano_id"], plano_id)
+        self.assertEqual(doc_exito["archivo_id"], "test/archivo.jpg")
+        self.assertEqual(doc_exito["version_prompt"], "1.0")
+        self.assertEqual(doc_exito["texto_original"], "OBRA MUNICIPAL 1938")
+        self.assertIn("OBRA MUNICIPAL 1938", doc_exito["json_crudo"])
+        self.assertIsInstance(doc_exito["duracion_segundos"], float)
+        self.assertIsNotNone(doc_exito["fecha"])
+        self.assertEqual(doc_exito["estado"], "completado")
+
+        # Corrida fallida también se registra en corridas_ia
+        mock_coleccion.reset_mock()
+        with patch.object(planos_worker_mod, "engine", self.engine), \
+             patch.object(planos_worker_mod.db_client, "coleccion_corridas_ia", mock_coleccion), \
+             patch.object(planos_worker_mod, "extraer_datos_plano", side_effect=ExtraccionError("fallo IA")):
+            asyncio.run(planos_worker_mod.planos_worker._procesar(plano_id, b"img"))
+
+        self.assertEqual(mock_coleccion.insert_one.call_count, 1)
+        doc_error = mock_coleccion.insert_one.call_args[0][0]
+        self.assertEqual(doc_error["plano_id"], plano_id)
+        self.assertEqual(doc_error["archivo_id"], "test/archivo.jpg")
+        self.assertEqual(doc_error["estado"], "error")
+        self.assertIn("fallo IA", doc_error["error"])
+
 
 if __name__ == "__main__":
     unittest.main()
-

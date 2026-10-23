@@ -10,7 +10,8 @@ import logging
 import os
 from pathlib import Path
 import re
-from typing import Dict, List, Optional, Tuple
+import threading
+from typing import Any, Dict, List, Optional, Tuple
 
 from dotenv import dotenv_values
 from PIL import Image
@@ -32,6 +33,7 @@ _ENV_FILE = next((p for p in _ENV_CANDIDATES if p.is_file()), _ENV_CANDIDATES[0]
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://ollama:11434").rstrip("/")
 MODEL_NAME = os.environ.get("VISION_MODEL", "qwen2.5vl:3b")
 OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "300"))
+VERSION_PROMPT = "1.0"
 
 _INITIAL_OLLAMA_HOST = OLLAMA_HOST
 _INITIAL_MODEL_NAME = MODEL_NAME
@@ -42,6 +44,24 @@ OLLAMA_HEADERS = {
     "ngrok-skip-browser-warning": "true",
 }
 COLAB_ACTIVE_ALIAS = "colab-activo"
+
+_ultima_corrida = threading.local()
+
+
+def limpiar_metadata_corrida() -> None:
+    """Reinicia la metadata de la última corrida de IA en el hilo actual."""
+    _ultima_corrida.modelo = None
+    _ultima_corrida.version_prompt = VERSION_PROMPT
+    _ultima_corrida.json_crudo = None
+
+
+def obtener_metadata_ultima_corrida() -> Dict[str, Any]:
+    """Devuelve la metadata registrada en la última ejecución de IA del hilo actual."""
+    return {
+        "modelo": getattr(_ultima_corrida, "modelo", None) or obtener_modelo_configurado(),
+        "version_prompt": getattr(_ultima_corrida, "version_prompt", VERSION_PROMPT),
+        "json_crudo": getattr(_ultima_corrida, "json_crudo", None),
+    }
 
 
 def _leer_env_actualizado() -> Dict[str, str]:
@@ -369,6 +389,8 @@ def extraer_datos_cajetin(cajetin_bytes: bytes, model: Optional[str] = None) -> 
     host = obtener_ollama_host()
     timeout = obtener_ollama_timeout()
     modelo = model or obtener_modelo_activo(host)
+    _ultima_corrida.modelo = modelo
+    _ultima_corrida.version_prompt = VERSION_PROMPT
     image_b64 = base64.b64encode(cajetin_bytes).decode("utf-8")
 
     payload = {
@@ -399,6 +421,7 @@ def extraer_datos_cajetin(cajetin_bytes: bytes, model: Optional[str] = None) -> 
     data = response.json()
     mensaje = data.get("message", {})
     contenido = mensaje.get("content", "")
+    _ultima_corrida.json_crudo = contenido or None
 
     if not contenido:
         payload["messages"][0]["content"] = (
@@ -417,6 +440,7 @@ def extraer_datos_cajetin(cajetin_bytes: bytes, model: Optional[str] = None) -> 
         data = response.json()
         mensaje = data.get("message", {})
         contenido = mensaje.get("content", "")
+        _ultima_corrida.json_crudo = contenido or None
 
     try:
         if not contenido:
@@ -445,6 +469,8 @@ def extraer_datos_plano(
     """
     host = obtener_ollama_host()
     modelo = obtener_modelo_activo(host)
+    _ultima_corrida.modelo = modelo
+    _ultima_corrida.version_prompt = VERSION_PROMPT
     logger.info(f"Iniciando detección del cajetín en {host} con modelo '{modelo}'...")
     # Preprocesar versión ligera para no saturar memoria durante la detección geométrica
     imagen_deteccion = preprocess_image(image_bytes)
@@ -464,4 +490,3 @@ def extraer_datos_plano(
             f"Extracción sobre el recorte falló ({exc}), reintentando con plano completo..."
         )
         return extraer_datos_cajetin(imagen_deteccion, model=modelo)
-

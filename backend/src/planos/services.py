@@ -60,6 +60,18 @@ def _comprobar_unica(session: Session, clave: str, plano_id: Optional[int] = Non
         raise HTTPException(status_code=409, detail={"codigo": "duplicado"})
 
 
+def _comprobar_sin_analisis_en_curso(session: Session) -> None:
+    en_proceso = session.exec(select(Plano).where(Plano.ia_estado == EstadoIA.procesando)).first()
+    if en_proceso is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "codigo": "procesando_ia",
+                "mensaje": "Ya hay un plano en análisis en este momento. Esperá a que finalice antes de subir otro.",
+            },
+        )
+
+
 def _commit_unico(session: Session, clave: str, plano_id: Optional[int] = None):
     try:
         session.commit()
@@ -114,6 +126,7 @@ async def crear_plano(
             detail=f"Formato no soportado: {archivo.content_type}. "
             f"Usá {', '.join(sorted(FORMATOS_ACEPTADOS))}.",
         )
+    _comprobar_sin_analisis_en_curso(session)
 
     contenido = await archivo.read()
     nombre = archivo.filename or "plano"

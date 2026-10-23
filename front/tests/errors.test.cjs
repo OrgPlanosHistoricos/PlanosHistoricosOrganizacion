@@ -189,6 +189,7 @@ test('API: envía los cuatro campos de carga y conserva los opcionales vacíos',
 test('API: códigos acordados explican duplicados y nomenclatura sin mostrar texto recibido', async () => {
   for(const [status,detail,expected] of [
     [409,{codigo:'duplicado'},'duplicado'],
+    [409,{codigo:'procesando_ia'},'procesando_ia'],
     [422,{codigo:'nomenclatura'},'nomenclatura'],
     [422,[{loc:['body','seccion'],msg:raw}],'nomenclatura'],
     [409,{codigo:raw},'inesperado']
@@ -196,6 +197,31 @@ test('API: códigos acordados explican duplicados y nomenclatura sin mostrar tex
     const {PH}=setup(async()=>({ok:false,status,json:async()=>({detail})}));
     await assert.rejects(PH.API.create(new Blob(['pdf']),'','',''),e=>e.codigo===expected && !PH.Errores.mensaje(e).includes(raw));
   }
+});
+test('carga: bloquea subida si ya hay un plano en estado procesando', async () => {
+  let submit;
+  let postCalls = 0;
+  const { PH, context, elements } = setup(async (url, options) => {
+    if (options && options.method === 'POST') postCalls++;
+    return {
+      ok: true,
+      json: async () => [{ id: 10, estado: 'pendiente', ia_estado: 'procesando', nombre_original: 'uno.jpg' }]
+    };
+  });
+  context.document.getElementById('form-cargar').addEventListener = (_, handler) => { submit = handler; };
+  context.document.getElementById('btn-cargar');
+  PH.CUCargar.inicializar();
+  await PH.CUCargar.renderRecientes();
+  assert.equal(elements['btn-cargar'].disabled, true);
+
+  const file = new Blob(['image']);
+  file.name = 'plano2.jpg';
+  context.document.getElementById('f-archivo').files = [file];
+  completar(context, 'f-');
+  submit({ preventDefault() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(postCalls, 0);
+  assert.ok(elements['cargar-msgs'].innerHTML.includes(PH.Errores.mensajes.procesando_ia));
 });
 test('revisión y modificación: envían nomenclatura normalizada y bloquean datos incompletos', async () => {
   for(const [module,prefix,select,save] of [['CUValidar','v-','seleccionar','confirmar'],['CUModificar','m-','seleccionar','guardar']]) {
@@ -249,4 +275,3 @@ test('modificar catalogación: propuesta de IA renderiza banner y tabla de antes
   assert.ok(modalHtml.includes('Propuesto por IA'));
   assert.ok(modalHtml.includes('Aplicar cambios de la IA'));
 });
-
