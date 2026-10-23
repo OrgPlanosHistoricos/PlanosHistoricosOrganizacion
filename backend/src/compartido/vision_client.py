@@ -240,7 +240,7 @@ def _verificar_respuesta_ollama(response: requests.Response, host: str, modelo: 
         if "model" in err_msg.lower() and "not found" in err_msg.lower():
             raise ExtraccionError(
                 f"El modelo '{modelo}' no está descargado en Ollama ({host}). "
-                "Seleccioná y descargá el modelo desde la Celda 3 de Google Colab."
+                "Seleccioná y activá el modelo desde la Celda 1 de ollama_colab.ipynb en Google Colab."
             )
     try:
         response.raise_for_status()
