@@ -1,21 +1,23 @@
 """Servicios y reglas de negocio del catálogo de planos (Postgres + MinIO)."""
 import asyncio
-from typing import List, Optional, Tuple, Union
+import hashlib
+import json
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from src.compartido.minio_client import (
-    eliminar_archivo,
     existe_archivo,
     obtener_archivo,
     obtener_preview_key,
     subir_archivo,
     subir_archivo_con_key,
 )
-from src.compartido.preprocessing import pdf_page_to_jpeg_bytes
+from src.compartido.preprocessing import MAX_CAJETIN_DIMENSION, MAX_DIMENSION, pdf_page_to_jpeg_bytes
 from src.compartido.sesion import engine
+from src.compartido.vision_client import VERSION_PROMPT_EXTRACCION
 from src.config import settings
 from src.models import (
     DatosPlano,
@@ -39,10 +41,55 @@ FORMATOS_IMAGEN = settings.FORMATOS_IMAGEN
 FORMATOS_PDF = settings.FORMATOS_PDF
 FORMATOS_ACEPTADOS = settings.FORMATOS_ACEPTADOS
 
+CAMPOS_AUDITORIA = (
+    "circunscripcion",
+    "seccion",
+    "manzana",
+    "parcela_catastral",
+    "nomenclatura",
+    "ubicacion_fisica",
+    "expediente",
+    "direccion_referencia",
+    "parcela",
+    "arquitecto",
+    "anio",
+    "titulo",
+    "ubicacion",
+    "escala",
+    "tipo_de_plano",
+    "material_soporte",
+    "notas",
+    "estado",
+)
+
+
+def _snapshot_plano(plano: Plano) -> Dict[str, Any]:
+    snap: Dict[str, Any] = {}
+    for campo in CAMPOS_AUDITORIA:
+        val = getattr(plano, campo, None)
+        if hasattr(val, "value"):
+            val = val.value
+        snap[campo] = val
+    return snap
+
+
+def _parametros_preprocesamiento_json() -> str:
+    return json.dumps(
+        {
+            "max_dimension_deteccion": MAX_DIMENSION,
+            "max_dimension_cajetin": MAX_CAJETIN_DIMENSION,
+            "autocontrast_cutoff": 1,
+            "sharpness_factor": 1.5,
+            "padding_pct": 0.02,
+            "rotacion": 0,
+        },
+        ensure_ascii=False,
+    )
+
 
 def _obtener_plano(session: Session, plano_id: int) -> Plano:
     plano = session.get(Plano, plano_id)
-    if plano is None:
+    if plano is None or not plano.activo:
         raise HTTPException(status_code=404, detail="Plano no encontrado")
     return plano
 
@@ -55,7 +102,9 @@ def _datos_nomenclatura(circ, secc, mza, parc):
 
 
 def _comprobar_unica(session: Session, clave: str, plano_id: Optional[int] = None):
-    existente = session.exec(select(Plano).where(Plano.nomenclatura == clave)).first()
+    existente = session.exec(
+        select(Plano).where(Plano.nomenclatura == clave, Plano.activo == True)  # noqa: E712
+    ).first()
     if existente is not None and existente.id != plano_id:
         raise HTTPException(status_code=409, detail={"codigo": "duplicado"})
 
@@ -104,6 +153,7 @@ async def crear_plano(
     direccion_referencia: str,
     usuario_id: str,
     session: Session,
+    ip_origen: Optional[str] = None,
 ) -> PlanoRead:
     nomen = _datos_nomenclatura(circunscripcion, seccion, manzana, parcela_catastral)
     clave = clave_nomenclatura(nomen)
@@ -116,6 +166,8 @@ async def crear_plano(
         )
 
     contenido = await archivo.read()
+    hash_sha256 = hashlib.sha256(contenido).hexdigest()
+    tamano_bytes = len(contenido)
     nombre = archivo.filename or "plano"
     minio_path = await asyncio.to_thread(subir_archivo, contenido, nombre, archivo.content_type)
 
@@ -137,6 +189,8 @@ async def crear_plano(
         nomenclatura=clave,
         nombre_original=nombre,
         content_type=archivo.content_type,
+        hash_sha256=hash_sha256,
+        tamano_bytes=tamano_bytes,
         minio_path=minio_path,
         ubicacion_fisica=ubicacion_fisica.strip(),
         expediente=expediente.strip(),
@@ -146,8 +200,24 @@ async def crear_plano(
     )
 
     session.add(nuevo_plano)
-    nuevo_plano.eventos.append(EventoAuditoria(motivo="Creación de plano", usuario_id=usuario_id))
-    nuevo_plano.procesamientos.append(ProcesamientoIA(intento=1, estado=EstadoIA.procesando))
+    nuevo_plano.eventos.append(
+        EventoAuditoria(
+            accion="Carga",
+            motivo="Creación de plano",
+            usuario_id=usuario_id,
+            valores_anteriores=None,
+            valores_nuevos=json.dumps(_snapshot_plano(nuevo_plano), ensure_ascii=False),
+            ip_origen=ip_origen,
+        )
+    )
+    nuevo_plano.procesamientos.append(
+        ProcesamientoIA(
+            intento=1,
+            estado=EstadoIA.procesando,
+            version_prompt=VERSION_PROMPT_EXTRACCION,
+            parametros_preprocesamiento=_parametros_preprocesamiento_json(),
+        )
+    )
     _commit_unico(session, clave)
     session.refresh(nuevo_plano)
 
@@ -163,7 +233,7 @@ def listar_planos(
     q: Optional[str],
     session: Session,
 ) -> List[PlanoRead]:
-    consulta = select(Plano).order_by(Plano.creado_en.desc())
+    consulta = select(Plano).where(Plano.activo == True).order_by(Plano.creado_en.desc())  # noqa: E712
     if estado:
         consulta = consulta.where(Plano.estado.in_(estado))
     if q and q.strip():
@@ -179,21 +249,36 @@ def obtener_plano(plano_id: int, session: Session) -> PlanoDetalle:
     return PlanoDetalle.model_validate(_obtener_plano(session, plano_id))
 
 
-def eliminar_plano(plano_id: int, session: Session) -> dict:
-    plano = session.exec(select(Plano).where(Plano.id == plano_id).with_for_update()).first()
+def eliminar_plano(
+    plano_id: int,
+    session: Session,
+    usuario_id: str = "Operador",
+    ip_origen: Optional[str] = None,
+) -> dict:
+    plano = session.exec(
+        select(Plano).where(Plano.id == plano_id, Plano.activo == True).with_for_update()  # noqa: E712
+    ).first()
     if plano is None:
         raise HTTPException(status_code=404, detail="Plano no encontrado")
-    try:
-        eliminar_archivo(obtener_preview_key(plano.minio_path))
-        eliminar_archivo(plano.minio_path)
-    except Exception:
-        session.rollback()
-        raise HTTPException(status_code=503, detail="No se pudo eliminar el archivo. Reintentá la operación.")
-    for evento in list(plano.eventos):
-        session.delete(evento)
-    for procesamiento in list(plano.procesamientos):
-        session.delete(procesamiento)
-    session.delete(plano)
+    valores_ant = _snapshot_plano(plano)
+    valores_ant["activo"] = True
+    plano.activo = False
+    plano.nomenclatura = None
+    plano.actualizado_en = ahora()
+    valores_nue = _snapshot_plano(plano)
+    valores_nue["activo"] = False
+    session.add(plano)
+    session.add(
+        EventoAuditoria(
+            plano_id=plano.id,
+            accion="Caducidad",
+            motivo="Baja lógica de plano",
+            usuario_id=usuario_id,
+            valores_anteriores=json.dumps(valores_ant, ensure_ascii=False),
+            valores_nuevos=json.dumps(valores_nue, ensure_ascii=False),
+            ip_origen=ip_origen,
+        )
+    )
     session.commit()
     return {"eliminado": True, "id": plano_id}
 
@@ -222,31 +307,66 @@ def obtener_preview_plano(plano_id: int, session: Session) -> Tuple[bytes, str]:
     return contenido, "image/jpeg"
 
 
-def validar_plano(plano_id: int, datos: PlanoValidar, session: Session) -> PlanoDetalle:
+def validar_plano(
+    plano_id: int,
+    datos: PlanoValidar,
+    session: Session,
+    ip_origen: Optional[str] = None,
+) -> PlanoDetalle:
     plano = _obtener_plano(session, plano_id)
     if plano.estado != EstadoPlano.pendiente:
         raise HTTPException(
             status_code=409,
             detail="El plano ya fue validado. Usá PUT /planos/{id}/modificar para cambiarlo.",
         )
+    valores_ant = _snapshot_plano(plano)
     _aplicar_datos(plano, datos, session)
     plano.validado_por = datos.usuario_id
+    plano.validado_en = ahora()
+    valores_nue = _snapshot_plano(plano)
     session.add(plano)
-    session.add(EventoAuditoria(plano_id=plano.id, motivo="Validación inicial", usuario_id=datos.usuario_id))
+    session.add(
+        EventoAuditoria(
+            plano_id=plano.id,
+            accion="Validación",
+            motivo="Validación inicial",
+            usuario_id=datos.usuario_id,
+            valores_anteriores=json.dumps(valores_ant, ensure_ascii=False),
+            valores_nuevos=json.dumps(valores_nue, ensure_ascii=False),
+            ip_origen=ip_origen,
+        )
+    )
     _commit_unico(session, plano.nomenclatura, plano.id)
     session.refresh(plano)
     return PlanoDetalle.model_validate(plano)
 
 
-def modificar_plano(plano_id: int, datos: PlanoModificar, session: Session) -> PlanoDetalle:
+def modificar_plano(
+    plano_id: int,
+    datos: PlanoModificar,
+    session: Session,
+    ip_origen: Optional[str] = None,
+) -> PlanoDetalle:
     motivo = datos.motivo.strip()
     if not motivo:
         raise HTTPException(status_code=400, detail="El motivo de la modificación es obligatorio.")
     plano = _obtener_plano(session, plano_id)
+    valores_ant = _snapshot_plano(plano)
     _aplicar_datos(plano, datos, session)
     plano.ia_propuesta = None
+    valores_nue = _snapshot_plano(plano)
     session.add(plano)
-    session.add(EventoAuditoria(plano_id=plano.id, motivo=motivo, usuario_id=datos.usuario_id))
+    session.add(
+        EventoAuditoria(
+            plano_id=plano.id,
+            accion="Modificación",
+            motivo=motivo,
+            usuario_id=datos.usuario_id,
+            valores_anteriores=json.dumps(valores_ant, ensure_ascii=False),
+            valores_nuevos=json.dumps(valores_nue, ensure_ascii=False),
+            ip_origen=ip_origen,
+        )
+    )
     _commit_unico(session, plano.nomenclatura, plano.id)
     session.refresh(plano)
     return PlanoDetalle.model_validate(plano)
@@ -261,7 +381,12 @@ def descartar_propuesta(plano_id: int, session: Session) -> PlanoDetalle:
     return PlanoDetalle.model_validate(plano)
 
 
-def reintentar_ia(plano_id: int, usuario_id: str, session: Session) -> PlanoDetalle:
+def reintentar_ia(
+    plano_id: int,
+    usuario_id: str,
+    session: Session,
+    ip_origen: Optional[str] = None,
+) -> PlanoDetalle:
     plano = _obtener_plano(session, plano_id)
     if plano.ia_estado == EstadoIA.no_aplica:
         raise HTTPException(
@@ -288,8 +413,24 @@ def reintentar_ia(plano_id: int, usuario_id: str, session: Session) -> PlanoDeta
     plano.ia_estado = EstadoIA.procesando
     session.add(plano)
 
-    session.add(EventoAuditoria(plano_id=plano.id, motivo="Reintento de análisis IA", usuario_id=usuario_id))
-    session.add(ProcesamientoIA(plano_id=plano.id, intento=nuevo_intento_num, estado=EstadoIA.procesando))
+    session.add(
+        EventoAuditoria(
+            plano_id=plano.id,
+            accion="Observación",
+            motivo="Reintento de análisis IA",
+            usuario_id=usuario_id,
+            ip_origen=ip_origen,
+        )
+    )
+    session.add(
+        ProcesamientoIA(
+            plano_id=plano.id,
+            intento=nuevo_intento_num,
+            estado=EstadoIA.procesando,
+            version_prompt=VERSION_PROMPT_EXTRACCION,
+            parametros_preprocesamiento=_parametros_preprocesamiento_json(),
+        )
+    )
     session.commit()
     session.refresh(plano)
 

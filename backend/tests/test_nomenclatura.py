@@ -1,3 +1,5 @@
+import hashlib
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -12,9 +14,10 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from src.compartido.sesion import get_session
-from src.models import EventoAuditoria, Plano, ProcesamientoIA
+from src.models import EstadoIA, EventoAuditoria, Plano, ProcesamientoIA
 from src.planos.nomenclatura import clave_nomenclatura, normalizar_nomenclatura
 from src.planos.routes import router
+from src.planos.worker import _guardar_resultado
 
 
 class NomenclaturaTests(unittest.TestCase):
@@ -42,24 +45,38 @@ class NomenclaturaTests(unittest.TestCase):
         self.addCleanup(self.engine.dispose)
         self.data = dict(circunscripcion="03", seccion=" k ", manzana="012 A", parcela_catastral="05 b")
 
-    def create(self, data=None):
+    def create(self, data=None, headers=None):
         return self.client.post(
             "/planos",
             data=self.data if data is None else data,
             files={"archivo": ("test.jpg", b"test", "image/jpeg")},
+            headers=headers or {},
         )
 
     def test_normalizacion_y_datos_opcionales(self):
-        res = self.create()
+        res = self.create(headers={"X-Forwarded-For": "192.168.1.50"})
         self.assertEqual(res.status_code, 201, res.text)
         doc = res.json()
         self.assertEqual(doc["nomenclatura"], "3-K-12A-5B")
         self.assertEqual(doc["expediente"], "")
         self.assertEqual(doc["ubicacion_fisica"], "")
         self.assertEqual(doc["direccion_referencia"], "")
+        self.assertEqual(doc["hash_sha256"], hashlib.sha256(b"test").hexdigest())
+        self.assertEqual(doc["tamano_bytes"], 4)
+        self.assertTrue(doc["activo"])
+        self.assertIsNone(doc["validado_en"])
         with Session(self.engine) as db:
-            self.assertEqual(len(db.exec(select(EventoAuditoria)).all()), 1)
-            self.assertEqual(len(db.exec(select(ProcesamientoIA)).all()), 1)
+            eventos = db.exec(select(EventoAuditoria)).all()
+            self.assertEqual(len(eventos), 1)
+            self.assertEqual(eventos[0].accion, "Carga")
+            self.assertEqual(eventos[0].ip_origen, "192.168.1.50")
+            self.assertIsNone(eventos[0].valores_anteriores)
+            self.assertEqual(json.loads(eventos[0].valores_nuevos)["nomenclatura"], "3-K-12A-5B")
+            procs = db.exec(select(ProcesamientoIA)).all()
+            self.assertEqual(len(procs), 1)
+            self.assertEqual(procs[0].modelo_ia, "qwen2.5-vl:3b")
+            self.assertIsNotNone(procs[0].version_prompt)
+            self.assertIsNotNone(procs[0].parametros_preprocesamiento)
         self.queue_mock.assert_called_once()
 
     def test_faltantes_e_invalidos_no_suben_archivo(self):
@@ -93,7 +110,9 @@ class NomenclaturaTests(unittest.TestCase):
     def test_validar_modificar_y_duplicados(self):
         first = self.create().json()["id"]
         second = self.create({**self.data, "manzana": "15"}).json()["id"]
-        self.assertEqual(self.client.put(f"/planos/{first}/validar", json=self.data).status_code, 200)
+        res_val = self.client.put(f"/planos/{first}/validar", json=self.data)
+        self.assertEqual(res_val.status_code, 200)
+        self.assertIsNotNone(res_val.json()["validado_en"])
         res = self.client.put(f"/planos/{second}/validar", json=self.data)
         self.assertEqual(res.status_code, 409)
         res = self.client.put(
@@ -106,6 +125,10 @@ class NomenclaturaTests(unittest.TestCase):
         self.assertEqual(res.status_code, 200, res.text)
         self.assertEqual(res.json()["nomenclatura"], "3-K-20-5B")
         self.assertEqual(res.json()["estado"], "validado")
+        eventos = res.json()["eventos"]
+        self.assertEqual([e["accion"] for e in eventos], ["Carga", "Validación", "Modificación"])
+        self.assertEqual(json.loads(eventos[-1]["valores_anteriores"])["manzana"], "12A")
+        self.assertEqual(json.loads(eventos[-1]["valores_nuevos"])["manzana"], "20")
 
     def test_catalogacion_conserva_texto_original_omitido_o_alterado(self):
         plano_id = self.create().json()["id"]
@@ -161,33 +184,59 @@ class NomenclaturaTests(unittest.TestCase):
                 db.commit()
             db.rollback()
 
-    def test_eliminar_borra_archivos_relaciones_y_libera_nomenclatura(self):
+    def test_eliminar_hace_baja_logica_conserva_trazabilidad_y_libera_nomenclatura(self):
         plano_id = self.create().json()["id"]
-        with patch("src.planos.services.eliminar_archivo") as borrar:
-            res = self.client.delete(f"/planos/{plano_id}")
+        res = self.client.delete(f"/planos/{plano_id}")
         self.assertEqual(res.status_code, 200, res.text)
-        self.assertEqual(
-            [c.args[0] for c in borrar.call_args_list],
-            ["test/archivo.jpg.preview.jpg", "test/archivo.jpg"],
-        )
         self.assertEqual(self.client.get(f"/planos/{plano_id}").status_code, 404)
+        self.assertEqual(self.client.get("/planos").json(), [])
         with Session(self.engine) as db:
-            self.assertEqual(db.exec(select(EventoAuditoria)).all(), [])
-            self.assertEqual(db.exec(select(ProcesamientoIA)).all(), [])
+            plano_db = db.get(Plano, plano_id)
+            self.assertIsNotNone(plano_db)
+            self.assertFalse(plano_db.activo)
+            self.assertIsNone(plano_db.nomenclatura)
+            eventos = db.exec(select(EventoAuditoria).where(EventoAuditoria.plano_id == plano_id)).all()
+            self.assertEqual([e.accion for e in eventos], ["Carga", "Caducidad"])
+            self.assertTrue(json.loads(eventos[-1].valores_anteriores)["activo"])
+            self.assertFalse(json.loads(eventos[-1].valores_nuevos)["activo"])
+            self.assertEqual(len(db.exec(select(ProcesamientoIA)).all()), 1)
         self.assertEqual(self.create().status_code, 201)
 
-    def test_eliminar_fallo_storage_conserva_registro(self):
-        plano_id = self.create().json()["id"]
-        with patch("src.planos.services.eliminar_archivo", side_effect=RuntimeError("privado")):
-            res = self.client.delete(f"/planos/{plano_id}")
-        self.assertEqual(res.status_code, 503)
-        self.assertNotIn("privado", res.text)
-        self.assertEqual(self.client.get(f"/planos/{plano_id}").status_code, 200)
+    def test_eliminar_ausente_devuelve_404(self):
+        self.assertEqual(self.client.delete("/planos/999").status_code, 404)
 
-    def test_eliminar_ausente_no_toca_storage(self):
-        with patch("src.planos.services.eliminar_archivo") as borrar:
-            self.assertEqual(self.client.delete("/planos/999").status_code, 404)
-            borrar.assert_not_called()
+    def test_worker_actualiza_procesamiento_ia_con_raw_y_metricas(self):
+        plano_id = self.create().json()["id"]
+        datos_ia = {
+            "texto_extraido": "TEXTO CRUDO DEL PLANO",
+            "arquitecto": "Salamone",
+            "anio": 1937,
+            "titulo": "Palacio Municipal",
+            "ubicacion": "Azul",
+            "escala": "1:100",
+            "tipo_de_plano": "planta",
+            "material_soporte": "tela",
+            "notas": "Exp 1",
+        }
+        with patch("src.planos.worker.engine", self.engine):
+            _guardar_resultado(
+                plano_id=plano_id,
+                datos=datos_ia,
+                error=None,
+                duracion_ms=1450,
+                modelo_ia="qwen2.5vl:7b",
+            )
+        detalle = self.client.get(f"/planos/{plano_id}").json()
+        self.assertEqual(detalle["texto_extraido"], "TEXTO CRUDO DEL PLANO")
+        self.assertEqual(len(detalle["procesamientos"]), 1)
+        proc = detalle["procesamientos"][0]
+        self.assertEqual(proc["estado"], EstadoIA.completado.value)
+        self.assertEqual(proc["modelo_ia"], "qwen2.5vl:7b")
+        self.assertEqual(proc["duracion_ms"], 1450)
+        self.assertEqual(proc["texto_extraido_raw"], "TEXTO CRUDO DEL PLANO")
+        self.assertEqual(json.loads(proc["respuesta_json_raw"])["arquitecto"], "Salamone")
+        self.assertIsNotNone(proc["version_prompt"])
+        self.assertIsNotNone(proc["parametros_preprocesamiento"])
 
     def test_reintentar_ia_limite_3_intentos(self):
         with patch("src.planos.services.obtener_archivo", return_value=b"fake-image"):
