@@ -171,6 +171,7 @@ def obtener_modelo_activo(ollama_host: Optional[str] = None) -> str:
 
 # Bounding box por defecto basada en normas IRAM 4504 / ISO 7200 (cuadrante inferior derecho)
 FALLBACK_BBOX_IRAM = [600, 500, 1000, 1000]
+VERSION_PROMPT_EXTRACCION = "v2.0-cajetin-2pasos"
 
 PROMPT_DETECCION_CAJETIN = """\
 Detecta el cajetín, carimbo o cuadro de datos técnicos del plano.

@@ -1,12 +1,52 @@
-# API de Reconocimiento de Planos Históricos
+# Reconocimiento de Planos Históricos
 
 Extrae datos (arquitecto, año, ubicación, etc.) de planos históricos
-escaneados usando el modelo de visión Qwen2.5-VL 3B servido por Ollama,
-y los devuelve en JSON estructurado.
+escaneados usando modelos de visión artificial (Qwen2.5-VL o Gemma 3) servidos por Ollama (localmente o en Google Colab con GPU T4 gratuita),
+y los devuelve en JSON estructurado y normalizado.
 
-## Uso
+---
 
-Para levantar el entorno local (PostgreSQL, MinIO, API y Frontend) usando Google Colab como motor de IA:
+<a id="indice"></a>
+## 📑 Tabla de Contenidos
+
+- [1. Puesta en Marcha Rápida (Uso)](#1-puesta-en-marcha-rápida-uso)
+  - [1.1 Inicio del Entorno con Docker](#11-inicio-del-entorno-con-docker)
+  - [1.2 Acceso a la Aplicación Web](#12-acceso-a-la-aplicación-web)
+  - [1.3 Extracción con MongoDB y Supabase (procesar-plano)](#13-extracción-con-mongodb-y-supabase-procesar-plano)
+- [2. Estructura y Arquitectura del Backend](#2-estructura-y-arquitectura-del-backend)
+  - [2.1 Capas dentro de cada recurso](#21-capas-dentro-de-cada-recurso)
+  - [2.2 Detalle de carpetas y módulos](#22-detalle-de-carpetas-y-módulos)
+- [3. Procesamiento Acelerado con GPU en Google Colab (Paso a Paso)](#3-procesamiento-acelerado-con-gpu-en-google-colab-paso-a-paso)
+- [4. Funcionamiento del Procesamiento con IA (Pipeline en 2 Pasos con Grounding)](#4-funcionamiento-del-procesamiento-con-ia-pipeline-en-2-pasos-con-grounding)
+  - [4.1 El desafío en planos de gran formato](#41-el-desafío-en-planos-de-gran-formato)
+  - [4.2 Paso 1: Detección y Grounding del Cajetín](#42-paso-1-detección-y-grounding-del-cajetín)
+  - [4.3 Recorte en Alta Resolución (Crop y Preprocesamiento)](#43-recorte-en-alta-resolución-crop-y-preprocesamiento)
+  - [4.4 Paso 2: Extracción Estructurada de Datos Técnicos en HD](#44-paso-2-extracción-estructurada-de-datos-técnicos-en-hd)
+  - [4.5 Resiliencia y Manejo de Errores](#45-resiliencia-y-manejo-de-errores)
+- [5. Catálogo y Base de Datos Relacional (PostgreSQL y MinIO)](#5-catálogo-y-base-de-datos-relacional-postgresql-y-minio)
+  - [5.1 Variables de Entorno y Conexión](#51-variables-de-entorno-y-conexión)
+  - [5.2 Funcionamiento de la Base de Datos](#52-funcionamiento-de-la-base-de-datos)
+  - [5.3 Tablas y Campos](#53-tablas-y-campos)
+    - [Tabla planos](#1-tabla-planos-clase-plano-y-planobase)
+    - [Tabla eventos_auditoria](#2-tabla-eventos_auditoria-clase-eventoauditoria)
+    - [Tabla procesamientos_ia](#3-tabla-procesamientos_ia-clase-procesamientoia)
+  - [5.4 Diagrama Entidad-Relación](#54-diagrama-entidad-relación)
+  - [5.5 Endpoints del Catálogo (planos)](#55-endpoints-del-catálogo-planos)
+- [6. Almacenamiento Secundario (Supabase y MongoDB)](#6-almacenamiento-secundario-supabase-y-mongodb)
+  - [6.1 Variables de Entorno](#61-variables-de-entorno)
+- [7. Reglas de Negocio, Nomenclatura y Pruebas](#7-reglas-de-negocio-nomenclatura-y-pruebas)
+  - [7.1 Nomenclatura Catastral y Reglas del Archivo](#71-nomenclatura-catastral-y-reglas-del-archivo)
+  - [7.2 Indicador de Conexión a la Base de Datos](#72-indicador-de-conexión-a-la-base-de-datos)
+  - [7.3 Ejecución de Pruebas Automatizadas](#73-ejecución-de-pruebas-automatizadas)
+- [8. Notas y Parámetros Técnicos](#8-notas-y-parámetros-técnicos)
+
+---
+
+## 1. Puesta en Marcha Rápida (Uso)
+
+### 1.1 Inicio del Entorno con Docker
+
+Para levantar el entorno local completo (PostgreSQL, MinIO, API y Frontend) usando Google Colab como motor de IA:
 
 ```bash
 docker compose up -d
@@ -20,9 +60,18 @@ docker compose up -d
 
 La API espera hasta 300 segundos por la respuesta de Ollama (ajustable mediante la variable `OLLAMA_TIMEOUT`).
 
-Una vez levantado todo:
+### 1.2 Acceso a la Aplicación Web
 
-### Modo asíncrono (predeterminado y recomendado para la app web):
+El ingreso a la aplicación web debe realizarse desde [http://localhost:8080](http://localhost:8080) (o directamente a [http://localhost:8080/planos-historicos.html](http://localhost:8080/planos-historicos.html)) en el navegador.
+
+> **Importante**: No abras el archivo HTML directamente desde el explorador ni a través de Live Server sin proxy, ya que el frontend se comunica con el backend mediante rutas relativas (`/api/...`) que Nginx reenvía internamente al contenedor `api:8000`, evitando problemas de CORS y resolución de red.
+
+Formatos de archivo admitidos: JPEG, PNG, WEBP, TIFF y PDF (se analiza y previsualiza la primera página del plano).
+
+### 1.3 Extracción con MongoDB y Supabase (procesar-plano)
+
+> **Nota**: Este endpoint procesa planos de manera aislada utilizando Supabase Storage y MongoDB. Para el catálogo completo con PostgreSQL, MinIO y auditoría, consultá la sección [Catálogo y Base de Datos Relacional](#5-catálogo-y-base-de-datos-relacional-postgresql--minio).
+
 ```bash
 curl -X POST http://localhost:8000/procesar-plano \
   -F "archivo=@/ruta/a/tu/plano.jpg"
@@ -63,9 +112,11 @@ Respuesta cuando finaliza (`status: "completed"`):
 }
 ```
 
+[↑ Volver a la tabla de contenidos](#indice)
+
 ---
 
-## Estructura del Backend
+## 2. Estructura y Arquitectura del Backend
 
 El backend sigue una arquitectura organizada por recursos y capas (`routes → controllers → services → models`), manteniendo separada la infraestructura compartida de la lógica de cada dominio.
 
@@ -111,7 +162,7 @@ backend/
         └── schemas.py
 ```
 
-### Capas dentro de cada recurso (`<recurso>/`)
+### 2.1 Capas dentro de cada recurso
 
 Cada subcarpeta de recurso en `backend/src/` se organiza en las mismas cuatro capas:
 
@@ -123,7 +174,7 @@ Cada subcarpeta de recurso en `backend/src/` se organiza en las mismas cuatro ca
 └── schemas.py      Modelos Pydantic/SQLModel para validación de entrada y serialización de salida
 ```
 
-### Detalle de carpetas y módulos
+### 2.2 Detalle de carpetas y módulos
 
 - **`backend/` (raíz del servicio)**:
   - `Dockerfile` y `requirements.txt`: imagen Docker de Python y dependencias necesarias para levantar el contenedor de la API.
@@ -141,7 +192,7 @@ Cada subcarpeta de recurso en `backend/src/` se organiza en las mismas cuatro ca
   - `preprocessing.py`: rasterización de páginas PDF (`pypdfium2`), recorte de alta resolución del cajetín técnico según coordenadas normalizadas y mejora de contraste/nitidez (`Pillow`).
   - `vision_client.py`: cliente HTTP hacia Ollama (local o Google Colab vía Ngrok) que ejecuta la detección de bounding box del cajetín (Paso 1) y la extracción JSON estructurada (Paso 2), incluyendo detección automática del modelo activo en Colab.
 - **`backend/src/planos/` (catálogo de planos históricos — `/planos`)**:
-  - `routes.py`, `controllers.py`, `services.py` y `schemas.py`: alta de planos con archivo y nomenclatura, listado con filtros, consulta de detalle con historial, descarga de archivo original y vista previa, validación inicial, modificación con auditoría, reintento de IA y baja física.
+  - `routes.py`, `controllers.py`, `services.py` y `schemas.py`: alta de planos con archivo y nomenclatura, listado con filtros, consulta de detalle con historial, descarga de archivo original y vista previa, validación inicial, modificación con auditoría, reintento de IA y baja lógica (*soft delete*).
   - `nomenclatura.py`: normalización y validación del formato catastral (`circunscripción-sección-manzana-parcela`) y generación de su clave única.
   - `worker.py`: cola asíncrona (`planos_worker`) que procesa con IA los planos recién creados o reintentados y persiste los metadatos extraídos en PostgreSQL, retomando pendientes tras un reinicio.
 - **`backend/src/tareas/` (procesamiento por cola de tareas — `/procesar-plano` y `/tareas`)**:
@@ -151,9 +202,11 @@ Cada subcarpeta de recurso en `backend/src/` se organiza en las mismas cuatro ca
   - `test_nomenclatura.py`: pruebas de normalización catastral, unicidad, ciclo de validación/modificación, preservación de transcripción original y borrado.
   - `test_vision_colab.py`: pruebas del cliente de visión, selección dinámica de modelo en Google Colab (`colab-activo`), recarga de `.env` y pipeline en 2 pasos.
 
+[↑ Volver a la tabla de contenidos](#indice)
+
 ---
 
-## Procesamiento acelerado con GPU en Google Colab (Paso a Paso)
+## 3. Procesamiento acelerado con GPU en Google Colab (Paso a Paso)
 
 Si no contás con una placa de video NVIDIA local, podés ejecutar **Ollama en Google Colab** aprovechando su GPU **NVIDIA T4 gratuita (16 GB VRAM)** y conectarlo a tu backend local mediante un túnel seguro de **Ngrok**. Esto reduce el tiempo de procesamiento de 60–90 segundos en CPU a unos pocos segundos por plano y permite elegir modelos más grandes (como `qwen2.5vl:7b` o `gemma3:12b`) directamente desde el notebook.
 
@@ -165,7 +218,7 @@ Si no contás con una placa de video NVIDIA local, podés ejecutar **Ollama en G
 ### Paso 2: Abrir el notebook en Google Colab y activar la GPU
 1. Subí o abrí el archivo `ollama_colab.ipynb` incluido en la raíz de este repositorio en [Google Colab](https://colab.research.google.com/).
 2. En el menú superior de Colab, entrá en **Entorno de ejecución** → **Cambiar tipo de entorno de ejecución**.
-3. Seleccioná **GPU T4 (para los modelos de hasta 7b) o GPU L4 (para los modelos mas grandes, este no esta disponible con google colab gratis solo con planes de pago)** en "Acelerador por hardware" y guardá los cambios.
+3. Seleccioná **GPU T4 (para los modelos de hasta 7b) o GPU L4 (para los modelos más grandes, este no está disponible con Google Colab gratis solo con planes de pago)** en "Acelerador por hardware" y guardá los cambios.
 
 ### Paso 3: Instalar e iniciar Ollama + Túnel Ngrok
 1. Ejecutá la **Celda 1** (`📦 1. Instalar dependencias, Ollama y pyngrok`) y esperá a que finalice la instalación (~30–60 segundos).
@@ -206,13 +259,15 @@ Para verificar el funcionamiento del cliente de visión y la selección dinámic
 docker compose exec -T api python -m unittest tests.test_vision_colab -v
 ```
 
+[↑ Volver a la tabla de contenidos](#indice)
+
 ---
 
-## Funcionamiento del Procesamiento con IA (Pipeline en 2 Pasos con Grounding)
+## 4. Funcionamiento del Procesamiento con IA (Pipeline en 2 Pasos con Grounding)
 
 El procesamiento de planos combina las normas de dibujo técnico (**IRAM 4504** en Argentina e **ISO 7200** a nivel internacional) con las capacidades de **Grounding y Detección de Objetos** del modelo **Qwen2.5-VL 3B**.
 
-### El desafío en planos de gran formato
+### 4.1 El desafío en planos de gran formato
 Los planos arquitectónicos digitalizados suelen tener resoluciones gigantescas (ej. 4000×3000 px o más). Si se envía el plano completo comprimido a 1600 px a un modelo de visión, los textos críticos (año, cotas, firmas a mano, escalas y nomenclatura catastral) quedan reducidos a un puñado de píxeles borrosos e ilegibles.
 
 Por norma técnica, la información legal, catastral y de autoría se concentra siempre en el **cajetín, carimbo o rótulo**, ubicado reglamentariamente en la **esquina inferior derecha**. Por eso, el sistema no analiza todo el plano de una sola vez: divide la tarea en **dos pasos estratégicos**.
@@ -238,7 +293,7 @@ Por norma técnica, la información legal, catastral y de autoría se concentra 
 
 ---
 
-### Paso 1: Detección y Grounding del Cajetín
+### 4.2 Paso 1: Detección y Grounding del Cajetín
 
 Se genera una vista previa optimizada del plano para no sobrecargar la memoria de la GPU ni dilatar el tiempo de inferencia, y se le pide al modelo que localice la caja delimitadora (**Bounding Box**) del cuadro técnico.
 
@@ -255,7 +310,7 @@ Se genera una vista previa optimizada del plano para no sobrecargar la memoria d
 
 ---
 
-### Recorte en Alta Resolución (Crop & Preprocesamiento)
+### 4.3 Recorte en Alta Resolución (Crop y Preprocesamiento)
 
 Implementado en `backend/src/compartido/preprocessing.py` con la función `crop_cajetin_from_bbox`:
 
@@ -267,7 +322,7 @@ Implementado en `backend/src/compartido/preprocessing.py` con la función `crop_
 
 ---
 
-### Paso 2: Extracción Estructurada de Datos Técnicos en HD
+### 4.4 Paso 2: Extracción Estructurada de Datos Técnicos en HD
 
 Se envía **únicamente el recorte del cajetín en máxima resolución** a Qwen2.5-VL con el esquema JSON completo de `PlanoHistorico` (`backend/src/tareas/schemas.py`). Al tener solo el rótulo en primer plano, el modelo dispone del 100% de su capacidad atencional y de resolución óptica en el texto que importa.
 
@@ -303,75 +358,29 @@ Se envía **únicamente el recorte del cajetín en máxima resolución** a Qwen2
 
 ---
 
-### Resiliencia y Manejo de Errores
+### 4.5 Resiliencia y Manejo de Errores
 
-- **Reintentos automáticos:** Tanto `tasks.py` como `planos_worker.py` ejecutan reintentos automáticos si la llamada al modelo no responde en el primer intento.
+- **Reintentos automáticos:** Tanto el gestor de tareas asíncronas (`backend/src/tareas/services.py`) como el worker del catálogo (`backend/src/planos/worker.py`) ejecutan reintentos automáticos si la llamada al modelo no responde en el primer intento.
 - **Doble Fallback:** Si por algún caso extremo la extracción sobre el recorte del cajetín fallase, el sistema reintenta la extracción sobre el plano completo para no dejar la petición en error.
 - **Concurrencia no bloqueante:** Toda la inferencia pesada corre en hilos separados (`asyncio.to_thread`) para mantener ágil el event loop de FastAPI.
 
+[↑ Volver a la tabla de contenidos](#indice)
+
 ---
 
-## Almacenamiento: Supabase + MongoDB
+## 5. Catálogo y Base de Datos Relacional (PostgreSQL y MinIO)
 
-_Agregado: 2026-09-29_
-
-Cada plano procesado (tanto en modo asíncrono como con `?sync=true`)
-se persiste en dos lugares:
-
-
-- **Supabase Storage** (bucket `planos_escaneados`): guarda el archivo
-  original que subió el usuario y expone su URL pública (`supabase_url`
-  en la respuesta de `/tareas/{task_id}`).
-- **MongoDB** (base `planos_db`, colección `extracciones`): guarda el
-  documento completo (fecha de procesamiento, datos del archivo y la
-  extracción de Qwen) con el esquema `DocumentoExtraccion`
-  (`backend/src/tareas/schemas.py`).
-
-Esta lógica vive en `backend/src/tareas/services.py` (función `_guardar_extraccion`),
-que se llama tanto desde el worker asíncrono como desde
-`procesar_directo` (modo `sync`), después de que Qwen devuelve el
-resultado. La subida a Supabase usa `backend/src/compartido/storage_client.py` y el
-insert a Mongo usa `backend/src/compartido/db_client.py`.
-
-### Variables de entorno
-
-Están en `.env` (no se commitea, ver `.env.example`):
-
-```
-MONGODB_URI=mongodb+srv://usuario:password@cluster.mongodb.net/?appName=...
-SUPABASE_URL=https://<proyecto>.supabase.co
-SUPABASE_KEY=<service_role key>
-```
-
-`docker-compose.yml` las toma del `.env` de la raíz y se las pasa al
-contenedor `api`.
-
-**Importante sobre `SUPABASE_KEY`**: tiene que ser la **service_role
-key** (Supabase Dashboard → Settings → API), no la `anon`/`publishable`.
-El bucket tiene Row Level Security activado, así que la key anónima no
-tiene permiso de `INSERT` y el upload falla con
-`403 new row violates row-level security policy`. La service_role
-bypasea RLS y nunca se expone al frontend - solo la usa este backend.
-
-**Importante sobre `MONGODB_URI`**: la IP desde la que corre la API
-tiene que estar en la whitelist de Atlas (Network Access → Add IP
-Address). Si no, las operaciones se cuelgan con
-`ServerSelectionTimeoutError`.
-
-## Catálogo: PostgreSQL + MinIO (Fase 2)
-
-_Agregado: 2026-09-29_
-
-El catálogo de planos (datos de origen, estado de validación e
-historial) se guarda en **PostgreSQL**, y los archivos originales en
+El catálogo de planos (datos de origen, estado de validación, auditoría
+e historial) se guarda en **PostgreSQL**, y los archivos originales en
 **MinIO** (bucket `planos`). Ambos corren como servicios del
-`docker-compose.yml`: no hace falta crear cuentas ni instalar nada,
-las tablas se crean solas al arrancar la API.
+`docker-compose.yml`: las tablas se crean e inicializan solas al arrancar la API.
+
+### 5.1 Variables de Entorno y Conexión
 
 Variables en `.env` (ver `.env.example`; si no están, se usan esos
 mismos valores por defecto):
 
-```
+```env
 POSTGRES_USER=planos
 POSTGRES_PASSWORD=planos
 POSTGRES_DB=planos_db
@@ -379,32 +388,185 @@ POSTGRES_DB=planos_db
 
 Postgres queda expuesto en `localhost:5432` para inspeccionarlo con
 cualquier cliente (DBeaver, pgAdmin, `psql`), y la consola de MinIO en
-http://localhost:9001.
+[http://localhost:9001](http://localhost:9001).
 
-### Tablas
+### 5.2 Funcionamiento de la Base de Datos
 
-- **`planos`**: archivo (`nombre_original`, `content_type`,
-  `minio_path`), datos de origen (`ubicacion_fisica`, `expediente`,
-  `direccion_referencia`, `parcela`), `estado` (`pendiente` |
-  `validado` | `sin_ubicacion`), estado de la IA (`ia_estado`:
-  `procesando` | `completado` | `error` | `no_aplica`, más `ia_error`),
-  los metadatos del plano (`arquitecto`, `anio`, `titulo`, `ubicacion`,
-  `escala`, `tipo_de_plano`, `material_soporte`, `notas`) y fechas de
-  creación/actualización.
-- **`historial_modificaciones`**: `plano_id` (FK), `fecha`, `motivo`.
+La persistencia del catálogo se apoya en **PostgreSQL** mediante **SQLModel** (integración entre Pydantic y SQLAlchemy en `backend/src/models.py`), complementada por **MinIO** para el almacenamiento de archivos binarios:
 
-### Endpoints
+1. **Inicialización y Migraciones Automáticas (`init_db`)**:
+   - Al arrancar la aplicación (`main.py`), `init_db()` ejecuta `SQLModel.metadata.create_all(engine)`.
+   - Adicionalmente, aplica sentencias idempotentes `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` y `CREATE UNIQUE INDEX IF NOT EXISTS`. Esto permite actualizar esquemas existentes sin pérdida de información ni requerir scripts de migración manuales.
+
+2. **Integridad de Archivos y Almacenamiento Híbrido**:
+   - Los archivos originales (JPEG, PNG, WEBP, TIFF, PDF) y sus previsualizaciones JPEG se suben al bucket `planos` de MinIO.
+   - En PostgreSQL se registra la ruta relativa (`minio_path`), el peso del documento (`tamano_bytes`) y la firma criptográfica **SHA-256** (`hash_sha256`) calculada en memoria antes de la subida para garantizar que el archivo nunca haya sido alterado.
+
+3. **Unicidad de Nomenclatura Catastral**:
+   - Cada plano posee cuatro componentes obligatorios: `circunscripcion`, `seccion`, `manzana` y `parcela_catastral`.
+   - La concatenación normalizada (ej. `3-K-12A-5B`) se indexa de forma única con el índice `ux_planos_nomenclatura`, impidiendo duplicados en el catálogo activo.
+
+4. **Trazabilidad y Auditoría de Operaciones (`eventos_auditoria`)**:
+   - Toda mutación (`Carga`, `Validación`, `Modificación`, `Observación`, `Caducidad`) genera un registro inmutable.
+   - Se guardan snapshots en formato JSON (`valores_anteriores` y `valores_nuevos`), el motivo justificado, el operador responsable y la dirección IP de origen (`ip_origen`).
+
+5. **Baja Lógica (*Soft Delete*)**:
+   - Al ejecutar `DELETE /planos/{id}`, el sistema no destruye los datos ni borra los archivos físicos en MinIO: marca `activo = False`, libera la nomenclatura (asignándole `null` para permitir reclasificaciones futuras) y añade un evento de auditoría con la acción `'Caducidad'`.
+
+6. **Trazabilidad de Inferencia IA (`procesamientos_ia`)**:
+   - Cada intento de extracción automática por el modelo de visión (hasta un máximo de 3 intentos) se registra de forma independiente.
+   - Se documenta el modelo utilizado (`modelo_ia`), la versión del prompt (`version_prompt`), los parámetros de preprocesamiento aplicados (`parametros_preprocesamiento`), el texto OCR crudo (`texto_extraido_raw`), la respuesta JSON íntegra (`respuesta_json_raw`) y el tiempo de respuesta (`duracion_ms`).
+
+---
+
+### 5.3 Tablas y Campos
+
+#### 1. Tabla planos (Clase Plano y PlanoBase)
+
+Representa la ficha del plano histórico dentro del archivo municipal o institucional.
+
+| Campo | Tipo SQL | Restricciones / Default | Descripción |
+|---|---|---|---|
+| `id` | `INTEGER` | Primary Key, Autoincremental | Identificador único del plano. |
+| `minio_path` | `TEXT` | NOT NULL | Clave o ruta del archivo original almacenado en MinIO (ej. `<uuid>.<ext>`). |
+| `hash_sha256` | `VARCHAR(64)` | Nullable | Hash SHA-256 del archivo original para verificar su integridad. |
+| `tamano_bytes` | `INTEGER` | Nullable | Tamaño exacto del archivo original subido, expresado en bytes. |
+| `nombre_original` | `TEXT` | NOT NULL | Nombre original del archivo proporcionado por el usuario al subirlo. |
+| `content_type` | `TEXT` | NOT NULL | Tipo MIME del archivo (ej. `image/jpeg`, `application/pdf`). |
+| `circunscripcion` | `TEXT` | NOT NULL, Default `''` | Circunscripción catastral normalizada (ej. `3`). |
+| `seccion` | `TEXT` | NOT NULL, Default `''` | Sección catastral normalizada (ej. `K`). |
+| `manzana` | `TEXT` | NOT NULL, Default `''` | Manzana catastral normalizada (ej. `12A`). |
+| `parcela_catastral`| `TEXT` | NOT NULL, Default `''` | Parcela catastral normalizada (ej. `5B`). |
+| `nomenclatura` | `TEXT` | Nullable, Unique Index | Clave unificada (ej. `3-K-12A-5B`). Se setea a `null` si se da de baja lógica. |
+| `ubicacion_fisica` | `TEXT` | Default `''` | Ubicación del documento en el archivo físico (estante, planera, caja). |
+| `expediente` | `TEXT` | Default `''` | Número o código del expediente administrativo vinculado. |
+| `direccion_referencia` | `TEXT` | Default `''` | Dirección urbana aproximada o de referencia. |
+| `parcela` | `TEXT` | Default `''` | Parcela o lote libre asignado en catalogación. |
+| `estado` | `VARCHAR` | Default `'pendiente'` | Estado de catalogación humana: `pendiente`, `validado`, `sin_ubicacion`. |
+| `ia_estado` | `VARCHAR` | Default `'procesando'`| Estado de análisis del worker: `procesando`, `completado`, `error`, `no_aplica`. |
+| `ia_error` | `TEXT` | Nullable | Detalle del error devuelto por la IA si la extracción falló. |
+| `ia_propuesta` | `TEXT` | Nullable | JSON con propuesta sugerida por la IA tras un reintento en plano ya validado. |
+| `creado_por` | `TEXT` | Nullable | Identificador del usuario u operador que realizó la carga. |
+| `validado_por` | `TEXT` | Nullable | Identificador del operador técnico que aprobó la catalogación. |
+| `validado_en` | `TIMESTAMPTZ`| Nullable | Fecha y hora exacta de la validación inicial (independiente de actualizaciones posteriores). |
+| `activo` | `BOOLEAN` | NOT NULL, Default `TRUE` | Bandera de baja lógica (*soft delete*). `False` indica que el plano fue dado de baja. |
+| `texto_extraido` | `TEXT` | Nullable | Transcripción OCR final consolidada y searchable del plano. |
+| `arquitecto` | `TEXT` | Nullable | Autor, proyectista o profesional firmante. |
+| `anio` | `INTEGER` | Nullable | Año del plano o proyecto (número de 4 dígitos, ej. 1936). |
+| `titulo` | `TEXT` | Nullable | Título de la obra, proyecto o designación de la lámina. |
+| `ubicacion` | `TEXT` | Nullable | Localidad o ubicación geográfica leída del rótulo. |
+| `escala` | `TEXT` | Nullable | Escala técnica indicada (ej. `1:100`, `1:50`). |
+| `tipo_de_plano` | `TEXT` | Nullable | Tipología (planta, fachada, corte, detalle, etc.). |
+| `material_soporte`| `TEXT` | Nullable | Soporte físico indicado expresamente (papel tela, calco, vegetal). |
+| `notas` | `TEXT` | Nullable | Notas complementarias, sellos o anotaciones marginales. |
+| `creado_en` | `TIMESTAMPTZ`| NOT NULL, Default `now()` | Fecha y hora de creación del registro (UTC). |
+| `actualizado_en` | `TIMESTAMPTZ`| NOT NULL, Default `now()` | Fecha y hora de la última modificación (UTC). |
+
+---
+
+#### 2. Tabla eventos_auditoria (Clase EventoAuditoria)
+
+Registra cada acción administrativa realizada sobre un plano para asegurar trazabilidad jurídica e institucional.
+
+| Campo | Tipo SQL | Restricciones / Default | Descripción |
+|---|---|---|---|
+| `id` | `INTEGER` | Primary Key, Autoincremental | Identificador único del evento. |
+| `plano_id` | `INTEGER` | NOT NULL, Foreign Key (`planos.id`) | Identificador del plano auditado (indexado). |
+| `usuario_id` | `TEXT` | NOT NULL | Usuario o rol que ejecutó la operación (ej. `Operador`, `Validador`). |
+| `fecha` | `TIMESTAMPTZ`| NOT NULL, Default `now()` | Fecha y hora de la operación en UTC. |
+| `accion` | `VARCHAR(15)` | NOT NULL, Default `'Modificación'` | Clasificación del evento: `'Carga'`, `'Validación'`, `'Modificación'`, `'Observación'`, `'Caducidad'`. |
+| `motivo` | `TEXT` | NOT NULL | Explicación o motivo obligatorio del cambio introducido. |
+| `valores_anteriores` | `TEXT` | Nullable | Snapshot en formato JSON con el estado de los campos antes de la acción. |
+| `valores_nuevos` | `TEXT` | Nullable | Snapshot en formato JSON con el estado de los campos después de la acción. |
+| `ip_origen` | `VARCHAR(45)` | Nullable | Dirección IP (IPv4 o IPv6) desde la cual se emitió la solicitud HTTP. |
+
+---
+
+#### 3. Tabla procesamientos_ia (Clase ProcesamientoIA)
+
+Almacena el historial y los resultados de cada intento de inferencia ejecutado por los modelos de visión sobre el plano.
+
+| Campo | Tipo SQL | Restricciones / Default | Descripción |
+|---|---|---|---|
+| `id` | `INTEGER` | Primary Key, Autoincremental | Identificador único del intento de procesamiento. |
+| `plano_id` | `INTEGER` | NOT NULL, Foreign Key (`planos.id`) | Identificador del plano procesado (indexado). |
+| `intento` | `INTEGER` | NOT NULL | Número correlativo del intento (1, 2 o 3). |
+| `estado` | `VARCHAR` | NOT NULL | Estado de este intento: `procesando`, `completado`, `error`, `no_aplica`. |
+| `error` | `TEXT` | Nullable | Traza o detalle del error si el intento no prosperó. |
+| `modelo_ia` | `VARCHAR(100)`| NOT NULL, Default `'qwen2.5-vl:3b'` | Nombre y versión exacta del modelo de visión que procesó el plano. |
+| `version_prompt` | `VARCHAR(30)` | Nullable | Versión o etiqueta del prompt utilizado (ej. `v2.0-cajetin-2pasos`). |
+| `parametros_preprocesamiento` | `TEXT` | Nullable | JSON con los parámetros aplicados en `preprocessing.py` (resolución, recorte, contraste, nitidez, rotación). |
+| `texto_extraido_raw` | `TEXT` | Nullable | Transcripción íntegra cruda devuelta por el modelo sin edición posterior. |
+| `respuesta_json_raw` | `TEXT` | Nullable | Payload JSON completo devuelto por el modelo para ese intento. |
+| `duracion_ms` | `INTEGER` | Nullable | Duración total de la inferencia en milisegundos. |
+| `fecha` | `TIMESTAMPTZ`| NOT NULL, Default `now()` | Fecha y hora en que se registró el intento (UTC). |
+
+---
+
+### 5.4 Diagrama Entidad-Relación
+
+```mermaid
+erDiagram
+    planos ||--o{ eventos_auditoria : "registra historial"
+    planos ||--o{ procesamientos_ia : "registra intentos"
+
+    planos {
+        int id PK
+        string minio_path
+        string hash_sha256
+        int tamano_bytes
+        string nombre_original
+        string content_type
+        string nomenclatura UK
+        string estado
+        string ia_estado
+        boolean activo
+        timestamptz validado_en
+        timestamptz creado_en
+        timestamptz actualizado_en
+    }
+
+    eventos_auditoria {
+        int id PK
+        int plano_id FK
+        string usuario_id
+        timestamptz fecha
+        string accion
+        string motivo
+        text valores_anteriores
+        text valores_nuevos
+        string ip_origen
+    }
+
+    procesamientos_ia {
+        int id PK
+        int plano_id FK
+        int intento
+        string estado
+        string modelo_ia
+        string version_prompt
+        text parametros_preprocesamiento
+        text texto_extraido_raw
+        text respuesta_json_raw
+        int duracion_ms
+        timestamptz fecha
+    }
+```
+
+### 5.5 Endpoints del Catálogo (planos)
 
 | Método | Ruta | Qué hace |
 |---|---|---|
 | `POST` | `/planos` | Multipart: `archivo`, `circunscripcion`, `seccion`, `manzana`, `parcela_catastral` (obligatorios) + `ubicacion_fisica`, `expediente`, `direccion_referencia` (opcionales). Sube a MinIO, crea el plano como `pendiente` y dispara la IA en segundo plano (`ia_estado=procesando`). Si es PDF, rasteriza la primera página para el análisis y la previsualización. |
 | `GET` | `/planos` | Lista. Filtros: `estado` (repetible: `?estado=validado&estado=sin_ubicacion`) y `q` (coincidencia exacta de nomenclatura: `3-K-12A-5B`). |
 | `GET` | `/planos/{id}` | Detalle con historial. Sirve para consultar si la IA terminó (`ia_estado`). |
-| `DELETE` | `/planos/{id}` | Elimina permanentemente el plano, su archivo, previsualización, auditoría y registros de IA. Devuelve 404 si no existe y 503 si falla el almacenamiento. |
+| `DELETE` | `/planos/{id}` | Baja lógica (*soft delete*): marca `activo=False`, libera la nomenclatura y registra un evento de auditoría `'Caducidad'`. Conserva el documento original y su trazabilidad histórica. Devuelve 404 si el plano no existe o ya fue dado de baja. |
 | `GET` | `/planos/{id}/archivo` | Devuelve el archivo original (imagen o PDF original). |
 | `GET` | `/planos/{id}/preview` | Devuelve una imagen JPEG de previsualización (la imagen original o la primera página rasterizada si es PDF). |
-| `PUT` | `/planos/{id}/validar` | JSON con los metadatos revisados + `parcela`. Queda `validado` si hay parcela, si no `sin_ubicacion`. Agrega "Validación inicial" al historial. Devuelve 409 si el plano ya fue validado. |
-| `PUT` | `/planos/{id}/modificar` | JSON con los metadatos + `parcela` + `motivo` (obligatorio, 400 si falta). Actualiza el plano y agrega el motivo al historial. |
+| `PUT` | `/planos/{id}/validar` | JSON con los metadatos revisados + nomenclatura catastral obligatoria. Pasa a estado `validado`, registra `validado_en` y añade un evento `'Validación'` al historial de auditoría con snapshot JSON. Devuelve 409 si el plano ya fue validado. |
+| `PUT` | `/planos/{id}/modificar` | JSON con los metadatos + nomenclatura + `motivo` (obligatorio, 400 si falta). Actualiza el plano, limpia `ia_propuesta` y añade un evento `'Modificación'` al historial con snapshot de valores anteriores y nuevos. |
+| `POST` | `/planos/{id}/reintentar_ia` | Query param `usuario_id`. Dispara un reanálisis con IA si el plano no está en procesamiento y no superó el límite de 3 intentos. Si el plano ya estaba validado, la respuesta de la IA se guarda en `ia_propuesta` para revisión sin pisar los datos confirmados. |
+| `POST` | `/planos/{id}/descartar_propuesta` | Descarta la propuesta sugerida por la IA (`ia_propuesta = null`) conservando los datos aprobados por el operador. |
 
 Ejemplo:
 
@@ -431,86 +593,83 @@ Detalles de comportamiento:
 - Esto convive con `/procesar-plano` y `/tareas` (y su persistencia en
   Supabase/MongoDB), que siguen funcionando igual.
 
-## Notas
+[↑ Volver a la tabla de contenidos](#indice)
 
-- El esquema de campos a extraer está en `backend/src/tareas/schemas.py` (Pydantic).
-  Agregá o quitá campos ahí y se propagan automáticamente al modelo.
-- Sin GPU, cada plano puede tardar entre 20 y 90 segundos según
-  resolución. Con GPU (ver comentario en `docker-compose.yml`) baja
-  drásticamente.
-- `backend/src/compartido/preprocessing.py` redimensiona y mejora el contraste de la
-  imagen antes de mandarla al modelo - ajustá `MAX_DIMENSION` si tus
-  planos tienen mucho detalle fino.
-# planosHistoricos
-# planosHistoricos
-# planosHistoricos
+---
 
-IMPORTANTE
-Se debe desacargar un modelo en ollama (configurado actualmente qwen2.5vl:3b) se peude consultar el estado de la descarga en cualquier momento con:
+## 6. Almacenamiento Secundario (Supabase y MongoDB)
+
+Cada plano procesado a través de los endpoints `/procesar-plano` y `/tareas` (tanto en modo asíncrono como con `?sync=true`) se persiste de forma aislada en dos servicios externos:
+
+- **Supabase Storage** (bucket `planos_escaneados`): guarda el archivo original subido y expone su URL pública (`supabase_url` en la respuesta de `/tareas/{task_id}`).
+- **MongoDB** (base `planos_db`, colección `extracciones`): guarda el documento completo (fecha de procesamiento, metadatos del archivo y la extracción realizada por el modelo) según el esquema `DocumentoExtraccion` (`backend/src/tareas/schemas.py`).
+
+Esta lógica vive en `backend/src/tareas/services.py` (función `_guardar_extraccion`), utilizando los clientes `backend/src/compartido/storage_client.py` y `backend/src/compartido/db_client.py`.
+
+### 6.1 Variables de Entorno
+
+Definidas en `.env` (ver `.env.example`):
+
+```env
+MONGODB_URI=mongodb+srv://usuario:password@cluster.mongodb.net/?appName=...
+SUPABASE_URL=https://<proyecto>.supabase.co
+SUPABASE_KEY=<service_role key>
+```
+
+> **Importante sobre `SUPABASE_KEY`**: Debe ser la **service_role key** (Supabase Dashboard → Settings → API), no la `anon`/`publishable`. El bucket tiene Row Level Security (RLS) activado, por lo que la clave anónima no tiene permiso de `INSERT` y falla con error 403. La service_role key nunca se expone al cliente web.
+>
+> **Importante sobre `MONGODB_URI`**: La IP del servidor debe estar habilitada en la lista blanca de Atlas (Network Access → Add IP Address) para evitar errores `ServerSelectionTimeoutError`.
+
+[↑ Volver a la tabla de contenidos](#indice)
+
+---
+
+## 7. Reglas de Negocio, Nomenclatura y Pruebas
+
+### 7.1 Nomenclatura Catastral y Reglas del Archivo
+
+La carga exige archivo, circunscripción, sección, manzana y parcela catastral. Expediente, dirección de referencia y ubicación física son opcionales. La combinación de los cuatro componentes es única para cada plano dentro del archivo. El ID numérico interno se conserva para las relaciones de base de datos.
+
+- **Formato admitido**: Circunscripción numérica positiva, sección con letras A–Z, y manzana/parcela con número positivo y letras opcionales al final. Cada componente tiene un límite técnico de 64 caracteres.
+- **Normalización**: Se normalizan espacios, mayúsculas y ceros iniciales: `03-k-012 a-05 b` se guarda y busca como `3-K-12A-5B`.
+- **Búsqueda exacta**: La consulta en el catálogo es estricta por clave catastral; no realiza búsquedas parciales por expediente o año. Las colas de carga/revisión y las listas de modificación muestran sus registros sin requerir una búsqueda previa.
+- **Migración de planos históricos**: Al iniciar la API, `init_db()` añade las columnas requeridas y el índice único preservando planos anteriores, los cuales quedan con nomenclatura pendiente hasta su revisión o modificación manual.
+
+### 7.2 Indicador de Conexión a la Base de Datos
+
+La barra lateral de la interfaz web muestra el estado de conexión con PostgreSQL en tiempo real (al ingresar y cada 15 segundos):
+- **Verde**: Base de datos conectada y operativa.
+- **Rojo**: Fallo de conexión o consulta rechazada.
+- **Amarillo**: Estado desconocido (por ejemplo, si la API está caída o Nginx responde con 502).
+
+El endpoint `GET /health/database` (o `/api/health/database` a través del proxy) ejecuta `SELECT 1` y devuelve `{"database":"connected"}` (HTTP 200) o `{"database":"disconnected"}` (HTTP 503), garantizando que nunca se expongan credenciales ni trazas de error internas al cliente.
+
+### 7.3 Ejecución de Pruebas Automatizadas
+
+El proyecto cuenta con suites de pruebas unitarias y de integración tanto para el backend (con SQLite temporal y mocks de almacenamiento/IA) como para el frontend (con simulación de DOM y red):
 
 ```bash
-docker exec -it ollama ollama list
-```
-
-el ingreso a la app debe hacerse desde http://localhost:8080 en el navegador. Sino se bloquea el uso de la API de reconocimiento de imagenes.
-Formatos admitidos: JPEG, PNG, WEBP, TIFF y PDF (se analiza y previsualiza la primera página del plano).
-
-El procesamiento por CPU tarda de 60 a 90 segundos.
-
-### Nomenclatura del archivo y pruebas del frontend
-
-La carga exige archivo, circunscripción, sección, manzana y parcela catastral.
-Expediente, dirección de referencia y ubicación física siguen siendo opcionales.
-La combinación de los cuatro componentes es única para cada plano, por regla
-de este proyecto. El ID numérico interno se conserva para las relaciones.
-
-El formato del proyecto admite circunscripción numérica positiva, sección con
-letras A–Z, y manzana/parcela con número positivo y letras opcionales al final.
-Cada componente tiene un límite técnico de 64 caracteres. Estos límites no son
-una certificación de ARBA ni verifican la existencia real de la parcela.
-Se normalizan espacios, mayúsculas y ceros iniciales: `03-k-012 a-05 b`
-se guarda y busca como `3-K-12A-5B`. La consulta del catálogo es exacta;
-ya no busca por dirección, expediente o año. Las colas de carga/revisión y las
-listas de modificación siguen mostrando sus registros sin exigir una búsqueda.
-
-Al iniciar la API se agregan columnas y un índice único, conservando los planos
-anteriores. Estos quedan con nomenclatura pendiente, sin valores inventados;
-se puede completar desde Revisión o Modificar antes de guardar. En Consultar
-sólo aparecen planos catalogados. Los nuevos cambios requieren reiniciar la API:
-
-```powershell
-docker compose restart api
-```
-
-Pruebas (frontend con solicitudes simuladas; backend con SQLite temporal y
-almacenamiento/IA simulados, sin modificar los planos del proyecto):
-
-```powershell
-node --test front/tests/errors.test.cjs
+# Pruebas de reglas de negocio, endpoints y nomenclatura
 docker compose exec -T api python -m unittest tests.test_nomenclatura -v
-```
 
-Para probar la página usá `http://localhost:8080/planos-historicos.html`.
-Live Server no reenvía `/api` al backend.
-
-### Indicador de conexión a la base de datos
-
-La barra lateral del módulo muestra el estado de PostgreSQL al ingresar y cada
-15 segundos: verde si está conectada, rojo si la consulta falla y amarillo si
-no se puede verificar (por ejemplo, si la API no responde o nginx devuelve 502).
-El texto acompaña al color. Al recuperarse el servicio, se actualiza automáticamente.
-
-`GET /health/database` en la API (o `/api/health/database` desde el front) ejecuta
-`SELECT 1`: devuelve 200 con `{"database":"connected"}` o 503 con
-`{"database":"disconnected"}`, sin exponer errores internos ni credenciales.
-Comprueba la base del catálogo; MongoDB y los servicios de archivos no forman
-parte de este indicador. Si la API no pudo iniciar por una falla de PostgreSQL,
-el front muestra que no se pudo verificar el estado.
-
-Para activar el endpoint, reiniciá la API y recargá la página:
-
-```powershell
-docker compose restart api
-node --test front/tests/errors.test.cjs front/tests/database-status.test.cjs
+# Pruebas de salud del sistema y conexión a PostgreSQL
 docker compose exec -T api python -m unittest tests.test_health -v
+
+# Pruebas del cliente de visión e integración dinámica con Google Colab
+docker compose exec -T api python -m unittest tests.test_vision_colab -v
+
+# Pruebas del frontend (manejo de errores y estado de base de datos)
+node --test front/tests/errors.test.cjs front/tests/database-status.test.cjs
 ```
+
+[↑ Volver a la tabla de contenidos](#indice)
+
+---
+
+## 8. Notas y Parámetros Técnicos
+
+- **Esquema de extracción**: Definido en `backend/src/tareas/schemas.py` (`PlanoHistorico` con Pydantic). Cualquier ajuste o nuevo campo agregado allí se propaga automáticamente a las directivas de extracción estructurada del modelo VLM.
+- **Rendimiento con GPU vs CPU**: Sin GPU, cada plano puede demorar entre 20 y 90 segundos según su resolución óptica. Con aceleración por GPU (Google Colab T4 o GPU NVIDIA local), el tiempo se reduce a unos pocos segundos por lámina.
+- **Ajuste de Preprocesamiento**: La función `backend/src/compartido/preprocessing.py` optimiza la resolución preliminar (`MAX_DIMENSION = 1600`) y la resolución del cajetín técnico (`MAX_CAJETIN_DIMENSION = 1800`) aplicando autocontraste y realce de nitidez con Pillow antes de consultar al modelo.
+
+[↑ Volver a la tabla de contenidos](#indice)

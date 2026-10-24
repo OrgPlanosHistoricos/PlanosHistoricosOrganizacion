@@ -21,6 +21,7 @@ async def crear_plano(
     direccion_referencia: str,
     usuario_id: str,
     session: Session,
+    ip_origen: Optional[str] = None,
 ) -> PlanoRead:
     return await services.crear_plano(
         archivo=archivo,
@@ -33,6 +34,7 @@ async def crear_plano(
         direccion_referencia=direccion_referencia,
         usuario_id=usuario_id,
         session=session,
+        ip_origen=ip_origen,
     )
 
 
@@ -48,8 +50,18 @@ def obtener_plano(plano_id: int, session: Session) -> PlanoDetalle:
     return services.obtener_plano(plano_id=plano_id, session=session)
 
 
-def eliminar_plano(plano_id: int, session: Session) -> dict:
-    return services.eliminar_plano(plano_id=plano_id, session=session)
+def eliminar_plano(
+    plano_id: int,
+    session: Session,
+    usuario_id: str = "Operador",
+    ip_origen: Optional[str] = None,
+) -> dict:
+    return services.eliminar_plano(
+        plano_id=plano_id,
+        session=session,
+        usuario_id=usuario_id,
+        ip_origen=ip_origen,
+    )
 
 
 def descargar_archivo(plano_id: int, session: Session) -> Response:
@@ -72,18 +84,48 @@ def obtener_preview(plano_id: int, session: Session) -> Response:
     )
 
 
-def validar_plano(plano_id: int, datos: PlanoValidar, session: Session) -> PlanoDetalle:
-    return services.validar_plano(plano_id=plano_id, datos=datos, session=session)
+def validar_plano(
+    plano_id: int,
+    datos: PlanoValidar,
+    session: Session,
+    ip_origen: Optional[str] = None,
+) -> PlanoDetalle:
+    return services.validar_plano(
+        plano_id=plano_id,
+        datos=datos,
+        session=session,
+        ip_origen=ip_origen,
+    )
 
 
-def modificar_plano(plano_id: int, datos: PlanoModificar, session: Session) -> PlanoDetalle:
-    return services.modificar_plano(plano_id=plano_id, datos=datos, session=session)
+def modificar_plano(
+    plano_id: int,
+    datos: PlanoModificar,
+    session: Session,
+    ip_origen: Optional[str] = None,
+) -> PlanoDetalle:
+    return services.modificar_plano(
+        plano_id=plano_id,
+        datos=datos,
+        session=session,
+        ip_origen=ip_origen,
+    )
 
 
 def descartar_propuesta(plano_id: int, session: Session) -> PlanoDetalle:
     return services.descartar_propuesta(plano_id=plano_id, session=session)
 
 
-def reintentar_ia(plano_id: int, usuario_id: str, session: Session) -> PlanoDetalle:
-    return services.reintentar_ia(plano_id=plano_id, usuario_id=usuario_id, session=session)
+def reintentar_ia(
+    plano_id: int,
+    usuario_id: str,
+    session: Session,
+    ip_origen: Optional[str] = None,
+) -> PlanoDetalle:
+    return services.reintentar_ia(
+        plano_id=plano_id,
+        usuario_id=usuario_id,
+        session=session,
+        ip_origen=ip_origen,
+    )
 
