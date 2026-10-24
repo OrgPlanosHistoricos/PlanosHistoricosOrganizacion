@@ -17,6 +17,7 @@
     servidor: 'El servicio no está disponible en este momento. Intentá nuevamente más tarde.',
     ia: 'El análisis automático no pudo completarse. Podés reintentarlo o completar los datos manualmente.',
     max_intentos: 'Se alcanzó el límite máximo de 3 intentos de análisis para este plano.',
+    procesando_ia: 'Ya hay un plano en análisis en este momento. Esperá a que finalice antes de subir otro.',
     nomenclatura: 'Completá la nomenclatura: circunscripción con un número, sección con letras, y manzana y parcela con un número y letras opcionales. Los números deben ser mayores que cero.',
     duplicado: 'Ya existe un plano con esa nomenclatura. Revisá los cuatro datos o consultá el plano existente.',
     inesperado: 'No pudimos completar la operación. Intentá nuevamente; si el problema continúa, contactá al administrador.'
@@ -55,8 +56,14 @@
         try {
           var cuerpo = await res.json();
           var codigoAPI = cuerpo && cuerpo.detail && cuerpo.detail.codigo;
-          if (codigoAPI === 'nomenclatura' || codigoAPI === 'duplicado' || codigoAPI === 'max_intentos') codigo = codigoAPI;
-          else if (res.status === 422 && Array.isArray(cuerpo.detail) && cuerpo.detail.some(function(d) {
+          if (
+            codigoAPI === 'nomenclatura' ||
+            codigoAPI === 'duplicado' ||
+            codigoAPI === 'max_intentos' ||
+            codigoAPI === 'procesando_ia'
+          ) {
+            codigo = codigoAPI;
+          } else if (res.status === 422 && Array.isArray(cuerpo.detail) && cuerpo.detail.some(function(d) {
             return Array.isArray(d.loc) && ['circunscripcion', 'seccion', 'manzana', 'parcela_catastral'].indexOf(d.loc[d.loc.length - 1]) !== -1;
           })) codigo = 'nomenclatura';
         } catch (error) { /* Mantener el mensaje seguro por estado HTTP. */ }
@@ -154,4 +161,3 @@
   };
 
 })(window);
-

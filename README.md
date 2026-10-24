@@ -220,44 +220,49 @@ Si no contás con una placa de video NVIDIA local, podés ejecutar **Ollama en G
 2. En el menú superior de Colab, entrá en **Entorno de ejecución** → **Cambiar tipo de entorno de ejecución**.
 3. Seleccioná **GPU T4 (para los modelos de hasta 7b) o GPU L4 (para los modelos más grandes, este no está disponible con Google Colab gratis solo con planes de pago)** en "Acelerador por hardware" y guardá los cambios.
 
-### Paso 3: Instalar e iniciar Ollama + Túnel Ngrok
-1. Ejecutá la **Celda 1** (`📦 1. Instalar dependencias, Ollama y pyngrok`) y esperá a que finalice la instalación (~30–60 segundos).
-2. En la **Celda 2** (`⚙️ Iniciar Ollama y generar URL pública`), pegá tu token en el campo `NGROK_TOKEN` y ejecutá la celda.
-3. Al finalizar, la consola mostrará un bloque similar a este:
-   ```text
-   =================================================================
+### Paso 3: Configurar y ejecutar la Celda 1 (Arranque Principal)
+El notebook ollama_colab.ipynb está optimizado en **2 celdas**:
+1. En la **Celda 1** (🚀 1. Arranque Principal: Almacenamiento, Ollama, Modelo y Túnel Ngrok), completá los parámetros del formulario:
+   - NGROK_TOKEN: pegá tu Authtoken de Ngrok.
+   - MODELO: seleccioná el modelo de visión del desplegable (por ejemplo qwen2.5vl:7b, qwen2.5vl:3b, gemma3:12b, minicpm-v:8b) o escribí cualquier modelo compatible con Ollama.
+   - USAR_GOOGLE_DRIVE (True/False):
+     - En True, monta tu Google Drive personal (drive.mount('/content/drive')) y guarda los modelos en OLLAMA_MODELS=/content/drive/MyDrive/ollama_models (cada integrante usa su propia cuenta sin afectar al resto).
+     - En False, usa almacenamiento efímero local (/content/ollama_models) si no tenés espacio en Drive.
+2. Ejecutá la **Celda 1**. El script:
+   - Instala e inicia ollama serve apuntando a la carpeta de modelos elegida.
+   - Consulta http://127.0.0.1:11434/api/tags antes de descargar: si el modelo ya existe en tu Drive o carpeta local, **omite la descarga** y lo usa directamente; si no existe, lo descarga una única vez.
+   - Registra el alias colab-activo (ollama cp {MODELO} colab-activo) para que el backend local detecte automáticamente el modelo activo sin tocar VISION_MODEL en .env.
+   - Levanta el túnel Ngrok en el puerto 11434 y muestra al final el banner listo para copiar:
+   `	ext
+   ======================================================================
    🚀 ¡OLLAMA ESTÁ CORRIENDO EN GOOGLE COLAB!
-   Copia esta URL en tu archivo .env local:
-   OLLAMA_HOST=https://xxxx-xx-xx-xx.ngrok-free.dev
-   =================================================================
-   ```
+   📂 Almacenamiento: Google Drive personal (/content/drive/MyDrive/ollama_models)
+   🎯 Modelo activo:  qwen2.5vl:7b (alias: colab-activo)
+   ----------------------------------------------------------------------
+   Copia y pega esta línea en tu archivo .env local:
+   OLLAMA_HOST=https://xxxx.ngrok-free.app
+   ======================================================================
+   `
 
-### Paso 4: Elegir y activar el modelo de visión desde Google Colab
-1. En la **Celda 3** (`🎯 Seleccionar y activar modelo de visión`), elegí el modelo que querés utilizar desde el selector desplegable `MODELO` (por ejemplo `qwen2.5vl:3b`, `qwen2.5vl:7b`, `qwen2.5vl:32b`, `gemma3:12b`, `gemma3:27b`, `mistral-small3.1:24b`, `minicpm-v:8b`) o escribí cualquier otro modelo de visión compatible con Ollama.
-2. Ejecutá la celda. El notebook descargará el modelo en Colab y lo registrará automáticamente con el alias interno `colab-activo`.
-3. **No hace falta modificar `VISION_MODEL` en tu `.env` local ni reiniciar Docker**: antes de procesar cada plano, el backend consulta los modelos de la instancia de Colab y utiliza automáticamente el que hayas dejado activo en esta celda.
-4. Si en cualquier momento querés probar otro modelo, simplemente cambialo en el desplegable de la **Celda 3** y volvé a ejecutarla.
+### Paso 4: Mantener la sesión activa y ver logs (Opcional)
+1. Ejecutá la **Celda 2** (📜 2. Mantenimiento de sesión y logs de Ollama en vivo) para mantener la pestaña de Colab en ejecución y observar en tiempo real las peticiones que llegan desde tu entorno local.
 
-### Paso 5: Verificar el estado del túnel en Colab
-1. Ejecutá la **Celda 4** (`🩺 Test de salud del túnel y modelo activo`) para confirmar que el túnel responde correctamente y verificar qué modelo está activo.
-2. *(Opcional)* Ejecutá la **Celda 6** (`📜 6. Ver logs de Ollama en vivo`) para mantener la pestaña de Colab activa y observar en tiempo real las peticiones que llegan desde tu entorno local.
-
-### Paso 6: Vincular tu entorno local con Google Colab
-1. Abrí el archivo `.env` en la raíz del proyecto local y pegá la URL generada en el Paso 3:
-   ```env
-   OLLAMA_HOST=https://xxxx-xx-xx-xx.ngrok-free.dev
-   ```
+### Paso 5: Vincular tu entorno local con Google Colab
+1. Abrí el archivo .env en la raíz del proyecto local y pegá la URL generada en la Celda 1:
+   `env
+   OLLAMA_HOST=https://xxxx.ngrok-free.app
+   `
 2. Si todavía no levantaste los contenedores locales, ejecutá:
-   ```bash
+   `ash
    docker compose up -d
-   ```
-   *(Nota: Como `.env` está montado en el contenedor de la API y se lee dinámicamente en cada extracción, si cambiás `OLLAMA_HOST` en `.env` por una nueva sesión de Colab no necesitás recrear el contenedor).*
+   `
+   *(Nota: Como .env está montado en el contenedor de la API y se lee dinámicamente en cada extracción, si cambiás OLLAMA_HOST en .env por una nueva sesión de Colab no necesitás recrear el contenedor).*
 
-### Paso 7: Ejecutar las pruebas de integración con Colab
+### Paso 6: Ejecutar las pruebas de integración con Colab
 Para verificar el funcionamiento del cliente de visión y la selección dinámica de modelos:
-```bash
+`ash
 docker compose exec -T api python -m unittest tests.test_vision_colab -v
-```
+`
 
 [↑ Volver a la tabla de contenidos](#indice)
 

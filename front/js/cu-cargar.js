@@ -5,6 +5,8 @@
   'use strict';
 
   var API = window.PH.API;
+  var subiendo = false;
+  var hayAnalizando = false;
 
   function esc(s) {
     return (s === undefined || s === null || s === '') ? '' :
@@ -24,19 +26,42 @@
     document.getElementById('cargar-msgs').innerHTML = '';
   }
 
+  function actualizarEstadoBoton() {
+    var btn = document.getElementById('btn-cargar');
+    if (!btn) return;
+    btn.disabled = Boolean(subiendo || hayAnalizando);
+    if (subiendo) {
+      btn.textContent = 'Subiendo plano…';
+    } else if (hayAnalizando) {
+      btn.textContent = 'Analizando plano en curso…';
+    } else {
+      btn.textContent = 'Guardar y analizar';
+    }
+  }
 
   function inicializar() {
+    subiendo = false;
+    hayAnalizando = false;
     document.getElementById('cargar-nomenclatura').innerHTML = window.PH.Nomenclatura.formulario('f-');
     var form = document.getElementById('form-cargar');
     form.addEventListener('submit', function(ev) {
       ev.preventDefault();
       onSubmit();
     });
+    actualizarEstadoBoton();
   }
 
   async function onSubmit() {
+    if (subiendo || hayAnalizando) {
+      mostrarMensaje('error', window.PH.Errores.mensajes.procesando_ia);
+      return;
+    }
     limpiarMensaje();
     var fileInput = document.getElementById('f-archivo');
+    if (fileInput.files && fileInput.files.length > 1) {
+      mostrarMensaje('error', 'Solo podés subir un plano a analizar a la vez.');
+      return;
+    }
     var file = fileInput.files[0];
 
     if (!file) {
@@ -57,6 +82,8 @@
     var expediente = document.getElementById('f-exp').value.trim();
     var direccion = document.getElementById('f-dir').value.trim();
 
+    subiendo = true;
+    actualizarEstadoBoton();
     try {
       mostrarMensaje('pulse', 'Subiendo archivo e iniciando procesamiento...');
       var doc = await API.create(file, ubicacion, expediente, direccion, nomenclatura);
@@ -66,6 +93,9 @@
       if (window.PH.actualizarListas) window.PH.actualizarListas();
     } catch (e) {
       mostrarMensaje('error', window.PH.Errores.mensaje(e));
+    } finally {
+      subiendo = false;
+      actualizarEstadoBoton();
     }
   }
 
@@ -79,6 +109,8 @@
       // la API no filtra por ia_estado con query param "estado". 
       // Por ahora traemos todo y filtramos localmente los pendientes + ia procesando.
       var todos = await API.getAll();
+      hayAnalizando = Array.isArray(todos) && todos.some(function(d) { return d.ia_estado === 'procesando'; });
+      actualizarEstadoBoton();
       var recientes = todos.filter(d => d.estado === 'pendiente' || d.ia_estado === 'procesando');
 
       if (recientes.length === 0) {
@@ -100,6 +132,8 @@
           '</div>';
       }).join('') + '</div>';
     } catch (e) {
+      hayAnalizando = false;
+      actualizarEstadoBoton();
       cont.innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
     }
   }
