@@ -34,6 +34,7 @@ class ProcesamientoRead(SQLModel):
 
 class PlanoRead(PlanoBase):
     id: int
+    id_inmueble: Optional[int] = None
     creado_en: datetime
     actualizado_en: datetime
 

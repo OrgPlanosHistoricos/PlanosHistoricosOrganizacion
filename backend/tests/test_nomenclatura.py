@@ -16,7 +16,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from src.compartido.sesion import get_session
 from src.errors import ExtraccionError
-from src.models import EstadoIA, EventoAuditoria, Plano, ProcesamientoIA
+from src.models import EstadoIA, EventoAuditoria, Inmueble, Localidad, Plano, ProcesamientoIA
 from src.planos import worker as planos_worker_mod
 from src.planos.nomenclatura import clave_nomenclatura, normalizar_nomenclatura
 from src.planos.routes import router
@@ -27,7 +27,11 @@ from src.tareas.schemas import PlanoHistorico
 class NomenclaturaTests(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine(
-            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+            # SQLite no tiene esquemas: planos.* y tramitacion.* van al esquema por defecto
+            execution_options={"schema_translate_map": {"planos": None, "tramitacion": None}},
         )
         SQLModel.metadata.create_all(self.engine)
         app = FastAPI()
@@ -147,6 +151,25 @@ class NomenclaturaTests(unittest.TestCase):
         self.assertEqual([e["accion"] for e in eventos], ["Carga", "Validación", "Modificación"])
         self.assertEqual(json.loads(eventos[-1]["valores_anteriores"])["manzana"], "12A")
         self.assertEqual(json.loads(eventos[-1]["valores_nuevos"])["manzana"], "20")
+
+    def test_vincula_inmueble_de_tramitacion_solo_si_existe_en_la_localidad(self):
+        with Session(self.engine) as db:
+            db.add(Localidad(id_localidad=1, nombre="La Plata", codigo="LP"))
+            db.add(Localidad(id_localidad=2, nombre="Quilmes", codigo="QUI"))
+            db.add(Inmueble(id_inmueble=10, nomenclatura_catastral="3-K-12A-5B", id_localidad=1))
+            db.add(Inmueble(id_inmueble=20, nomenclatura_catastral="3-K-20-5B", id_localidad=2))
+            db.commit()
+        res = self.create()
+        self.assertEqual(res.json()["id_inmueble"], 10)
+        plano_id = res.json()["id"]
+        # Existe con esa nomenclatura, pero en otra localidad
+        res = self.client.put(f"/planos/{plano_id}/validar", json={**self.data, "manzana": "20"})
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertIsNone(res.json()["id_inmueble"])
+        res = self.client.put(f"/planos/{plano_id}/modificar", json={**self.data, "motivo": "Corrección"})
+        self.assertEqual(res.json()["id_inmueble"], 10)
+        with Session(self.engine) as db:
+            self.assertEqual(len(db.exec(select(Inmueble)).all()), 2)
 
     def test_catalogacion_conserva_texto_original_omitido_o_alterado(self):
         plano_id = self.create().json()["id"]

@@ -14,6 +14,8 @@ class Settings:
     FORMATOS_IMAGEN: set[str] = {"image/jpeg", "image/png", "image/webp", "image/tiff"}
     FORMATOS_PDF: set[str] = {"application/pdf"}
     FORMATOS_ACEPTADOS: set[str] = FORMATOS_IMAGEN | FORMATOS_PDF
+    # Código de tramitacion.localidades donde se buscan los inmuebles de nuestros planos.
+    LOCALIDAD_PLANOS: str = os.getenv("LOCALIDAD_PLANOS", "LP")
 
 
 settings = Settings()
