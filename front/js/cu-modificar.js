@@ -198,7 +198,7 @@
 
       var bannerPropuesta = propuestaActual
         ? '<div class="banner-propuesta">'
-          + '<div><strong>Hay una nueva propuesta de la IA disponible para este plano.</strong> Podés comparar los cambios antes de aplicarlos.</div>'
+          + '<div>Hay una nueva propuesta de la IA disponible para este plano.</div>'
           + '<div style="display:flex; gap:8px;">'
           + '<button type="button" class="primary" onclick="PH.CUModificar.abrirComparacion()">Ver Antes y Después</button>'
           + '<button type="button" class="ghost" onclick="PH.CUModificar.descartarPropuesta()">Descartar propuesta</button>'
@@ -316,13 +316,13 @@
     var aplicados = 0;
     CAMPOS.forEach(function(c) {
       var seleccion = document.getElementById('m-aplicar-' + c.key);
-      if (!seleccion || !seleccion.checked) return;
+      if (!seleccion) return;
       var el = document.getElementById('m-' + c.key);
       if (el) {
-        var val = propuestaActual[c.key];
+        var val = seleccion.checked ? propuestaActual[c.key] : planoActual[c.key];
         if (c.key === 'escala') val = window.PH.normalizarEscala(val);
         el.value = (val !== undefined && val !== null) ? val : '';
-        aplicados++;
+        if (seleccion.checked) aplicados++;
       }
     });
     var motEl = document.getElementById('m-motivo');

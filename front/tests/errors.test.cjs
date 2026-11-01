@@ -308,6 +308,9 @@ test('modificar catalogación: propuesta de IA renderiza banner y tabla de antes
   seleccion.checked = true;
   PH.CUModificar.aplicarPropuesta();
   assert.equal(titulo.value, 'Propuesto por IA');
+  seleccion.checked = false;
+  PH.CUModificar.aplicarPropuesta();
+  assert.equal(titulo.value, 'Original');
 });
 
 test('historial: usa eventos, ordena por instante y muestra cambios escapados', async () => {
