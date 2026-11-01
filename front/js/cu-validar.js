@@ -81,6 +81,8 @@
     modoCargaManual = true;
     var formCont = document.getElementById('v-form-container');
     if (formCont) formCont.style.display = 'block';
+    var accionesPlano = document.getElementById('v-acciones-plano');
+    if (accionesPlano) accionesPlano.style.display = 'flex';
     var opcFalla = document.getElementById('v-opciones-falla');
     if (opcFalla) opcFalla.style.display = 'none';
     CAMPOS.forEach(function(c) {
@@ -167,8 +169,6 @@
               '<input type="' + type + '"' + (type === 'number' ? ' min="1" step="1"' : '') + ' id="v-' + c.key + '" value="' + attr(val) + '"></div>';
           }).join('')
         + '<div class="actions">'
-        + btnReintentarForm
-        + '<button class="danger" onclick="PH.CUValidar.eliminar(this)">Eliminar plano</button>'
         + '<button class="ghost" onclick="PH.CUValidar.cancelar()">Cancelar</button>'
         + '<button class="primary" onclick="PH.CUValidar.confirmar()">Confirmar e indexar</button>'
         + '</div>'
@@ -177,6 +177,10 @@
       cont.innerHTML = ''
         + '<img class="thumb" src="' + API.getPreviewUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
         + enlaceArchivo
+        + '<div id="v-acciones-plano" class="det-actions det-actions-plano" style="display:' + (displayForm === 'none' ? 'none' : 'flex') + ';">'
+        + '<button class="danger" onclick="PH.CUValidar.eliminar(this)">Eliminar plano</button>'
+        + btnReintentarForm
+        + '</div>'
         + aviso
         + opcionesFallaHTML
         + '<div id="v-msg"></div>'
@@ -231,7 +235,7 @@
       await renderLista();
       var cont = document.getElementById('validar-detalle');
       if (cont) {
-        cont.innerHTML = '<div class="confirm">Reanálisis iniciado. El plano volverá a aparecer en la lista cuando finalice el procesamiento.</div>';
+        cont.innerHTML = '<div class="confirm">Análisis iniciado. El plano volverá a aparecer en la lista cuando finalice el procesamiento.</div>';
       }
       if (window.PH.actualizarListas) window.PH.actualizarListas();
     } catch (e) {
