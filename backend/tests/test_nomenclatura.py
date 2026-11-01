@@ -4,7 +4,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -21,7 +21,7 @@ from src.planos import worker as planos_worker_mod
 from src.planos.nomenclatura import clave_nomenclatura, normalizar_nomenclatura
 from src.planos.routes import router
 from src.planos.worker import _guardar_resultado
-from src.tareas.schemas import PlanoHistorico
+from src.planos.schemas import PlanoHistorico
 
 
 class NomenclaturaTests(unittest.TestCase):
@@ -343,9 +343,8 @@ class NomenclaturaTests(unittest.TestCase):
         self.assertEqual(res_mod.status_code, 200)
         self.assertIsNone(res_mod.json().get("ia_propuesta"))
 
-    def test_worker_guarda_corrida_ia_en_mongo_exitosa_y_fallida(self):
+    def test_worker_guarda_respuesta_cruda_del_modelo_exitosa_y_fallida(self):
         plano_id = self.create().json()["id"]
-        mock_coleccion = MagicMock()
         resultado_fake = PlanoHistorico(
             texto_extraido="OBRA MUNICIPAL 1938",
             arquitecto="Salamone",
@@ -353,36 +352,27 @@ class NomenclaturaTests(unittest.TestCase):
             titulo="Palacio",
         )
 
-        with patch.object(planos_worker_mod, "engine", self.engine), \
-             patch.object(planos_worker_mod.db_client, "coleccion_corridas_ia", mock_coleccion), \
-             patch.object(planos_worker_mod, "extraer_datos_plano", return_value=resultado_fake):
+        def ultimo_procesamiento():
+            return self.client.get(f"/planos/{plano_id}").json()["procesamientos"][0]
+
+        crudo_ok = '```json {"texto_extraido": "OBRA MUNICIPAL 1938", "arquitecto": "Salamone"} ```'
+        with patch.object(planos_worker_mod, "engine", self.engine),              patch.object(planos_worker_mod, "extraer_datos_plano", return_value=resultado_fake),              patch.object(planos_worker_mod, "obtener_metadata_ultima_corrida", return_value={"json_crudo": crudo_ok}):
             asyncio.run(planos_worker_mod.planos_worker._procesar(plano_id, b"img"))
 
-        self.assertEqual(mock_coleccion.insert_one.call_count, 1)
-        doc_exito = mock_coleccion.insert_one.call_args[0][0]
-        self.assertEqual(doc_exito["plano_id"], plano_id)
-        self.assertEqual(doc_exito["archivo_id"], "test/archivo.jpg")
-        self.assertEqual(doc_exito["version_prompt"], "1.0")
-        self.assertEqual(doc_exito["texto_original"], "OBRA MUNICIPAL 1938")
-        self.assertIn("OBRA MUNICIPAL 1938", doc_exito["json_crudo"])
-        self.assertIsInstance(doc_exito["duracion_segundos"], float)
-        self.assertIsNotNone(doc_exito["fecha"])
-        self.assertEqual(doc_exito["estado"], "completado")
+        proc = ultimo_procesamiento()
+        self.assertEqual(proc["estado"], "completado")
+        self.assertEqual(proc["respuesta_json_raw"], crudo_ok)
+        self.assertEqual(proc["texto_extraido_raw"], "OBRA MUNICIPAL 1938")
+        self.assertIsInstance(proc["duracion_ms"], int)
 
-        # Corrida fallida también se registra en corridas_ia
-        mock_coleccion.reset_mock()
-        with patch.object(planos_worker_mod, "engine", self.engine), \
-             patch.object(planos_worker_mod.db_client, "coleccion_corridas_ia", mock_coleccion), \
-             patch.object(planos_worker_mod, "extraer_datos_plano", side_effect=ExtraccionError("fallo IA")):
+        # Si el modelo devuelve algo que no se puede parsear, igual queda registrado
+        with patch.object(planos_worker_mod, "engine", self.engine),              patch.object(planos_worker_mod, "extraer_datos_plano", side_effect=ExtraccionError("fallo IA")),              patch.object(planos_worker_mod, "obtener_metadata_ultima_corrida", return_value={"json_crudo": '{"roto": '}):
             asyncio.run(planos_worker_mod.planos_worker._procesar(plano_id, b"img"))
 
-        self.assertEqual(mock_coleccion.insert_one.call_count, 1)
-        doc_error = mock_coleccion.insert_one.call_args[0][0]
-        self.assertEqual(doc_error["plano_id"], plano_id)
-        self.assertEqual(doc_error["archivo_id"], "test/archivo.jpg")
-        self.assertEqual(doc_error["estado"], "error")
-        self.assertIn("fallo IA", doc_error["error"])
-
+        proc = ultimo_procesamiento()
+        self.assertEqual(proc["estado"], "error")
+        self.assertIn("fallo IA", proc["error"])
+        self.assertEqual(proc["respuesta_json_raw"], '{"roto": ')
 
 if __name__ == "__main__":
     unittest.main()

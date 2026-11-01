@@ -32,62 +32,20 @@ services:
     environment:
       - OLLAMA_HOST=ollama:11434
 
-  minio:
-    image: cgr.dev/chainguard/minio:latest
-    container_name: minio
-    command: server /data --console-address ":9001"
-    environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin123}
-    volumes:
-      - minio_data:/data
-    ports:
-      - "9000:9000"   # API S3
-      - "9001:9001"   # Consola web
-
-  postgres:
-    image: postgres:16-alpine
-    container_name: planos-postgres
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER:-planos}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-planos}
-      - POSTGRES_DB=${POSTGRES_DB:-planos_db}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      # Esquema del otro grupo; solo corre con el volumen vacío (docker compose down -v)
-      - ./db/tramitacion:/docker-entrypoint-initdb.d:ro
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   api:
     build: ./backend
     container_name: planos-api
     command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-    depends_on:
-      minio:
-        condition: service_started
-      # La API crea las tablas al arrancar, así que necesita Postgres aceptando conexiones
-      postgres:
-        condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-planos}:${POSTGRES_PASSWORD:-planos}@postgres:5432/${POSTGRES_DB:-planos_db}
+      # Postgres de Supabase (session pooler); el esquema tramitacion se carga a mano desde db/tramitacion
+      - DATABASE_URL=${SUPABASE_DB_URL}
       - LOCALIDAD_PLANOS=${LOCALIDAD_PLANOS:-LP}
       - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
       - VISION_MODEL=${VISION_MODEL:-qwen2.5vl:3b}
       - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-300}
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
-      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin123}
-      - MINIO_BUCKET=planos
-      - MINIO_SECURE=false
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
-      - MONGODB_URI=${MONGODB_URI}
+      - SUPABASE_BUCKET=${SUPABASE_BUCKET:-planos_escaneados}
     volumes:
       - ./backend/src:/app/src
       - ./backend/tests:/app/tests
@@ -108,5 +66,3 @@ services:
 
 volumes:
   ollama_data:
-  minio_data:
-  postgres_data:

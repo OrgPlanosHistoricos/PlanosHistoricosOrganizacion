@@ -1,4 +1,4 @@
-"""Servicios y reglas de negocio del catálogo de planos (Postgres + MinIO)."""
+"""Servicios y reglas de negocio del catálogo de planos (Postgres + Supabase Storage)."""
 import asyncio
 import hashlib
 import json
@@ -8,7 +8,7 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from src.compartido.minio_client import (
+from src.compartido.storage_client import (
     existe_archivo,
     obtener_archivo,
     obtener_preview_key,
@@ -327,7 +327,7 @@ def obtener_preview_plano(plano_id: int, session: Session) -> Tuple[bytes, str]:
         contenido = obtener_archivo(plano.minio_path)
         return contenido, plano.content_type
 
-    # Si es PDF, buscar o generar la vista previa JPEG en MinIO
+    # Si es PDF, buscar o generar la vista previa JPEG en Storage
     preview_key = obtener_preview_key(plano.minio_path)
     if existe_archivo(preview_key):
         contenido = obtener_archivo(preview_key)

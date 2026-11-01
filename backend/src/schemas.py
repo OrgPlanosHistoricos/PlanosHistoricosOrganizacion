@@ -4,15 +4,9 @@ from src.planos.schemas import (  # noqa: F401
     NomenclaturaEntrada,
     PlanoDetalle,
     PlanoModificar,
+    PlanoHistorico,
     PlanoRead,
     PlanoValidar,
     ProcesamientoRead,
-)
-from src.tareas.schemas import (  # noqa: F401
-    ArchivoInfo,
-    DocumentoExtraccion,
-    PlanoHistorico,
-    TareaInfo,
-    TaskStatus,
 )
 

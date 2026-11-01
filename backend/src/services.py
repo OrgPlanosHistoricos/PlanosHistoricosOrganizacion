@@ -3,13 +3,13 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.compartido.sesion import engine
-from src.tareas.services import task_manager
+from src.planos.worker import planos_worker
 
 
 def estado_servicio() -> dict:
     return {
         "status": "ok",
-        "tareas_en_cola": task_manager.queue.qsize(),
+        "tareas_en_cola": planos_worker.queue.qsize(),
     }
 
 
