@@ -18,7 +18,7 @@
     ia: 'El análisis automático no pudo completarse. Podés reintentarlo o completar los datos manualmente.',
     max_intentos: 'Se alcanzó el límite máximo de 3 intentos de análisis para este plano.',
     procesando_ia: 'Ya hay un plano en análisis en este momento. Esperá a que finalice antes de subir otro.',
-    nomenclatura: 'Completá la nomenclatura: circunscripción con un número, sección con letras, y manzana y parcela con un número y letras opcionales. Los números deben ser mayores que cero.',
+    nomenclatura: 'Revisá la nomenclatura: circunscripción con un número, sección con letras, y manzana y parcela con un número y letras opcionales. Los números deben ser mayores que cero. Para una búsqueda exacta, completá los cuatro campos.',
     duplicado: 'Ya existe un plano con esa nomenclatura. Revisá los cuatro datos o consultá el plano existente.',
     inesperado: 'No pudimos completar la operación. Intentá nuevamente; si el problema continúa, contactá al administrador.'
   };

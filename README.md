@@ -408,7 +408,7 @@ La persistencia del catálogo se apoya en **PostgreSQL** mediante **SQLModel** (
    - En PostgreSQL se registra la ruta relativa (`minio_path`), el peso del documento (`tamano_bytes`) y la firma criptográfica **SHA-256** (`hash_sha256`) calculada en memoria antes de la subida para garantizar que el archivo nunca haya sido alterado.
 
 3. **Unicidad de Nomenclatura Catastral**:
-   - Cada plano posee cuatro componentes obligatorios: `circunscripcion`, `seccion`, `manzana` y `parcela_catastral`.
+   - Cada plano admite cuatro componentes opcionales: `circunscripcion`, `seccion`, `manzana` y `parcela_catastral`.
    - La concatenación normalizada (ej. `3-K-12A-5B`) se indexa de forma única con el índice `ux_planos_nomenclatura`, impidiendo duplicados en el catálogo activo.
 
 4. **Trazabilidad y Auditoría de Operaciones (`eventos_auditoria`)**:
@@ -562,13 +562,13 @@ erDiagram
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| `POST` | `/planos` | Multipart: `archivo`, `circunscripcion`, `seccion`, `manzana`, `parcela_catastral` (obligatorios) + `ubicacion_fisica`, `expediente`, `direccion_referencia` (opcionales). Sube a MinIO, crea el plano como `pendiente` y dispara la IA en segundo plano (`ia_estado=procesando`). Si es PDF, rasteriza la primera página para el análisis y la previsualización. |
+| `POST` | `/planos` | Multipart: `archivo` (obligatorio), `circunscripcion`, `seccion`, `manzana`, `parcela_catastral` (opcionales) + `ubicacion_fisica`, `expediente`, `direccion_referencia` (opcionales). Sube a MinIO, crea el plano como `pendiente` y dispara la IA en segundo plano (`ia_estado=procesando`). Si es PDF, rasteriza la primera página para el análisis y la previsualización. |
 | `GET` | `/planos` | Lista. Filtros: `estado` (repetible: `?estado=validado&estado=sin_ubicacion`) y `q` (coincidencia exacta de nomenclatura: `3-K-12A-5B`). |
 | `GET` | `/planos/{id}` | Detalle con historial. Sirve para consultar si la IA terminó (`ia_estado`). |
 | `DELETE` | `/planos/{id}` | Baja lógica (*soft delete*): marca `activo=False`, libera la nomenclatura y registra un evento de auditoría `'Caducidad'`. Conserva el documento original y su trazabilidad histórica. Devuelve 404 si el plano no existe o ya fue dado de baja. |
 | `GET` | `/planos/{id}/archivo` | Devuelve el archivo original (imagen o PDF original). |
 | `GET` | `/planos/{id}/preview` | Devuelve una imagen JPEG de previsualización (la imagen original o la primera página rasterizada si es PDF). |
-| `PUT` | `/planos/{id}/validar` | JSON con los metadatos revisados + nomenclatura catastral obligatoria. Pasa a estado `validado`, registra `validado_en` y añade un evento `'Validación'` al historial de auditoría con snapshot JSON. Devuelve 409 si el plano ya fue validado. |
+| `PUT` | `/planos/{id}/validar` | JSON con los metadatos revisados + nomenclatura catastral opcional. Pasa a estado `validado`, registra `validado_en` y añade un evento `'Validación'` al historial de auditoría con snapshot JSON. Devuelve 409 si el plano ya fue validado. |
 | `PUT` | `/planos/{id}/modificar` | JSON con los metadatos + nomenclatura + `motivo` (obligatorio, 400 si falta). Actualiza el plano, limpia `ia_propuesta` y añade un evento `'Modificación'` al historial con snapshot de valores anteriores y nuevos. |
 | `POST` | `/planos/{id}/reintentar_ia` | Query param `usuario_id`. Dispara un reanálisis con IA si el plano no está en procesamiento y no superó el límite de 3 intentos. Si el plano ya estaba validado, la respuesta de la IA se guarda en `ia_propuesta` para revisión sin pisar los datos confirmados. |
 | `POST` | `/planos/{id}/descartar_propuesta` | Descarta la propuesta sugerida por la IA (`ia_propuesta = null`) conservando los datos aprobados por el operador. |
@@ -633,7 +633,7 @@ SUPABASE_KEY=<service_role key>
 
 ### 7.1 Nomenclatura Catastral y Reglas del Archivo
 
-La carga exige archivo, circunscripción, sección, manzana y parcela catastral. Expediente, dirección de referencia y ubicación física son opcionales. La combinación de los cuatro componentes es única para cada plano dentro del archivo. El ID numérico interno se conserva para las relaciones de base de datos.
+La carga exige únicamente el archivo. Circunscripción, sección, manzana, parcela catastral, expediente, dirección de referencia y ubicación física son opcionales. Se pueden conservar nomenclaturas parciales. La clave única se genera solo cuando los cuatro componentes están completos; de lo contrario queda en null y puede haber varios planos sin nomenclatura completa. El ID numérico interno se conserva para las relaciones de base de datos.
 
 - **Formato admitido**: Circunscripción numérica positiva, sección con letras A–Z, y manzana/parcela con número positivo y letras opcionales al final. Cada componente tiene un límite técnico de 64 caracteres.
 - **Normalización**: Se normalizan espacios, mayúsculas y ceros iniciales: `03-k-012 a-05 b` se guarda y busca como `3-K-12A-5B`.

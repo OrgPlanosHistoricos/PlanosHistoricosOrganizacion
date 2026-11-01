@@ -83,18 +83,45 @@ class NomenclaturaTests(unittest.TestCase):
             self.assertIsNotNone(procs[0].parametros_preprocesamiento)
         self.queue_mock.assert_called_once()
 
-    def test_faltantes_e_invalidos_no_suben_archivo(self):
+    def test_invalidos_no_suben_archivo(self):
         for campo in self.data:
             datos = self.data.copy()
-            del datos[campo]
-            self.assertEqual(self.create(datos).status_code, 422)
-            for valor in ("", "???", "<script>"):
+            for valor in ("???", "<script>"):
                 datos[campo] = valor
                 self.assertEqual(self.create(datos).status_code, 422)
         for campo in ("circunscripcion", "manzana", "parcela_catastral"):
             datos = {**self.data, campo: "0"}
             self.assertEqual(self.create(datos).status_code, 422)
         self.upload_mock.assert_not_called()
+
+    def test_nomenclatura_opcional_y_parcial_en_carga_validacion_y_modificacion(self):
+        for datos in ({}, {"circunscripcion": "03"}, {"seccion": " k ", "manzana": "012 a"}):
+            with self.subTest(datos=datos):
+                res = self.create(datos)
+                self.assertEqual(res.status_code, 201, res.text)
+                plano_id = res.json()["id"]
+                self.assertIsNone(res.json()["nomenclatura"])
+                with Session(self.engine) as db:
+                    plano = db.get(Plano, plano_id)
+                    plano.ia_estado = EstadoIA.completado
+                    db.add(plano)
+                    db.commit()
+                validado = self.client.put(f"/planos/{plano_id}/validar", json=datos)
+                self.assertEqual(validado.status_code, 200, validado.text)
+                modificado = self.client.put(f"/planos/{plano_id}/modificar", json={"motivo": "Sin datos catastrales"})
+                self.assertEqual(modificado.status_code, 200, modificado.text)
+                self.assertIsNone(modificado.json()["nomenclatura"])
+                self.assertEqual(modificado.json()["circunscripcion"], "")
+
+    def test_completar_nomenclatura_y_luego_quitar_un_campo(self):
+        plano_id = self.create({}).json()["id"]
+        res = self.client.put(f"/planos/{plano_id}/validar", json=self.data)
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["nomenclatura"], "3-K-12A-5B")
+        res = self.client.put(f"/planos/{plano_id}/modificar", json={**self.data, "seccion": "", "motivo": "Dato desconocido"})
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertIsNone(res.json()["nomenclatura"])
+        self.assertEqual(res.json()["manzana"], "12A")
 
     def test_duplicado_normalizado_no_sube_otro_archivo(self):
         self.assertEqual(self.create().status_code, 201)
@@ -182,8 +209,8 @@ class NomenclaturaTests(unittest.TestCase):
             db.refresh(viejo)
             plano_id = viejo.id
         self.assertIsNone(self.client.get(f"/planos/{plano_id}").json()["nomenclatura"])
-        self.assertEqual(self.client.put(f"/planos/{plano_id}/validar", json={}).status_code, 422)
-        res = self.client.put(f"/planos/{plano_id}/validar", json=self.data)
+        self.assertEqual(self.client.put(f"/planos/{plano_id}/validar", json={}).status_code, 200)
+        res = self.client.put(f"/planos/{plano_id}/modificar", json={**self.data, "motivo": "Completar nomenclatura"})
         self.assertEqual(res.status_code, 200, res.text)
         self.assertEqual(res.json()["nomenclatura"], "3-K-12A-5B")
 

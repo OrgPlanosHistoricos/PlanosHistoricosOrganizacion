@@ -144,20 +144,21 @@ test('servidor sin ruta de carga: no confunde un servicio ausente con un plano f
 function completar(context, prefijo, datos = {circunscripcion:'03',seccion:'k',manzana:'012 a',parcela_catastral:'05 b'}) {
   for (const [key,value] of Object.entries(datos)) context.document.getElementById(prefijo+key).value=value;
 }
-test('nomenclatura: normaliza ceros, espacios y letras; rechaza vacíos y símbolos', () => {
+test('nomenclatura: normaliza ceros, espacios y letras; permite vacíos y rechaza símbolos', () => {
   const { PH } = setup();
   const valid = {circunscripcion:'03',seccion:' k ',manzana:'012 a',parcela_catastral:'05 b'};
   assert.equal(PH.Nomenclatura.clave(PH.Nomenclatura.normalizar(valid)), '3-K-12A-5B');
   for (const key of Object.keys(valid)) {
-    for (const value of ['', '???', '<script>']) assert.throws(() => PH.Nomenclatura.normalizar({...valid,[key]:value}), e=> e.codigo === 'nomenclatura');
+    for (const value of ['???', '<script>']) assert.throws(() => PH.Nomenclatura.normalizar({...valid,[key]:value}), e=> e.codigo === 'nomenclatura');
   }
   for (const key of ['circunscripcion','manzana','parcela_catastral']) assert.throws(() => PH.Nomenclatura.normalizar({...valid,[key]:'0'}));
 });
-test('carga: nomenclatura incompleta no hace solicitudes y conserva el archivo', async () => {
+test('carga: nomenclatura inválida no hace solicitudes y conserva el archivo', async () => {
   let calls = 0, submit;
   const { PH, context, elements } = setup(async () => { calls++; });
   context.document.getElementById('form-cargar').addEventListener=(_,handler)=>{submit=handler;};
   PH.CUCargar.inicializar();
+  context.document.getElementById('f-circunscripcion').value='???';
   const file={name:'plano.pdf'};
   context.document.getElementById('f-archivo').files=[file];
   submit({preventDefault(){}});
@@ -223,7 +224,7 @@ test('carga: bloquea subida si ya hay un plano en estado procesando', async () =
   assert.equal(postCalls, 0);
   assert.ok(elements['cargar-msgs'].innerHTML.includes(PH.Errores.mensajes.procesando_ia));
 });
-test('revisión y modificación: envían nomenclatura normalizada y bloquean datos incompletos', async () => {
+test('revisión y modificación: envían nomenclatura normalizada y bloquean datos inválidos', async () => {
   for(const [module,prefix,select,save] of [['CUValidar','v-','seleccionar','confirmar'],['CUModificar','m-','seleccionar','guardar']]) {
     const calls=[];
     const doc={id:1,estado:'pendiente',ia_estado:'error',procesamientos:[]};
@@ -234,6 +235,7 @@ test('revisión y modificación: envían nomenclatura normalizada y bloquean dat
       new RegExp('<textarea id="' + prefix + 'texto_extraido"[^>]* readonly>'));
     for(const key of ['texto_extraido','titulo','arquitecto','ubicacion','anio','escala','tipo_de_plano','material_soporte','notas']) context.document.getElementById(prefix+key);
     if(prefix==='m-') context.document.getElementById('m-motivo').value='Corrección';
+    context.document.getElementById(prefix+'seccion').value='???';
     await PH[module][save]();
     assert.equal(calls.filter(c=>c.options?.method==='PUT').length,0);
     completar(context,prefix);
@@ -323,4 +325,34 @@ test('historial: no muestra escala cuando solo cambia null literal por vacío', 
   const table = html.slice(html.indexOf('<table class="hist-table">'), html.indexOf('</table>') + 8);
   assert.ok(table.includes('Año') && table.includes('1999'));
   assert.ok(!table.includes('Escala'));
+});
+
+test('nomenclatura opcional: acepta vacíos y parciales; exige formato solo si hay contenido', () => {
+  const { PH } = setup();
+  const vacia = PH.Nomenclatura.normalizar({});
+  assert.ok(Object.values(vacia).every(v => v === ''));
+  const parcial = PH.Nomenclatura.normalizar({ circunscripcion: '03', manzana: '012 a' });
+  assert.equal(parcial.circunscripcion, '3');
+  assert.equal(parcial.manzana, '12A');
+  assert.equal(parcial.seccion, '');
+  assert.ok(!PH.Nomenclatura.formulario('f-').includes(' required '));
+  assert.ok(PH.Nomenclatura.formulario('c-', null, true).includes('required'));
+  assert.throws(() => PH.Nomenclatura.normalizar({}, true));
+});
+
+test('carga: permite guardar un plano sin nomenclatura', async () => {
+  let submit, body;
+  const { PH, context } = setup(async (url, options) => {
+    if (options?.method === 'POST') body = options.body;
+    return { ok: true, json: async () => options?.method === 'POST' ? { id: 1 } : [] };
+  });
+  context.document.getElementById('form-cargar').addEventListener = (_, handler) => { submit = handler; };
+  PH.CUCargar.inicializar();
+  const archivo = new Blob(['imagen']);
+  archivo.name = 'plano.jpg';
+  context.document.getElementById('f-archivo').files = [archivo];
+  submit({ preventDefault() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(body);
+  for (const key of ['circunscripcion', 'seccion', 'manzana', 'parcela_catastral']) assert.equal(body.get(key), '');
 });

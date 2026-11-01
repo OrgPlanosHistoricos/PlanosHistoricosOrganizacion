@@ -46,10 +46,10 @@ class PlanoDetalle(PlanoRead):
 
 
 class NomenclaturaEntrada(SQLModel):
-    circunscripcion: str
-    seccion: str
-    manzana: str
-    parcela_catastral: str
+    circunscripcion: str = ""
+    seccion: str = ""
+    manzana: str = ""
+    parcela_catastral: str = ""
 
 
 class DatosCatalogacion(DatosPlano):

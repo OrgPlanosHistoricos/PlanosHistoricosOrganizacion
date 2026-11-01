@@ -17,14 +17,14 @@
 
   var ultimaBusqueda = null;
   function inicializar() {
-    document.getElementById('consultar-nomenclatura').innerHTML = window.PH.Nomenclatura.formulario('c-');
+    document.getElementById('consultar-nomenclatura').innerHTML = window.PH.Nomenclatura.formulario('c-', null, true);
     document.getElementById('form-consultar').addEventListener('submit', function(ev) {
       ev.preventDefault();
       buscar();
     });
   }
   function buscar() {
-    try { renderLista(window.PH.Nomenclatura.clave(window.PH.Nomenclatura.leer('c-'))); }
+    try { renderLista(window.PH.Nomenclatura.clave(window.PH.Nomenclatura.leer('c-', true))); }
     catch (e) {
       document.getElementById('consultar-lista').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
     }

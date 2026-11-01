@@ -102,6 +102,8 @@ def _datos_nomenclatura(circ, secc, mza, parc):
 
 
 def _comprobar_unica(session: Session, clave: str, plano_id: Optional[int] = None):
+    if clave is None:
+        return
     existente = session.exec(
         select(Plano).where(Plano.nomenclatura == clave, Plano.activo == True)  # noqa: E712
     ).first()
