@@ -296,7 +296,18 @@ test('modificar catalogación: propuesta de IA renderiza banner y tabla de antes
   const modalHtml = context.document.getElementById('m-modal-comparacion').innerHTML;
   assert.ok(modalHtml.includes('Original'));
   assert.ok(modalHtml.includes('Propuesto por IA'));
-  assert.ok(modalHtml.includes('Aplicar cambios de la IA'));
+  assert.ok(modalHtml.includes('>Aplicar cambios</button>'));
+  assert.ok(modalHtml.includes('<th>Estado</th><th>Aplicar</th>'));
+  assert.ok(modalHtml.includes('id="m-aplicar-titulo" checked'));
+  const titulo = context.document.getElementById('m-titulo');
+  titulo.value = 'Original';
+  const seleccion = context.document.getElementById('m-aplicar-titulo');
+  seleccion.checked = false;
+  PH.CUModificar.aplicarPropuesta();
+  assert.equal(titulo.value, 'Original');
+  seleccion.checked = true;
+  PH.CUModificar.aplicarPropuesta();
+  assert.equal(titulo.value, 'Propuesto por IA');
 });
 
 test('historial: usa eventos, ordena por instante y muestra cambios escapados', async () => {

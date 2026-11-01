@@ -209,6 +209,10 @@
       cont.innerHTML = ''
         + '<img class="thumb" src="' + API.getPreviewUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
         + enlaceArchivo
+        + '<div class="det-actions det-actions-plano">'
+        + '<button class="danger" onclick="PH.CUModificar.eliminar(this)">Eliminar plano</button>'
+        + btnReintentar
+        + '</div>'
         + bannerPropuesta
         + window.PH.Nomenclatura.formulario('m-', d)
         + CAMPOS.map(function(c) {
@@ -225,13 +229,11 @@
         + '<div class="field"><label for="m-motivo">Motivo de la modificación (obligatorio)</label>' +
           '<textarea id="m-motivo" rows="3" required aria-required="true" placeholder="Cuente brevemente por qué se corrige este dato"></textarea></div>'
         + '<div id="m-msg"></div>'
-        + historialHTML
         + '<div class="det-actions">'
         + '<button class="ghost" onclick="PH.CUModificar.cancelar()">Cancelar</button>'
-        + btnReintentar
         + '<button class="primary" onclick="PH.CUModificar.guardar()">Guardar cambios</button>'
-        + '<button class="danger" onclick="PH.CUModificar.eliminar(this)">Eliminar plano</button>'
-        + '</div>';
+        + '</div>'
+        + historialHTML;
 
     } catch (e) {
       cont.innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>';
@@ -262,6 +264,9 @@
         + '<td>' + (valAnt ? esc(valAnt) : '<em style="color:var(--ink-soft);">(vacío)</em>') + '</td>'
         + '<td>' + (valNue ? esc(valNue) : '<em style="color:var(--ink-soft);">(vacío)</em>') + '</td>'
         + '<td>' + tag + '</td>'
+        + '<td class="diff-select">' + (modificado
+          ? '<input type="checkbox" id="m-aplicar-' + c.key + '" checked aria-label="Aplicar valor de la IA: ' + attr(c.label) + '">'
+          : '—') + '</td>'
         + '</tr>';
     }).join('');
 
@@ -271,15 +276,15 @@
       + '<button type="button" class="modal-close" onclick="PH.CUModificar.cerrarComparacion()">&times;</button>'
       + '</div>'
       + '<div class="modal-body">'
-      + '<p>Revisá los datos guardados actualmente frente a la propuesta sugerida por la IA. Si aplicás los cambios, se cargarán en el formulario para que puedas revisarlos y confirmarlos al guardar.</p>'
+      + '<p>Marcá los campos cuyo valor sugerido por la IA querés aplicar. Los campos desmarcados conservarán sus valores actuales. Los cambios seleccionados se cargarán en el formulario para que puedas revisarlos y confirmarlos al guardar.</p>'
       + '<table class="diff-table">'
-      + '<thead><tr><th>Campo</th><th>Valor anterior (guardado)</th><th>Nuevo valor sugerido por la IA</th><th>Estado</th></tr></thead>'
+      + '<thead><tr><th>Campo</th><th>Valor anterior (guardado)</th><th>Nuevo valor sugerido por la IA</th><th>Estado</th><th>Aplicar</th></tr></thead>'
       + '<tbody>' + filas + '</tbody>'
       + '</table>'
       + '</div>'
       + '<div class="modal-footer">'
-      + '<button type="button" class="ghost" onclick="PH.CUModificar.cerrarComparacion()">Conservar actuales (Descartar)</button>'
-      + '<button type="button" class="primary" onclick="PH.CUModificar.aplicarPropuesta()">Aplicar cambios de la IA</button>'
+      + '<button type="button" class="ghost" onclick="PH.CUModificar.cerrarComparacion()">Cancelar</button>'
+      + '<button type="button" class="primary" onclick="PH.CUModificar.aplicarPropuesta()">Aplicar cambios</button>'
       + '</div>'
       + '</div>';
     if (modal.style) modal.style.display = 'flex';
@@ -308,22 +313,28 @@
 
   function aplicarPropuesta() {
     if (!propuestaActual) return;
+    var aplicados = 0;
     CAMPOS.forEach(function(c) {
+      var seleccion = document.getElementById('m-aplicar-' + c.key);
+      if (!seleccion || !seleccion.checked) return;
       var el = document.getElementById('m-' + c.key);
       if (el) {
         var val = propuestaActual[c.key];
         if (c.key === 'escala') val = window.PH.normalizarEscala(val);
         el.value = (val !== undefined && val !== null) ? val : '';
+        aplicados++;
       }
     });
     var motEl = document.getElementById('m-motivo');
-    if (motEl && !motEl.value.trim()) {
-      motEl.value = 'Actualización por reanálisis de IA';
+    if (aplicados && motEl && !motEl.value.trim()) {
+      motEl.value = 'Actualización por análisis de IA';
     }
     cerrarComparacion();
     var msg = document.getElementById('m-msg');
     if (msg) {
-      msg.innerHTML = '<div class="confirm"><strong>Se cargaron los datos sugeridos por la IA en el formulario.</strong> Revisalos y hacé clic en "Guardar cambios" para confirmarlos definitivamente.</div>';
+      msg.innerHTML = aplicados
+        ? '<div class="confirm"><strong>Se cargaron los cambios seleccionados de la IA en el formulario.</strong> Revisalos y hacé clic en "Guardar cambios" para confirmarlos definitivamente.</div>'
+        : '<div class="confirm">No se seleccionaron cambios de la IA. Se conservaron los valores actuales del formulario.</div>';
     }
   }
 

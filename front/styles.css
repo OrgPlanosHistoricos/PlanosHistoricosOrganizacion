@@ -584,6 +584,12 @@ textarea[readonly] {
   margin-top: 16px;
 }
 
+.det-actions-plano {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
 /* ==========================================================================
    Responsive Design
    ========================================================================== */
@@ -733,6 +739,17 @@ button.danger { background: #a92323; color: #fff; border: 1px solid #a92323; }
 button.danger:disabled { opacity: .55; cursor: wait; }
 
 /* Modal de comparación Antes y Después */
+.diff-select {
+  text-align: center;
+}
+
+.diff-select input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
