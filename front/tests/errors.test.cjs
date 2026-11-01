@@ -263,7 +263,7 @@ test('revisión y modificación: envían nomenclatura normalizada y bloquean dat
     await PH[module][save]();
     const put=calls.find(c=>c.options?.method==='PUT');
     assert.ok(put);
-    assert.equal(Object.hasOwn(JSON.parse(put.options.body), 'texto_extraido'), false);
+    assert.equal(Object.hasOwn(JSON.parse(put.options.body), 'texto_extraido'), prefix === 'm-');
     assert.equal(JSON.parse(put.options.body).manzana,'12A');
     assert.equal(JSON.parse(put.options.body).parcela_catastral,'5B');
   }

@@ -199,6 +199,29 @@ class NomenclaturaTests(unittest.TestCase):
         self.assertEqual(res.json()["texto_extraido"], original)
         self.assertEqual(res.json()["titulo"], "Título corregido")
 
+    def test_modificar_acepta_texto_ia_seleccionado_y_registra_historial(self):
+        for aceptar in (False, True):
+            with self.subTest(aceptar=aceptar):
+                plano_id = self.create(data={}).json()["id"]
+                with Session(self.engine) as db:
+                    plano = db.get(Plano, plano_id)
+                    plano.texto_extraido = "Original"
+                    plano.ia_estado = EstadoIA.completado
+                    plano.ia_propuesta = json.dumps({"texto_extraido": "Nuevo texto IA"})
+                    db.add(plano)
+                    db.commit()
+                texto = "Nuevo texto IA" if aceptar else "Original"
+                res = self.client.put(f"/planos/{plano_id}/modificar", json={
+                    "motivo": "Actualización por análisis de IA", "texto_extraido": texto
+                })
+                self.assertEqual(res.status_code, 200, res.text)
+                self.assertEqual(res.json()["texto_extraido"], texto)
+                detalle = self.client.get(f"/planos/{plano_id}").json()
+                self.assertEqual(detalle["texto_extraido"], texto)
+                evento = detalle["eventos"][-1]
+                self.assertEqual(json.loads(evento["valores_anteriores"])["texto_extraido"], "Original")
+                self.assertEqual(json.loads(evento["valores_nuevos"])["texto_extraido"], texto)
+
     def test_registros_anteriores_se_conservan_y_se_completan(self):
         with Session(self.engine) as db:
             viejo = Plano(

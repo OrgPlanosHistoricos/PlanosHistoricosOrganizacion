@@ -382,7 +382,10 @@
 
     var datos = {};
     CAMPOS.forEach(function(c) {
-      if (c.readonly) return;
+      if (c.readonly) {
+        datos[c.key] = document.getElementById('m-' + c.key).value || null;
+        return;
+      }
       var v = document.getElementById('m-' + c.key).value.trim();
       datos[c.key] = v || null;
     });

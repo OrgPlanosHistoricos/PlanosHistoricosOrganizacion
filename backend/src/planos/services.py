@@ -42,6 +42,7 @@ FORMATOS_PDF = settings.FORMATOS_PDF
 FORMATOS_ACEPTADOS = settings.FORMATOS_ACEPTADOS
 
 CAMPOS_AUDITORIA = (
+    "texto_extraido",
     "circunscripcion",
     "seccion",
     "manzana",
@@ -370,6 +371,16 @@ def modificar_plano(
     plano = _obtener_plano(session, plano_id)
     valores_ant = _snapshot_plano(plano)
     _aplicar_datos(plano, datos, session)
+    # La transcripción solo se actualiza aceptando el valor de la propuesta IA.
+    if plano.ia_propuesta and "texto_extraido" in datos.model_fields_set:
+        try:
+            propuesta = json.loads(plano.ia_propuesta)
+        except (TypeError, ValueError):
+            propuesta = {}
+        if isinstance(propuesta, dict) and "texto_extraido" in propuesta:
+            texto_ia = propuesta["texto_extraido"] or None
+            if datos.texto_extraido == texto_ia:
+                plano.texto_extraido = texto_ia
     plano.ia_propuesta = None
     valores_nue = _snapshot_plano(plano)
     session.add(plano)
