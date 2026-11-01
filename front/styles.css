@@ -588,6 +588,7 @@ textarea[readonly] {
 .actions,
 .det-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 10px;
   margin-top: 16px;
 }
@@ -596,12 +597,6 @@ textarea[readonly] {
   justify-content: flex-start;
   flex-wrap: wrap;
   margin-bottom: 16px;
-}
-
-.actions > button.primary,
-.det-actions > button.primary,
-.modal-footer > button.primary {
-  margin-left: auto;
 }
 
 #btn-cargar {
@@ -823,7 +818,7 @@ button.danger:disabled { opacity: .55; cursor: wait; }
 }
 .modal-footer {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   padding: 16px 20px;
   border-top: 1px solid var(--border);

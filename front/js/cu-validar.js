@@ -167,9 +167,9 @@
               '<input type="' + type + '"' + (type === 'number' ? ' min="1" step="1"' : '') + ' id="v-' + c.key + '" value="' + attr(val) + '"></div>';
           }).join('')
         + '<div class="actions">'
-        + '<button class="ghost" onclick="PH.CUValidar.cancelar()">Cancelar</button>'
         + btnReintentarForm
         + '<button class="danger" onclick="PH.CUValidar.eliminar(this)">Eliminar plano</button>'
+        + '<button class="ghost" onclick="PH.CUValidar.cancelar()">Cancelar</button>'
         + '<button class="primary" onclick="PH.CUValidar.confirmar()">Confirmar e indexar</button>'
         + '</div>'
         + '</div>';
