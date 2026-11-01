@@ -377,3 +377,38 @@ test('carga: permite guardar un plano sin nomenclatura', async () => {
   assert.ok(body);
   for (const key of ['circunscripcion', 'seccion', 'manzana', 'parcela_catastral']) assert.equal(body.get(key), '');
 });
+
+test('consulta: filtros de calle, altura, expediente, año y parcela se combinan', async () => {
+  const docs = [
+    { id: 1, estado: 'validado', direccion_referencia: 'San Martín 620', expediente: 'EXP-1936-045', anio: 1936, parcela_catastral: '5B' },
+    { id: 2, estado: 'validado', direccion_referencia: 'San Martin 6200', expediente: 'EXP-1936-046', anio: 1936, parcela_catastral: '5B' },
+    { id: 3, estado: 'validado', direccion_referencia: 'Calle 47 N.º 620', expediente: 'EXP-2000', anio: 2000, parcela_catastral: '2' },
+    { id: 4, estado: 'validado', ubicacion: 'Belgrano 620', anio: null },
+    { id: 5, estado: 'validado', direccion_referencia: 'Calle 47', anio: 1947 },
+    { id: 6, estado: 'pendiente', direccion_referencia: 'San Martín 620', anio: 1936 }
+  ];
+  const { PH, context, elements } = setup(async () => ({ ok: true, json: async () => docs }));
+  PH.CUConsultar.inicializar();
+  await PH.CUConsultar.renderLista();
+  const ids = () => [...elements['consultar-lista'].innerHTML.matchAll(/seleccionar\((\d+)\)/g)].map(m => Number(m[1]));
+  completar(context, 'c-', { calle: 'san martin' });
+  PH.CUConsultar.buscar();
+  assert.deepEqual(ids(), [1, 2]);
+  completar(context, 'c-', { numero: '00620', expediente: '1936-045', anio: '193', parcela_catastral: '5b' });
+  PH.CUConsultar.buscar();
+  assert.deepEqual(ids(), [1]);
+  completar(context, 'c-', { calle: '', numero: '', expediente: '', anio: '', parcela_catastral: '' });
+  completar(context, 'c-', { calle: 'calle 47', numero: '620' });
+  PH.CUConsultar.buscar();
+  assert.deepEqual(ids(), [3]);
+  completar(context, 'c-', { calle: 'belgrano' });
+  PH.CUConsultar.buscar();
+  assert.deepEqual(ids(), [4]);
+  completar(context, 'c-', { calle: 'calle 47', numero: '47' });
+  PH.CUConsultar.buscar();
+  assert.deepEqual(ids(), []);
+  assert.ok(elements['consultar-lista'].innerHTML.includes('criterios de búsqueda'));
+  completar(context, 'c-', { calle: '', numero: '', anio: 'null' });
+  PH.CUConsultar.buscar();
+  assert.deepEqual(ids(), []);
+});

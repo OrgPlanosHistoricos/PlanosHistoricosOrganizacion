@@ -68,8 +68,14 @@
 
     <section id="view-consultar" class="view">
       <h1>Consultar planos históricos</h1>
-      <p class="lede">Filtre los planos mientras escribe los datos catastrales: Circ., Secc., Mza. y Parc.</p>
+      <p class="lede">Busque por calle, número, expediente, año o nomenclatura catastral. Los resultados se actualizan mientras escribe.</p>
       <form id="form-consultar" class="card">
+        <div class="grid2">
+          <div class="field"><label for="c-calle">Calle</label><input type="search" id="c-calle" placeholder="Ej.: San Martín o Calle 47"></div>
+          <div class="field"><label for="c-numero">Número</label><input type="search" id="c-numero" placeholder="Ej.: 620"></div>
+          <div class="field"><label for="c-expediente">Expediente</label><input type="search" id="c-expediente" placeholder="Ej.: EXP-1936"></div>
+          <div class="field"><label for="c-anio">Año</label><input type="search" inputmode="numeric" id="c-anio" placeholder="Ej.: 1936"></div>
+        </div>
         <div id="consultar-nomenclatura"></div>
 
       </form>

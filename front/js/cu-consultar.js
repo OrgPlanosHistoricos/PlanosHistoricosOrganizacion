@@ -17,6 +17,7 @@
 
   var camposCatastrales = ['circunscripcion', 'seccion', 'manzana', 'parcela_catastral'];
   var filtros = ['', '', '', ''];
+  var otrosFiltros = { calle: '', numero: '', expediente: '', anio: '' };
   var catalogo = [];
   var resultados = [];
   var pagina = 1;
@@ -26,6 +27,22 @@
   function normalizarFiltro(valor, indice) {
     var texto = String(valor || '').trim().toUpperCase().replace(/\s+/g, '');
     return indice === 1 ? texto : texto.replace(/^0+(?=[0-9])/, '');
+  }
+
+  function normalizarTexto(valor) {
+    return String(valor === null || valor === undefined ? '' : valor).normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+  }
+
+  function direccionPartes(d) {
+    var direccion = String(d.direccion_referencia || d.ubicacion || '').trim();
+    var partes = /^(.*?)\s+(?:n[.º°o]*|nro\.?|n[uú]mero|#)\s*(\d+[a-z]?)\b/i.exec(direccion);
+    if (!partes) {
+      partes = /^(.+?)\s+(\d+[a-z]?)\s*$/i.exec(direccion);
+      // En "Calle 47" el número identifica la calle, no la altura.
+      if (partes && /^(calle|ruta|avenida|av\.?)$/i.test(partes[1].trim())) partes = null;
+    }
+    return { calle: normalizarTexto(partes ? partes[1] : direccion), numero: partes ? partes[2].toLowerCase().replace(/^0+(?=\d)/, '') : '' };
   }
 
   function inicializar() {
@@ -46,6 +63,10 @@
     filtros = camposCatastrales.map(function(c, i) {
       return normalizarFiltro(document.getElementById('c-' + c).value, i);
     });
+    Object.keys(otrosFiltros).forEach(function(c) {
+      otrosFiltros[c] = normalizarTexto(document.getElementById('c-' + c).value);
+    });
+    otrosFiltros.numero = otrosFiltros.numero.replace(/^0+(?=\d)/, '');
     pagina = 1;
     limpiarDetalle();
     filtrar();
@@ -53,9 +74,13 @@
 
   function filtrar() {
     resultados = catalogo.filter(function(d) {
+      var direccion = direccionPartes(d);
       return filtros.every(function(filtro, i) {
         return !filtro || normalizarFiltro(d[camposCatastrales[i]], i).startsWith(filtro);
-      });
+      }) && (!otrosFiltros.calle || direccion.calle.includes(otrosFiltros.calle))
+        && (!otrosFiltros.numero || direccion.numero === otrosFiltros.numero)
+        && (!otrosFiltros.expediente || normalizarTexto(d.expediente).includes(otrosFiltros.expediente))
+        && (!otrosFiltros.anio || normalizarTexto(d.anio).startsWith(otrosFiltros.anio));
     });
     pagina = Math.min(pagina, Math.max(1, Math.ceil(resultados.length / porPagina)));
     dibujarLista();
@@ -65,8 +90,8 @@
     var cont = document.getElementById('consultar-lista');
     var paginador = document.getElementById('consultar-paginacion');
     if (!resultados.length) {
-      cont.innerHTML = '<div class="empty">' + (filtros.some(Boolean)
-        ? 'No se encontraron planos catalogados con esos datos catastrales.'
+      cont.innerHTML = '<div class="empty">' + (filtros.some(Boolean) || Object.values(otrosFiltros).some(Boolean)
+        ? 'No se encontraron planos catalogados con esos criterios de búsqueda.'
         : 'Todavía no hay planos catalogados.') + '</div>';
       paginador.innerHTML = '';
       limpiarDetalle();
@@ -139,6 +164,7 @@
         + '<div class="field"><label>Título</label><div>' + esc(d.titulo) + '</div></div>'
         + '<div class="field"><label>Arquitecto</label><div>' + esc(d.arquitecto) + '</div></div>'
         + '<div class="field"><label>Ubicación (extraída)</label><div>' + esc(d.ubicacion) + '</div></div>'
+        + '<div class="field"><label>Dirección de referencia</label><div>' + esc(d.direccion_referencia) + '</div></div>'
         + '<div class="field"><label>Año</label><div>' + esc(d.anio) + '</div></div>'
         + '<div class="field"><label>Escala</label><div>' + esc(d.escala) + '</div></div>'
         + '<div class="field"><label>Tipo de plano</label><div>' + esc(d.tipo_de_plano) + '</div></div>'
