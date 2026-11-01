@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import List, Optional
 import re
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from sqlmodel import SQLModel
 
 from src.models import DatosPlano, EstadoIA, PlanoBase
@@ -77,6 +77,6 @@ class PlanoValidar(DatosCatalogacion, NomenclaturaEntrada):
 
 class PlanoModificar(DatosCatalogacion, NomenclaturaEntrada):
     parcela: str = ""
-    motivo: str
+    motivo: str = Field(max_length=180)
     usuario_id: str = "anonimo"
 

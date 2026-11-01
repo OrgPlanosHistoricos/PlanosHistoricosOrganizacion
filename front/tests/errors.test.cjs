@@ -329,6 +329,32 @@ test('historial: usa eventos, ordena por instante y muestra cambios escapados', 
   assert.ok(!table.includes('1930'));
 });
 
+test('historial: pagina de a diez sin alterar el formulario', async () => {
+  const doc = { id: 1, eventos: Array.from({ length: 21 }, (_, i) => ({
+    id: i + 1, fecha: '2026-11-01T10:00:00Z', motivo: 'evento-' + (i + 1)
+  })) };
+  const { PH, elements } = setup(async () => ({ ok: true, json: async () => doc }));
+  await PH.CUModificar.seleccionar(1);
+  await PH.CUModificar.renderDetalle();
+  const html = elements['modificar-detalle'].innerHTML;
+  assert.equal((html.match(/class="ghost hist-toggle"/g) || []).length, 10);
+  assert.ok(html.includes('Página 1 de 3'));
+  assert.ok(html.includes('evento-21') && !html.includes('>evento-11<'));
+  elements['m-historial'] = {};
+  elements['m-titulo'] = { value: 'edición pendiente' };
+  PH.CUModificar.cambiarPaginaHistorial(1);
+  const segunda = elements['m-historial'].outerHTML;
+  assert.ok(segunda.includes('Página 2 de 3'));
+  assert.ok(segunda.includes('>evento-11<') && !segunda.includes('evento-21'));
+  PH.CUModificar.cambiarPaginaHistorial(1);
+  const ultima = elements['m-historial'].outerHTML;
+  assert.equal((ultima.match(/class="ghost hist-toggle"/g) || []).length, 1);
+  assert.ok(ultima.includes('Página 3 de 3'));
+  PH.CUModificar.cambiarPaginaHistorial(1);
+  assert.ok(elements['m-historial'].outerHTML.includes('Página 3 de 3'));
+  assert.equal(elements['m-titulo'].value, 'edición pendiente');
+});
+
 test('escala: acepta relaciones positivas y casos especiales; rechaza texto arbitrario', () => {
   const { PH } = setup();
   for (const valor of [null, '', '1:100', ' 1 : 50 ', '2:1', '1:2,5', 'Sin escala', 'Escalas varias']) {

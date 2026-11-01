@@ -169,8 +169,8 @@
         + '<div class="actions">'
         + '<button class="ghost" onclick="PH.CUValidar.cancelar()">Cancelar</button>'
         + btnReintentarForm
-        + '<button class="primary" onclick="PH.CUValidar.confirmar()">Confirmar e indexar</button>'
         + '<button class="danger" onclick="PH.CUValidar.eliminar(this)">Eliminar plano</button>'
+        + '<button class="primary" onclick="PH.CUValidar.confirmar()">Confirmar e indexar</button>'
         + '</div>'
         + '</div>';
 

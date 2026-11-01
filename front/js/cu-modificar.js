@@ -134,6 +134,43 @@
     renderLista();
   }
 
+  var paginaHistorial = 1;
+
+  function crearHistorial() {
+      var historial = planoActual.eventos || planoActual.historial || [];
+      var paginas = Math.max(1, Math.ceil(historial.length / 10));
+      paginaHistorial = Math.max(1, Math.min(paginaHistorial, paginas));
+      return historial.length
+        ? '<div class="hist" id="m-historial"><h3>Historial de cambios</h3><div class="hist-scroll">' +
+          '<table class="hist-table"><thead><tr><th scope="col">Fecha</th><th scope="col">Hora</th>' +
+          '<th scope="col">Usuario</th><th scope="col">Motivo</th><th scope="col">Detalle</th></tr></thead><tbody>' +
+          historial.slice().sort(function(a, b) {
+            return (Date.parse(b.fecha) || 0) - (Date.parse(a.fecha) || 0) || (b.id || 0) - (a.id || 0);
+          }).slice((paginaHistorial - 1) * 10, paginaHistorial * 10).map(function(h, indice) {
+            var fecha = new Date(h.fecha);
+            var valida = !isNaN(fecha.getTime());
+            return '<tr><td>' + (valida ? esc(fecha.toLocaleDateString('es-AR')) : '—') +
+              '</td><td>' + (valida ? esc(fecha.toLocaleTimeString('es-AR', { hour12: false })) : '—') +
+              '</td><td>' + textoHistorial(h.usuario_id) + '</td><td>' + textoHistorial(h.motivo) + '</td><td>' +
+              '<button type="button" class="ghost hist-toggle" aria-expanded="false" aria-controls="hist-detalle-' + indice + '" onclick="PH.CUModificar.alternarHistorial(this)">Ver detalle</button></td></tr>' +
+              '<tr id="hist-detalle-' + indice + '" hidden><td colspan="5" class="hist-detail">' +
+              detalleCambios(h) + '</td></tr>';
+          }).join('') + '</tbody></table></div>' +
+          '<div class="pagination">Página ' + paginaHistorial + ' de ' + paginas + ' · ' + historial.length + ' cambios</div>' +
+          '<div class="pagination-actions"><button type="button" class="ghost" onclick="PH.CUModificar.cambiarPaginaHistorial(-1)"' + (paginaHistorial === 1 ? ' disabled' : '') + '>Anterior</button>' +
+          '<button type="button" class="ghost" onclick="PH.CUModificar.cambiarPaginaHistorial(1)"' + (paginaHistorial === paginas ? ' disabled' : '') + '>Siguiente</button></div></div>'
+        : '';
+
+  }
+
+  function cambiarPaginaHistorial(paso) {
+    if (!planoActual) return;
+    var cont = document.getElementById('m-historial');
+    if (!cont) return;
+    paginaHistorial += paso;
+    cont.outerHTML = crearHistorial();
+  }
+
   async function renderDetalle() {
     var cont = document.getElementById('modificar-detalle');
 
@@ -155,24 +192,8 @@
         }
       }
 
-      var historial = d.eventos || d.historial || [];
-      var historialHTML = historial.length
-        ? '<div class="hist"><h3>Historial de cambios</h3><div class="hist-scroll">' +
-          '<table class="hist-table"><thead><tr><th scope="col">Fecha</th><th scope="col">Hora</th>' +
-          '<th scope="col">Usuario</th><th scope="col">Motivo</th><th scope="col">Detalle</th></tr></thead><tbody>' +
-          historial.slice().sort(function(a, b) {
-            return (Date.parse(b.fecha) || 0) - (Date.parse(a.fecha) || 0) || (b.id || 0) - (a.id || 0);
-          }).map(function(h, indice) {
-            var fecha = new Date(h.fecha);
-            var valida = !isNaN(fecha.getTime());
-            return '<tr><td>' + (valida ? esc(fecha.toLocaleDateString('es-AR')) : '—') +
-              '</td><td>' + (valida ? esc(fecha.toLocaleTimeString('es-AR', { hour12: false })) : '—') +
-              '</td><td>' + textoHistorial(h.usuario_id) + '</td><td>' + textoHistorial(h.motivo) + '</td><td>' +
-              '<button type="button" class="ghost hist-toggle" aria-expanded="false" aria-controls="hist-detalle-' + indice + '" onclick="PH.CUModificar.alternarHistorial(this)">Ver detalle</button></td></tr>' +
-              '<tr id="hist-detalle-' + indice + '" hidden><td colspan="5" class="hist-detail">' +
-              detalleCambios(h) + '</td></tr>';
-          }).join('') + '</tbody></table></div></div>'
-        : '';
+      paginaHistorial = 1;
+      var historialHTML = crearHistorial();
 
       var esPdf = d.content_type === 'application/pdf' || (d.nombre_original && d.nombre_original.toLowerCase().endsWith('.pdf'));
       var enlaceArchivo = '<div style="margin: 6px 0 12px 0;">'
@@ -227,7 +248,8 @@
               '<input type="' + type + '"' + (type === 'number' ? ' min="1" step="1"' : '') + ' id="m-' + c.key + '" value="' + attr(val) + '"></div>';
           }).join('')
         + '<div class="field"><label for="m-motivo">Motivo de la modificación (obligatorio)</label>' +
-          '<textarea id="m-motivo" rows="3" required aria-required="true" placeholder="Cuente brevemente por qué se corrige este dato"></textarea></div>'
+          '<textarea id="m-motivo" rows="3" maxlength="180" required aria-required="true" aria-describedby="m-motivo-contador" oninput="PH.CUModificar.actualizarContadorMotivo()" placeholder="Cuente brevemente por qué se corrige este dato"></textarea>' +
+          '<small id="m-motivo-contador" class="motivo-contador">0 / 180 caracteres</small></div>'
         + '<div id="m-msg"></div>'
         + '<div class="det-actions">'
         + '<button class="ghost" onclick="PH.CUModificar.cancelar()">Cancelar</button>'
@@ -311,6 +333,12 @@
     }
   }
 
+  function actualizarContadorMotivo() {
+    var motivo = document.getElementById('m-motivo');
+    var contador = document.getElementById('m-motivo-contador');
+    if (motivo && contador) contador.textContent = motivo.value.length + ' / 180 caracteres';
+  }
+
   function aplicarPropuesta() {
     if (!propuestaActual) return;
     var aplicados = 0;
@@ -329,6 +357,7 @@
     if (aplicados && motEl && !motEl.value.trim()) {
       motEl.value = 'Actualización por análisis de IA';
     }
+    actualizarContadorMotivo();
     cerrarComparacion();
     var msg = document.getElementById('m-msg');
     if (msg) {
@@ -342,6 +371,10 @@
     if (!seleccionadoId) return;
 
     var motivo = document.getElementById('m-motivo').value.trim();
+    if (document.getElementById('m-motivo').value.length > 180) {
+      document.getElementById('m-msg').innerHTML = '<div class="error">El motivo no puede superar los 180 caracteres.</div>';
+      return;
+    }
     if (!motivo) {
       document.getElementById('m-msg').innerHTML = '<div class="error">El motivo del cambio es obligatorio para guardar.</div>';
       return;
@@ -455,10 +488,12 @@
   window.PH.CUModificar = {
     renderLista: renderLista,
     alternarHistorial: alternarHistorial,
+    cambiarPaginaHistorial: cambiarPaginaHistorial,
     renderDetalle: renderDetalle,
     seleccionar: seleccionar,
     cancelar: cancelar,
     guardar: guardar,
+    actualizarContadorMotivo: actualizarContadorMotivo,
     reintentar: reintentar,
     abrirComparacion: abrirComparacion,
     cerrarComparacion: cerrarComparacion,
