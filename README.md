@@ -637,7 +637,7 @@ La carga exige únicamente el archivo. Circunscripción, sección, manzana, parc
 
 - **Formato admitido**: Circunscripción numérica positiva, sección con letras A–Z, y manzana/parcela con número positivo y letras opcionales al final. Cada componente tiene un límite técnico de 64 caracteres.
 - **Normalización**: Se normalizan espacios, mayúsculas y ceros iniciales: `03-k-012 a-05 b` se guarda y busca como `3-K-12A-5B`.
-- **Búsqueda exacta**: La consulta en el catálogo es estricta por clave catastral; no realiza búsquedas parciales por expediente o año. Las colas de carga/revisión y las listas de modificación muestran sus registros sin requerir una búsqueda previa.
+- **Consulta dinámica**: La pestaña Consultar muestra los planos catalogados en páginas de cinco. Al escribir en los campos catastrales, filtra por el inicio de cada componente y combina los filtros sin exigir los cuatro datos. La interfaz descarga el catálogo y filtra/pagina localmente; no filtra por expediente ni año. El parámetro `q` de la API conserva la búsqueda exacta por nomenclatura completa.
 - **Migración de planos históricos**: Al iniciar la API, `init_db()` añade las columnas requeridas y el índice único preservando planos anteriores, los cuales quedan con nomenclatura pendiente hasta su revisión o modificación manual.
 
 ### 7.2 Indicador de Conexión a la Base de Datos

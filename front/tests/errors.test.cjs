@@ -167,17 +167,38 @@ test('carga: nomenclatura inválida no hace solicitudes y conserva el archivo', 
   assert.ok(elements['cargar-msgs'].innerHTML.includes(PH.Errores.mensajes.nomenclatura));
   assert.equal(elements['f-archivo'].files[0],file);
 });
-test('consulta: exige los cuatro campos y envía únicamente la nomenclatura exacta', async () => {
-  const calls=[];
-  const { PH, context, elements }=setup(async url=>{calls.push(url);return {ok:true,json:async()=>[]};});
+test('consulta: lista cinco planos, pagina y filtra en vivo por componentes catastrales', async () => {
+  const calls = [];
+  const docs = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, estado: 'validado', circunscripcion: i < 7 ? '3' : '4', seccion: 'K', manzana: String(i + 1), parcela_catastral: '5B' }));
+  docs.push({ id: 99, estado: 'pendiente', circunscripcion: '3' });
+  let input;
+  const { PH, context, elements } = setup(async url => { calls.push(url); return { ok: true, json: async () => docs }; });
+  context.document.getElementById('form-consultar').addEventListener = (event, handler) => { if (event === 'input') input = handler; };
   PH.CUConsultar.inicializar();
-  PH.CUConsultar.buscar();
-  assert.equal(calls.length,0);
-  completar(context,'c-');
-  PH.CUConsultar.buscar();
-  await new Promise(resolve=>setImmediate(resolve));
-  assert.deepEqual(calls,['/api/planos?q=3-K-12A-5B']);
-  assert.ok(elements['consultar-lista'].innerHTML.includes('No se encontró'));
+  await PH.CUConsultar.renderLista();
+  assert.equal((elements['consultar-lista'].innerHTML.match(/class="row/g) || []).length, 5);
+  assert.ok(elements['consultar-paginacion'].innerHTML.includes('1–5 de 12'));
+  PH.CUConsultar.cambiarPagina(1);
+  assert.ok(elements['consultar-lista'].innerHTML.includes('seleccionar(6)'));
+  assert.ok(elements['consultar-paginacion'].innerHTML.includes('6–10 de 12'));
+  PH.CUConsultar.cambiarPagina(1);
+  assert.equal((elements['consultar-lista'].innerHTML.match(/class="row/g) || []).length, 2);
+  assert.ok(elements['consultar-paginacion'].innerHTML.includes('11–12 de 12'));
+  completar(context, 'c-', { circunscripcion: '03' });
+  input();
+  assert.ok(elements['consultar-paginacion'].innerHTML.includes('1–5 de 7'));
+  completar(context, 'c-', { manzana: '01' });
+  input();
+  assert.equal((elements['consultar-lista'].innerHTML.match(/class="row/g) || []).length, 1);
+  assert.ok(elements['consultar-lista'].innerHTML.includes('seleccionar(1)'));
+  completar(context, 'c-', { seccion: 'z' });
+  input();
+  assert.ok(elements['consultar-lista'].innerHTML.includes('No se encontraron'));
+  assert.equal(elements['consultar-paginacion'].innerHTML, '');
+  completar(context, 'c-', { circunscripcion: '', seccion: '', manzana: '', parcela_catastral: '' });
+  input();
+  assert.ok(elements['consultar-paginacion'].innerHTML.includes('1–5 de 12'));
+  assert.deepEqual(calls, ['/api/planos']);
 });
 test('API: envía los cuatro campos de carga y conserva los opcionales vacíos', async () => {
   let body;

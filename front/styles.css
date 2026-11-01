@@ -456,6 +456,23 @@ button.ghost:hover {
   overflow-y: auto;
 }
 
+.pagination {
+  margin-top: 12px;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.pagination-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pagination-actions button:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
 .row {
   min-width: 0;
   flex-shrink: 0;

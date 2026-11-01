@@ -68,14 +68,14 @@
 
     <section id="view-consultar" class="view">
       <h1>Consultar planos históricos</h1>
-      <p class="lede">Busque por la nomenclatura catastral completa: Circ., Secc., Mza. y Parc.</p>
+      <p class="lede">Filtre los planos mientras escribe los datos catastrales: Circ., Secc., Mza. y Parc.</p>
       <form id="form-consultar" class="card">
         <div id="consultar-nomenclatura"></div>
-        <button class="primary" id="c-buscar" type="submit">Buscar plano</button>
+
       </form>
       <div class="split">
-        <div><div id="consultar-lista" class="list"></div></div>
-        <div id="consultar-detalle"><div class="empty">Los resultados de su búsqueda aparecerán acá.</div></div>
+        <div><div id="consultar-lista" class="list"></div><nav id="consultar-paginacion" class="pagination" aria-label="Páginas de planos"></nav></div>
+        <div id="consultar-detalle"><div class="empty">Seleccione un plano de la lista para ver sus datos.</div></div>
       </div>
     </section>
 
