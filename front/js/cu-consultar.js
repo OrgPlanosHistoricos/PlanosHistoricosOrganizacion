@@ -8,7 +8,7 @@
   var seleccionadoId = null;
 
   function esc(s) {
-    return (s === undefined || s === null || s === '') ? 's/d' :
+    return (s === undefined || s === null || s === '') ? '-' :
       String(s).replace(/[&<>]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
   }
   function tituloDoc(d) {
@@ -52,7 +52,7 @@
       cont.innerHTML = resultados.map(function(d) {
         var sel = d.id === seleccionadoId ? ' sel' : '';
         var badge = d.estado === 'sin_ubicacion'
-          ? '<span class="badge sin_ubicacion">Sin ubicación</span>'
+          ? '<span class="badge sin_ubicacion">Sin parcela asignada</span>'
           : '<span class="badge validado">Validado</span>';
         return '<button class="row' + sel + '" onclick="PH.CUConsultar.seleccionar(' + d.id + ')">' +
           '<div class="t">' + esc(tituloDoc(d)) + '</div>' +
@@ -87,7 +87,7 @@
         + '<div class="field"><label>Nomenclatura catastral</label><div>' + esc(window.PH.Nomenclatura.titulo(d)) + '</div></div>'
         + '<div class="field"><label>Título</label><div>' + esc(d.titulo) + '</div></div>'
         + '<div class="field"><label>Arquitecto</label><div>' + esc(d.arquitecto) + '</div></div>'
-        + '<div class="field"><label>Ubicación (leída)</label><div>' + esc(d.ubicacion) + '</div></div>'
+        + '<div class="field"><label>Ubicación (extraída)</label><div>' + esc(d.ubicacion) + '</div></div>'
         + '<div class="field"><label>Año</label><div>' + esc(d.anio) + '</div></div>'
         + '<div class="field"><label>Escala</label><div>' + esc(d.escala) + '</div></div>'
         + '<div class="field"><label>Tipo de plano</label><div>' + esc(d.tipo_de_plano) + '</div></div>'

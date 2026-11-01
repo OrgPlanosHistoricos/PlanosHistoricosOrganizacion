@@ -32,7 +32,7 @@
         <form id="form-cargar">
           <div class="filebox">
             <label for="f-archivo">Archivo del plano — JPG, PNG, WEBP o PDF</label>
-            <input type="file" id="f-archivo" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf">
+            <input type="file" id="f-archivo" class="file-empty" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf">
           </div>
           <div id="cargar-msgs" role="status" aria-live="polite"></div>
           <div id="cargar-nomenclatura"></div>
@@ -49,7 +49,7 @@
 
     <section id="view-validar" class="view">
       <h1>Validar y catalogar</h1>
-      <p class="lede">Revise la nomenclatura y los datos leídos automáticamente. Corríjalos si hace falta antes de catalogar.</p>
+      <p class="lede">Revise la nomenclatura y los datos del plano. Complete o corrija la información antes de catalogar.</p>
       <div class="split">
         <div><div id="validar-lista" class="list"></div></div>
         <div id="validar-detalle"><div class="empty">Elija un plano pendiente de la lista para revisarlo.</div></div>
@@ -58,7 +58,7 @@
 
     <section id="view-modificar" class="view">
       <h1>Modificar catalogación</h1>
-      <p class="lede">Corrija los datos de un plano ya validado. Toda modificación requiere un motivo.</p>
+      <p class="lede">Modifique los datos de un plano previamente validado.</p>
       <div class="split">
         <div><div id="modificar-lista" class="list"></div></div>
         <div id="modificar-detalle"><div class="empty">Elija un plano catalogado para modificarlo.</div></div>

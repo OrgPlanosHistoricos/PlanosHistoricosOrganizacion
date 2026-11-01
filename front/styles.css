@@ -222,6 +222,27 @@ button:focus,
   outline-offset: 1px;
 }
 
+#v-texto_extraido,
+#m-texto_extraido,
+#m-motivo {
+  resize: none;
+  field-sizing: content;
+  line-height: 1.5;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+#v-texto_extraido,
+#m-texto_extraido {
+  min-height: calc(1.5em + 20px);
+  max-height: calc(18em + 20px);
+}
+
+#m-motivo {
+  min-height: calc(4.5em + 20px);
+  max-height: calc(9em + 20px);
+}
+
 .field {
   margin-bottom: 14px;
 }
@@ -241,6 +262,23 @@ button:focus,
 
 .filebox input {
   margin-top: 8px;
+}
+
+.filebox input.file-empty {
+  color: transparent;
+  width: 224px;
+  font-size: 0;
+}
+
+.filebox input::file-selector-button {
+  color: #000;
+}
+
+.filebox input.file-empty::file-selector-button {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  font: 14px Arial, sans-serif;
 }
 
 /* ==========================================================================
@@ -285,6 +323,10 @@ button.ghost:hover {
    ========================================================================== */
 
 .error {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
   background: var(--brick-soft);
   color: var(--brick);
   border: 1px solid var(--brick);
@@ -734,6 +776,89 @@ button.danger:disabled { opacity: .55; cursor: wait; }
   border-top: 1px solid var(--border);
   background: var(--paper-2);
 }
+.hist-scroll {
+  max-width: 100%;
+  margin-bottom: 16px;
+}
+
+.hist-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.hist-table th,
+.hist-table td {
+  border: 1px solid var(--border);
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.hist-table th {
+  background: var(--paper-2);
+  overflow-wrap: normal;
+  white-space: normal;
+}
+
+.hist-table th:nth-child(1) { width: 18%; }
+.hist-table th:nth-child(2) { width: 16%; }
+.hist-table th:nth-child(3) { width: 17%; }
+.hist-table th:nth-child(4) { width: 29%; }
+.hist-table th:nth-child(5) { width: 20%; }
+
+.hist-table td:nth-child(-n+2) {
+  white-space: normal;
+}
+
+.hist-table td:nth-child(n+3) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.hist-table td.hist-detail {
+  white-space: normal;
+  background: var(--paper-2);
+}
+
+.hist-detail p {
+  margin: 6px 0 12px;
+}
+
+.hist-change {
+  padding: 10px 0;
+}
+
+.hist-change + .hist-change {
+  border-top: 1px solid var(--border);
+}
+
+.hist-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.hist-values > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hist-values span {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+button.hist-toggle {
+  max-width: 100%;
+  padding: 5px 7px;
+  font-size: 12px;
+  white-space: normal;
+}
+
 .diff-table {
   width: 100%;
   border-collapse: collapse;

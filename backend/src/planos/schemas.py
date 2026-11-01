@@ -1,7 +1,9 @@
 """Esquemas de entrada y salida del recurso /planos."""
 from datetime import datetime
 from typing import List, Optional
+import re
 
+from pydantic import field_validator
 from sqlmodel import SQLModel
 
 from src.models import DatosPlano, EstadoIA, PlanoBase
@@ -50,12 +52,30 @@ class NomenclaturaEntrada(SQLModel):
     parcela_catastral: str
 
 
-class PlanoValidar(DatosPlano, NomenclaturaEntrada):
+class DatosCatalogacion(DatosPlano):
+    """Validación de entradas humanas sin restringir lecturas de registros históricos."""
+
+    @field_validator("escala")
+    @classmethod
+    def validar_escala(cls, valor):
+        if valor is None or not valor.strip() or valor.strip().casefold() == "null":
+            return None
+        valor = valor.strip()
+        especiales = {"sin escala": "Sin escala", "escalas varias": "Escalas varias"}
+        if valor.casefold() in especiales:
+            return especiales[valor.casefold()]
+        partes = re.fullmatch(r"([0-9]+(?:[.,][0-9]+)?)\s*:\s*([0-9]+(?:[.,][0-9]+)?)", valor)
+        if not partes or any(float(p.replace(",", ".")) <= 0 for p in partes.groups()):
+            raise ValueError("La escala debe tener formato 1:100, o indicar Sin escala o Escalas varias.")
+        return ":".join(p.replace(",", ".") for p in partes.groups())
+
+
+class PlanoValidar(DatosCatalogacion, NomenclaturaEntrada):
     parcela: str = ""
     usuario_id: str = "anonimo"
 
 
-class PlanoModificar(DatosPlano, NomenclaturaEntrada):
+class PlanoModificar(DatosCatalogacion, NomenclaturaEntrada):
     parcela: str = ""
     motivo: str
     usuario_id: str = "anonimo"

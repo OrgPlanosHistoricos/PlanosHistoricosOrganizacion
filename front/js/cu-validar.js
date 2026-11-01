@@ -157,13 +157,14 @@
         + window.PH.Nomenclatura.formulario('v-', d)
         + CAMPOS.map(function(c) {
             var val = (tieneFalla && modoCargaManual) ? '' : (d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : '');
+            if (c.key === 'escala') val = window.PH.normalizarEscala(val) || '';
             if (c.type === 'textarea') {
               return '<div class="field"><label for="v-' + c.key + '">' + c.label + '</label>' +
                 '<textarea id="v-' + c.key + '" rows="4" readonly>' + esc(val) + '</textarea></div>';
             }
             var type = c.type === 'number' ? 'number' : 'text';
             return '<div class="field"><label>' + c.label + '</label>' +
-              '<input type="' + type + '" id="v-' + c.key + '" value="' + attr(val) + '"></div>';
+              '<input type="' + type + '"' + (type === 'number' ? ' min="1" step="1"' : '') + ' id="v-' + c.key + '" value="' + attr(val) + '"></div>';
           }).join('')
         + '<div class="actions">'
         + '<button class="ghost" onclick="PH.CUValidar.cancelar()">Cancelar</button>'
@@ -196,6 +197,15 @@
       nuevosDatos[c.key] = v || null;
     });
 
+    if (nuevosDatos.anio !== null && (!Number.isSafeInteger(Number(nuevosDatos.anio)) || Number(nuevosDatos.anio) <= 0)) {
+      document.getElementById('v-msg').innerHTML = '<div class="error">El año debe ser un número entero mayor que cero o quedar vacío.</div>';
+      return;
+    }
+    nuevosDatos.escala = window.PH.normalizarEscala(nuevosDatos.escala);
+    if (!window.PH.validarEscala(nuevosDatos.escala)) {
+      document.getElementById('v-msg').innerHTML = '<div class="error">La escala debe tener formato 1:100, o indicar Sin escala o Escalas varias.</div>';
+      return;
+    }
     try { Object.assign(nuevosDatos, window.PH.Nomenclatura.leer('v-')); }
     catch (e) { document.getElementById('v-msg').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>'; return; }
     nuevosDatos.usuario_id = "Validador"; // Hardcoded for now as there's no login

@@ -31,7 +31,7 @@ class DatosPlano(SQLModel):
 
     texto_extraido: Optional[str] = Field(default=None, sa_type=Text)
     arquitecto: Optional[str] = None
-    anio: Optional[int] = None
+    anio: Optional[int] = Field(default=None, gt=0)
     titulo: Optional[str] = None
     ubicacion: Optional[str] = None
     escala: Optional[str] = None

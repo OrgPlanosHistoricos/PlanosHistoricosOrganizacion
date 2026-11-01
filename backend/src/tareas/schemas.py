@@ -29,6 +29,7 @@ class PlanoHistorico(BaseModel):
     )
     anio: Optional[int] = Field(
         None,
+        gt=0,
         description=(
             "Año del plano o del proyecto, como número de 4 dígitos (ej. 1936). "
             "Si figuran varias fechas (proyecto, aprobación, reforma), usar la del "

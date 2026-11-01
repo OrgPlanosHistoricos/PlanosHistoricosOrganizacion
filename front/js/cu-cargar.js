@@ -44,6 +44,11 @@
     hayAnalizando = false;
     document.getElementById('cargar-nomenclatura').innerHTML = window.PH.Nomenclatura.formulario('f-');
     var form = document.getElementById('form-cargar');
+    var fileInput = document.getElementById('f-archivo');
+    fileInput.className = fileInput.files.length ? '' : 'file-empty';
+    fileInput.addEventListener('change', function() {
+      fileInput.className = fileInput.files.length ? '' : 'file-empty';
+    });
     form.addEventListener('submit', function(ev) {
       ev.preventDefault();
       onSubmit();
@@ -88,7 +93,8 @@
       mostrarMensaje('pulse', 'Subiendo archivo e iniciando procesamiento...');
       var doc = await API.create(file, ubicacion, expediente, direccion, nomenclatura);
       document.getElementById('form-cargar').reset();
-      mostrarMensaje('confirm', 'El plano se guardó correctamente. Estará disponible en la cola de revisión en breve.');
+      fileInput.className = 'file-empty';
+      mostrarMensaje('confirm', 'El plano se guardó correctamente');
       renderRecientes();
       if (window.PH.actualizarListas) window.PH.actualizarListas();
     } catch (e) {

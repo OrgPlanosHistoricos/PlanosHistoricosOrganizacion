@@ -146,6 +146,18 @@
   }
 
   window.PH = window.PH || {};
+  window.PH.normalizarEscala = function(valor) {
+    if (valor === null || valor === undefined) return null;
+    var texto = String(valor).trim();
+    return !texto || /^null$/i.test(texto) ? null : texto;
+  };
+  window.PH.validarEscala = function(valor) {
+    valor = window.PH.normalizarEscala(valor);
+    if (valor === null) return true;
+    if (/^(sin escala|escalas varias)$/i.test(valor.trim())) return true;
+    var partes = /^([0-9]+(?:[.,][0-9]+)?)\s*:\s*([0-9]+(?:[.,][0-9]+)?)$/.exec(valor.trim());
+    return Boolean(partes && Number(partes[1].replace(',', '.')) > 0 && Number(partes[2].replace(',', '.')) > 0);
+  };
   window.PH.Errores = { mensaje: mensajeError, mensajes: MENSAJES };
   window.PH.API = {
     getAll: getAll,

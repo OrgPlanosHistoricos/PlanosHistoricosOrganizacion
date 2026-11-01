@@ -30,6 +30,67 @@
     return window.PH.Nomenclatura.titulo(d);
   }
 
+  function snapshot(valor) {
+    if (!valor) return null;
+    if (typeof valor === 'object') return valor;
+    try { return JSON.parse(valor); } catch (e) { return valor; }
+  }
+
+  function textoHistorial(valor) {
+    var texto = String(valor === null || valor === undefined || valor === '' ? '—' : valor);
+    var caracteres = Array.from(texto);
+    return esc(caracteres.length > 180 ? caracteres.slice(0, 179).join('') + '…' : texto);
+  }
+
+  function valoresHistorial(valor, otro) {
+    var datos = snapshot(valor);
+    var comparacion = snapshot(otro);
+    if (!datos) return '—';
+    if (typeof datos !== 'object') return textoHistorial(datos);
+    var campos = Object.keys(datos).filter(function(key) {
+      return !comparacion || typeof comparacion !== 'object' ||
+        JSON.stringify(datos[key]) !== JSON.stringify(comparacion[key]);
+    });
+    return textoHistorial(campos.map(function(key) {
+      var campo = CAMPOS.find(function(c) { return c.key === key; });
+      var valorCampo = datos[key];
+      return (campo ? campo.label : key.replace(/_/g, ' ')) +
+        ': ' + (valorCampo === null || valorCampo === '' ? '—' : valorCampo);
+    }).join('; '));
+  }
+
+  function alternarHistorial(boton) {
+    var detalle = document.getElementById(boton.getAttribute('aria-controls'));
+    detalle.hidden = !detalle.hidden;
+    boton.setAttribute('aria-expanded', String(!detalle.hidden));
+    boton.textContent = detalle.hidden ? 'Ver detalle' : 'Ocultar detalle';
+  }
+
+  function detalleCambios(evento) {
+    var anterior = snapshot(evento.valores_anteriores);
+    var nuevo = snapshot(evento.valores_nuevos);
+    if ((!anterior || typeof anterior === 'object') && (!nuevo || typeof nuevo === 'object')) {
+      var claves = Array.from(new Set(Object.keys(anterior || {}).concat(Object.keys(nuevo || {}))));
+      return claves.filter(function(key) {
+        var antes = anterior && anterior[key] !== undefined ? anterior[key] : null;
+        var despues = nuevo && nuevo[key] !== undefined ? nuevo[key] : null;
+        if (key === 'escala') {
+          antes = window.PH.normalizarEscala(antes);
+          despues = window.PH.normalizarEscala(despues);
+        }
+        return JSON.stringify(antes) !== JSON.stringify(despues);
+      }).map(function(key) {
+        var campo = CAMPOS.find(function(c) { return c.key === key; });
+        var etiqueta = campo ? campo.label : key.replace(/_/g, ' ');
+        return '<div class="hist-change"><strong>' + esc(etiqueta) + '</strong>' +
+          '<div class="hist-values"><div><span>Valor anterior</span><br>' + textoHistorial(anterior && anterior[key]) + '</div>' +
+          '<div><span>Valor nuevo</span><br>' + textoHistorial(nuevo && nuevo[key]) + '</div></div></div>';
+      }).join('') || '<p>No hay cambios de campos registrados para este evento.</p>';
+    }
+    return '<p><strong>Valor anterior</strong><br>' + valoresHistorial(evento.valores_anteriores, evento.valores_nuevos) + '</p>' +
+      '<p><strong>Valor nuevo</strong><br>' + valoresHistorial(evento.valores_nuevos, evento.valores_anteriores) + '</p>';
+  }
+
   async function renderLista() {
     var cont = document.getElementById('modificar-lista');
     try {
@@ -45,7 +106,7 @@
       cont.innerHTML = indexados.map(function(d) {
         var sel = d.id === seleccionadoId ? ' sel' : '';
         var badge = d.estado === 'sin_ubicacion'
-          ? '<span class="badge sin_ubicacion">Sin ubicación</span>'
+          ? '<span class="badge sin_ubicacion">Sin parcela asignada</span>'
           : '<span class="badge validado">Validado</span>';
         return '<button class="row' + sel + '" onclick="PH.CUModificar.seleccionar(' + d.id + ')">' +
           '<div class="t">' + esc(tituloDoc(d)) + '</div>' +
@@ -94,12 +155,23 @@
         }
       }
 
-      var historialHTML = d.historial && d.historial.length
-        ? '<div class="hist"><h3>Historial de cambios</h3><ul>' +
-          d.historial.slice().reverse().map(function(h) {
-            var date = new Date(h.fecha).toLocaleString('es-AR');
-            return '<li><strong>' + esc(date) + '</strong> — ' + esc(h.motivo) + '</li>';
-          }).join('') + '</ul></div>'
+      var historial = d.eventos || d.historial || [];
+      var historialHTML = historial.length
+        ? '<div class="hist"><h3>Historial de cambios</h3><div class="hist-scroll">' +
+          '<table class="hist-table"><thead><tr><th scope="col">Fecha</th><th scope="col">Hora</th>' +
+          '<th scope="col">Usuario</th><th scope="col">Motivo</th><th scope="col">Detalle</th></tr></thead><tbody>' +
+          historial.slice().sort(function(a, b) {
+            return (Date.parse(b.fecha) || 0) - (Date.parse(a.fecha) || 0) || (b.id || 0) - (a.id || 0);
+          }).map(function(h, indice) {
+            var fecha = new Date(h.fecha);
+            var valida = !isNaN(fecha.getTime());
+            return '<tr><td>' + (valida ? esc(fecha.toLocaleDateString('es-AR')) : '—') +
+              '</td><td>' + (valida ? esc(fecha.toLocaleTimeString('es-AR', { hour12: false })) : '—') +
+              '</td><td>' + textoHistorial(h.usuario_id) + '</td><td>' + textoHistorial(h.motivo) + '</td><td>' +
+              '<button type="button" class="ghost hist-toggle" aria-expanded="false" aria-controls="hist-detalle-' + indice + '" onclick="PH.CUModificar.alternarHistorial(this)">Ver detalle</button></td></tr>' +
+              '<tr id="hist-detalle-' + indice + '" hidden><td colspan="5" class="hist-detail">' +
+              detalleCambios(h) + '</td></tr>';
+          }).join('') + '</tbody></table></div></div>'
         : '';
 
       var esPdf = d.content_type === 'application/pdf' || (d.nombre_original && d.nombre_original.toLowerCase().endsWith('.pdf'));
@@ -141,16 +213,17 @@
         + window.PH.Nomenclatura.formulario('m-', d)
         + CAMPOS.map(function(c) {
             var val = d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : '';
+            if (c.key === 'escala') val = window.PH.normalizarEscala(val) || '';
             if (c.type === 'textarea') {
               return '<div class="field"><label for="m-' + c.key + '">' + c.label + '</label>' +
                 '<textarea id="m-' + c.key + '" rows="4" readonly>' + esc(val) + '</textarea></div>';
             }
             var type = c.type === 'number' ? 'number' : 'text';
             return '<div class="field"><label>' + c.label + '</label>' +
-              '<input type="' + type + '" id="m-' + c.key + '" value="' + attr(val) + '"></div>';
+              '<input type="' + type + '"' + (type === 'number' ? ' min="1" step="1"' : '') + ' id="m-' + c.key + '" value="' + attr(val) + '"></div>';
           }).join('')
-        + '<div class="field"><label>Motivo del cambio</label>' +
-          '<textarea id="m-motivo" rows="3" placeholder="Cuente brevemente por qué se corrige este dato"></textarea></div>'
+        + '<div class="field"><label for="m-motivo">Motivo de la modificación (obligatorio)</label>' +
+          '<textarea id="m-motivo" rows="3" required aria-required="true" placeholder="Cuente brevemente por qué se corrige este dato"></textarea></div>'
         + '<div id="m-msg"></div>'
         + historialHTML
         + '<div class="det-actions">'
@@ -239,6 +312,7 @@
       var el = document.getElementById('m-' + c.key);
       if (el) {
         var val = propuestaActual[c.key];
+        if (c.key === 'escala') val = window.PH.normalizarEscala(val);
         el.value = (val !== undefined && val !== null) ? val : '';
       }
     });
@@ -268,6 +342,15 @@
       var v = document.getElementById('m-' + c.key).value.trim();
       datos[c.key] = v || null;
     });
+    if (datos.anio !== null && (!Number.isSafeInteger(Number(datos.anio)) || Number(datos.anio) <= 0)) {
+      document.getElementById('m-msg').innerHTML = '<div class="error">El año debe ser un número entero mayor que cero o quedar vacío.</div>';
+      return;
+    }
+    datos.escala = window.PH.normalizarEscala(datos.escala);
+    if (!window.PH.validarEscala(datos.escala)) {
+      document.getElementById('m-msg').innerHTML = '<div class="error">La escala debe tener formato 1:100, o indicar Sin escala o Escalas varias.</div>';
+      return;
+    }
     try { Object.assign(datos, window.PH.Nomenclatura.leer('m-')); }
     catch (e) { document.getElementById('m-msg').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>'; return; }
     datos.motivo = motivo;
@@ -360,6 +443,7 @@
   window.PH = window.PH || {};
   window.PH.CUModificar = {
     renderLista: renderLista,
+    alternarHistorial: alternarHistorial,
     renderDetalle: renderDetalle,
     seleccionar: seleccionar,
     cancelar: cancelar,

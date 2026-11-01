@@ -121,7 +121,7 @@ test('carga: rechaza extensión inválida y confirma sin avisos por expediente o
   await new Promise(resolve => setImmediate(resolve));
   assert.ok(calls > 0);
   assert.ok(elements['cargar-msgs'].innerHTML.includes('se guardó correctamente'));
-  assert.equal(elements['cargar-msgs'].innerHTML, '<div class="confirm">El plano se guardó correctamente. Estará disponible en la cola de revisión en breve.</div>');
+  assert.equal(elements['cargar-msgs'].innerHTML, '<div class="confirm">El plano se guardó correctamente</div>');
 });
 test('archivo demasiado grande: explica el límite sin mostrar la respuesta de nginx', async () => {
   const { PH } = setup(async () => ({ ok: false, status: 413, text() { throw Error('must not read body'); } }));
@@ -274,4 +274,53 @@ test('modificar catalogación: propuesta de IA renderiza banner y tabla de antes
   assert.ok(modalHtml.includes('Original'));
   assert.ok(modalHtml.includes('Propuesto por IA'));
   assert.ok(modalHtml.includes('Aplicar cambios de la IA'));
+});
+
+test('historial: usa eventos, ordena por instante y muestra cambios escapados', async () => {
+  const doc = { id: 1, estado: 'validado', ia_estado: 'completado', eventos: [
+    { id: 1, fecha: '2026-11-01T10:00:00Z', usuario_id: 'ana', motivo: 'Primero', valores_anteriores: null, valores_nuevos: null },
+    { id: 2, fecha: '2026-11-01T11:00:00Z', usuario_id: '<usuario>', motivo: 'Segundo', valores_anteriores: JSON.stringify({ titulo: 'Antes', anio: 1930 }), valores_nuevos: JSON.stringify({ titulo: '<Nuevo>', anio: 1930 }) }
+  ] };
+  const { PH, elements } = setup(async url => ({ ok: true, json: async () => url === '/api/planos/1' ? doc : [doc] }));
+  PH.CUModificar.seleccionar(1);
+  await PH.CUModificar.renderDetalle();
+  const html = elements['modificar-detalle'].innerHTML;
+  const table = html.slice(html.indexOf('<table class="hist-table">'), html.indexOf('</table>') + 8);
+  assert.ok(table.includes('Fecha') && table.includes('Hora') && table.includes('Usuario'));
+  assert.ok(table.indexOf('Segundo') < table.indexOf('Primero'));
+  assert.ok(table.includes('&lt;usuario&gt;') && table.includes('&lt;Nuevo&gt;') && table.includes('Antes'));
+  assert.ok(!table.includes('1930'));
+});
+
+test('escala: acepta relaciones positivas y casos especiales; rechaza texto arbitrario', () => {
+  const { PH } = setup();
+  for (const valor of [null, '', '1:100', ' 1 : 50 ', '2:1', '1:2,5', 'Sin escala', 'Escalas varias']) {
+    assert.equal(PH.validarEscala(valor), true, String(valor));
+  }
+  for (const valor of ['CHINO', '0:100', '1:0', '-1:100', '1:100 basura']) {
+    assert.equal(PH.validarEscala(valor), false, valor);
+  }
+});
+
+test('escala: normaliza null real, literal y vacío antes de validar', () => {
+  const { PH } = setup();
+  for (const valor of [null, undefined, '', '   ', 'null', ' NULL ']) {
+    assert.equal(PH.normalizarEscala(valor), null);
+    assert.equal(PH.validarEscala(valor), true);
+  }
+  assert.equal(PH.normalizarEscala(' 1:100 '), '1:100');
+  assert.equal(PH.validarEscala('CHINO'), false);
+});
+
+test('historial: no muestra escala cuando solo cambia null literal por vacío', async () => {
+  const doc = { id: 1, estado: 'validado', ia_estado: 'completado', eventos: [
+    { id: 1, fecha: '2026-11-01T17:39:23Z', motivo: 'Corregir año', valores_anteriores: JSON.stringify({ anio: null, escala: 'null' }), valores_nuevos: JSON.stringify({ anio: 1999, escala: null }) }
+  ] };
+  const { PH, elements } = setup(async url => ({ ok: true, json: async () => url === '/api/planos/1' ? doc : [doc] }));
+  PH.CUModificar.seleccionar(1);
+  await PH.CUModificar.renderDetalle();
+  const html = elements['modificar-detalle'].innerHTML;
+  const table = html.slice(html.indexOf('<table class="hist-table">'), html.indexOf('</table>') + 8);
+  assert.ok(table.includes('Año') && table.includes('1999'));
+  assert.ok(!table.includes('Escala'));
 });
