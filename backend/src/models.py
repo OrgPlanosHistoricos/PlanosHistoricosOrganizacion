@@ -31,7 +31,7 @@ class DatosPlano(SQLModel):
 
     texto_extraido: Optional[str] = Field(default=None, sa_type=Text)
     arquitecto: Optional[str] = None
-    anio: Optional[int] = Field(default=None, gt=0)
+    anio: Optional[int] = Field(default=None, gt=0, le=2100)
     titulo: Optional[str] = None
     ubicacion: Optional[str] = None
     escala: Optional[str] = None
@@ -50,7 +50,7 @@ class PlanoBase(DatosPlano):
     nombre_original: str
     content_type: str
     hash_sha256: Optional[str] = Field(default=None, max_length=64, sa_type=String(64))
-    tamano_bytes: Optional[int] = None
+    tamano_bytes: Optional[int] = Field(default=None, ge=0)
     ubicacion_fisica: str = ""
     expediente: str = ""
     direccion_referencia: str = ""
@@ -110,7 +110,7 @@ class ProcesamientoIA(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     plano_id: int = Field(foreign_key="planos.id", index=True)
-    intento: int
+    intento: int = Field(ge=1, le=3)
     estado: EstadoIA
     error: Optional[str] = None
     modelo_ia: str = Field(default="qwen2.5-vl:3b", max_length=100, sa_type=String(100))
@@ -118,7 +118,7 @@ class ProcesamientoIA(SQLModel, table=True):
     parametros_preprocesamiento: Optional[str] = Field(default=None, sa_type=Text)
     texto_extraido_raw: Optional[str] = Field(default=None, sa_type=Text)
     respuesta_json_raw: Optional[str] = Field(default=None, sa_type=Text)
-    duracion_ms: Optional[int] = None
+    duracion_ms: Optional[int] = Field(default=None, ge=0)
     fecha: datetime = Field(default_factory=ahora, sa_type=DateTime(timezone=True))
 
     plano: Optional[Plano] = Relationship(back_populates="procesamientos")
@@ -151,6 +151,17 @@ def init_db() -> None:
         conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS validado_por TEXT;"))
         conn.execute(text("ALTER TABLE planos ADD COLUMN IF NOT EXISTS ia_propuesta TEXT;"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_planos_nomenclatura ON planos (nomenclatura);"))
+        if DATABASE_URL.startswith("postgresql"):
+            conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'ck_planos_anio_positivo'
+                    ) THEN
+                        ALTER TABLE planos ADD CONSTRAINT ck_planos_anio_positivo CHECK (anio IS NULL OR (anio > 0 AND anio <= 2100));
+                    END IF;
+                END $$;
+            """))
 
         # Migraciones de tabla eventos_auditoria
         conn.execute(text("ALTER TABLE eventos_auditoria ADD COLUMN IF NOT EXISTS accion VARCHAR(15) NOT NULL DEFAULT 'Modificación';"))

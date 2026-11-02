@@ -11,7 +11,7 @@ class ValidacionCamposTests(unittest.TestCase):
 
     def test_anios_invalidos(self):
         for esquema in (PlanoValidar, PlanoModificar):
-            for anio in (-1930, 0, 1930.5, 'chino'):
+            for anio in (-1930, 0, 1930.5, 'chino', 2500):
                 with self.subTest(esquema=esquema.__name__, anio=anio):
                     with self.assertRaises(ValidationError):
                         self.entrada(esquema, anio=anio)

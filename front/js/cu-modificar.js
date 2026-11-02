@@ -11,14 +11,14 @@
 
   var CAMPOS = [
     { key: 'texto_extraido', label: 'Texto extraído (solo lectura)', type: 'textarea', readonly: true },
-    { key: 'titulo', label: 'Título' },
-    { key: 'arquitecto', label: 'Arquitecto' },
-    { key: 'ubicacion', label: 'Ubicación' },
-    { key: 'anio', label: 'Año', type: 'number' },
-    { key: 'escala', label: 'Escala' },
-    { key: 'tipo_de_plano', label: 'Tipo de Plano' },
-    { key: 'material_soporte', label: 'Material' },
-    { key: 'notas', label: 'Notas' }
+    { key: 'titulo', label: 'Título', maxlength: 200 },
+    { key: 'arquitecto', label: 'Arquitecto', maxlength: 150 },
+    { key: 'ubicacion', label: 'Ubicación', maxlength: 250 },
+    { key: 'anio', label: 'Año', type: 'number', min: 1, max: 2100 },
+    { key: 'escala', label: 'Escala', maxlength: 30 },
+    { key: 'tipo_de_plano', label: 'Tipo de Plano', maxlength: 100 },
+    { key: 'material_soporte', label: 'Material', maxlength: 100 },
+    { key: 'notas', label: 'Notas', maxlength: 1000 }
   ];
 
   function esc(s) {
@@ -214,7 +214,10 @@
       } else if (puedeReintentar) {
         btnReintentar = '<button type="button" class="ghost" id="m-btn-reintentar" onclick="PH.CUModificar.reintentar(' + d.id + ')">Reintentar análisis IA (' + intentos + '/' + maxIntentos + ')</button>';
       } else if (intentos >= maxIntentos && d.ia_estado !== 'no_aplica') {
-        btnReintentar = '<span class="badge limite">Límite de 3 intentos alcanzado</span>';
+        btnReintentar = '<button type="button" class="btn-limite" disabled aria-disabled="true" title="Se alcanzó el límite máximo de 3 intentos de análisis">'
+          + '<span class="limite-dot" aria-hidden="true"></span>'
+          + 'Límite de 3 intentos alcanzado'
+          + '</button>';
       }
 
       var bannerPropuesta = propuestaActual
@@ -244,11 +247,16 @@
                 '<textarea id="m-' + c.key + '" rows="4" readonly>' + esc(val) + '</textarea></div>';
             }
             var type = c.type === 'number' ? 'number' : 'text';
+            var attrs = '';
+            if (c.maxlength) attrs += ' maxlength="' + c.maxlength + '"';
+            if (type === 'number') {
+              attrs += ' min="' + (c.min || 1) + '" max="' + (c.max || 2100) + '" step="1" onkeydown="if([\'-\',\'+\',\'e\',\'E\',\'.\',\',\' ].includes(event.key)) event.preventDefault();" oninput="if(this.value && Number(this.value) < 0) this.value = \'\';"';
+            }
             return '<div class="field"><label>' + c.label + '</label>' +
-              '<input type="' + type + '"' + (type === 'number' ? ' min="1" step="1"' : '') + ' id="m-' + c.key + '" value="' + attr(val) + '"></div>';
+              '<input type="' + type + '"' + attrs + ' id="m-' + c.key + '" value="' + attr(val) + '"></div>';
           }).join('')
         + '<div class="field"><label for="m-motivo">Motivo de la modificación (obligatorio)</label>' +
-          '<textarea id="m-motivo" rows="3" maxlength="180" required aria-required="true" aria-describedby="m-motivo-contador" oninput="PH.CUModificar.actualizarContadorMotivo()" placeholder="Cuente brevemente por qué se corrige este dato"></textarea>' +
+          '<textarea id="m-motivo" rows="3" maxlength="180" style="resize:none;" required aria-required="true" aria-describedby="m-motivo-contador" oninput="PH.CUModificar.actualizarContadorMotivo()" placeholder="Cuente brevemente por qué se corrige este dato"></textarea>' +
           '<small id="m-motivo-contador" class="motivo-contador">0 / 180 caracteres</small></div>'
         + '<div id="m-msg"></div>'
         + '<div class="det-actions">'
@@ -389,8 +397,8 @@
       var v = document.getElementById('m-' + c.key).value.trim();
       datos[c.key] = v || null;
     });
-    if (datos.anio !== null && (!Number.isSafeInteger(Number(datos.anio)) || Number(datos.anio) <= 0)) {
-      document.getElementById('m-msg').innerHTML = '<div class="error">El año debe ser un número entero mayor que cero o quedar vacío.</div>';
+    if (datos.anio !== null && (!Number.isSafeInteger(Number(datos.anio)) || Number(datos.anio) <= 0 || Number(datos.anio) > 2100)) {
+      document.getElementById('m-msg').innerHTML = '<div class="error">El año debe ser un número entero mayor que cero (máximo 2100) o quedar vacío.</div>';
       return;
     }
     datos.escala = window.PH.normalizarEscala(datos.escala);

@@ -7,14 +7,14 @@
   var API = window.PH.API;
   var CAMPOS = [
     { key: 'texto_extraido', label: 'Texto extraído (solo lectura)', type: 'textarea', readonly: true },
-    { key: 'titulo', label: 'Título' },
-    { key: 'arquitecto', label: 'Arquitecto' },
-    { key: 'ubicacion', label: 'Ubicación' },
-    { key: 'anio', label: 'Año', type: 'number' },
-    { key: 'escala', label: 'Escala' },
-    { key: 'tipo_de_plano', label: 'Tipo de Plano' },
-    { key: 'material_soporte', label: 'Material' },
-    { key: 'notas', label: 'Notas' }
+    { key: 'titulo', label: 'Título', maxlength: 200 },
+    { key: 'arquitecto', label: 'Arquitecto', maxlength: 150 },
+    { key: 'ubicacion', label: 'Ubicación', maxlength: 250 },
+    { key: 'anio', label: 'Año', type: 'number', min: 1, max: 2100 },
+    { key: 'escala', label: 'Escala', maxlength: 30 },
+    { key: 'tipo_de_plano', label: 'Tipo de Plano', maxlength: 100 },
+    { key: 'material_soporte', label: 'Material', maxlength: 100 },
+    { key: 'notas', label: 'Notas', maxlength: 1000 }
   ];
   
   var seleccionadoId = null;
@@ -165,8 +165,13 @@
                 '<textarea id="v-' + c.key + '" rows="4" readonly>' + esc(val) + '</textarea></div>';
             }
             var type = c.type === 'number' ? 'number' : 'text';
+            var attrs = '';
+            if (c.maxlength) attrs += ' maxlength="' + c.maxlength + '"';
+            if (type === 'number') {
+              attrs += ' min="' + (c.min || 1) + '" max="' + (c.max || 2100) + '" step="1" onkeydown="if([\'-\',\'+\',\'e\',\'E\',\'.\',\',\' ].includes(event.key)) event.preventDefault();" oninput="if(this.value && Number(this.value) < 0) this.value = \'\';"';
+            }
             return '<div class="field"><label>' + c.label + '</label>' +
-              '<input type="' + type + '"' + (type === 'number' ? ' min="1" step="1"' : '') + ' id="v-' + c.key + '" value="' + attr(val) + '"></div>';
+              '<input type="' + type + '"' + attrs + ' id="v-' + c.key + '" value="' + attr(val) + '"></div>';
           }).join('')
         + '<div class="actions">'
         + '<button class="ghost" onclick="PH.CUValidar.cancelar()">Cancelar</button>'
@@ -201,8 +206,8 @@
       nuevosDatos[c.key] = v || null;
     });
 
-    if (nuevosDatos.anio !== null && (!Number.isSafeInteger(Number(nuevosDatos.anio)) || Number(nuevosDatos.anio) <= 0)) {
-      document.getElementById('v-msg').innerHTML = '<div class="error">El año debe ser un número entero mayor que cero o quedar vacío.</div>';
+    if (nuevosDatos.anio !== null && (!Number.isSafeInteger(Number(nuevosDatos.anio)) || Number(nuevosDatos.anio) <= 0 || Number(nuevosDatos.anio) > 2100)) {
+      document.getElementById('v-msg').innerHTML = '<div class="error">El año debe ser un número entero mayor que cero (máximo 2100) o quedar vacío.</div>';
       return;
     }
     nuevosDatos.escala = window.PH.normalizarEscala(nuevosDatos.escala);

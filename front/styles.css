@@ -223,24 +223,24 @@ button:focus,
 }
 
 #v-texto_extraido,
-#m-texto_extraido,
-#m-motivo {
+#m-texto_extraido {
   resize: none;
   field-sizing: content;
   line-height: 1.5;
   overflow-y: auto;
   overflow-wrap: anywhere;
-}
-
-#v-texto_extraido,
-#m-texto_extraido {
   min-height: calc(1.5em + 20px);
   max-height: calc(18em + 20px);
 }
 
 #m-motivo {
-  min-height: calc(4.5em + 20px);
-  max-height: calc(9em + 20px);
+  resize: none !important;
+  line-height: 1.5;
+  height: 84px;
+  min-height: 84px;
+  max-height: 84px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
 }
 
 .field {
@@ -595,7 +595,9 @@ textarea[readonly] {
 
 .det-actions-plano {
   justify-content: flex-start;
+  align-items: center;
   flex-wrap: wrap;
+  gap: 10px;
   margin-bottom: 16px;
 }
 
@@ -940,9 +942,35 @@ button.hist-toggle {
   font-size: 11px;
   color: var(--ink-soft);
 }
+.btn-limite,
 .badge.limite {
-  background: var(--ink-soft);
-  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--paper-2);
+  border: 1px solid var(--border);
+  cursor: not-allowed;
+  opacity: 0.9;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.btn-limite .limite-dot,
+.badge.limite .limite-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brick);
+  opacity: 0.85;
+  flex-shrink: 0;
 }
 .banner-propuesta {
   background: var(--amber-soft);

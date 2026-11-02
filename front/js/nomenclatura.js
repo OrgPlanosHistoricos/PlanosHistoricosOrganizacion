@@ -42,7 +42,7 @@
       + (completa ? '<p>Completá los cuatro datos para buscar. Manzana y parcela pueden incluir una letra después del número.</p>' : '')
       + '<div class="grid2">' + campos.map(function(c, i) {
         return '<div class="field"><label for="' + prefijo + c.key + '">' + c.label + '</label>'
-          + '<input type="text" ' + (completa ? 'required ' : '') + 'maxlength="64" ' + (i === 0 ? 'inputmode="numeric" ' : '')
+          + '<input type="text" ' + (completa ? 'required ' : '') + 'maxlength="64" ' + (i === 0 ? 'inputmode="numeric" onkeydown="if([\\\'-\\\',\\\'+\\\',\\\'e\\\',\\\'E\\\',\\\'.\\\',\\\',\\\',\\\'/\\\'].includes(event.key)) event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, \\\'\\\');" ' : '')
           + 'id="' + prefijo + c.key + '" value="' + esc(datos[c.key]) + '" placeholder="' + c.ejemplo + '"></div>';
       }).join('') + '</div></fieldset>';
   }

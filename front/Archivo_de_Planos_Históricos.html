@@ -37,10 +37,10 @@
           <div id="cargar-msgs" role="status" aria-live="polite"></div>
           <div id="cargar-nomenclatura"></div>
           <div class="grid2" style="margin-top:16px">
-            <div class="field"><label>Ubicación física de guarda <span class="optional">(opcional)</span></label><input type="text" id="f-ubic" placeholder="Caja 12, Estantería B"></div>
-            <div class="field"><label>Expediente de origen <span class="optional">(opcional)</span></label><input type="text" id="f-exp" placeholder="Expte. 4521-1968"></div>
+            <div class="field"><label>Ubicación física de guarda <span class="optional">(opcional)</span></label><input type="text" id="f-ubic" maxlength="120" placeholder="Caja 12, Estantería B"></div>
+            <div class="field"><label>Expediente de origen <span class="optional">(opcional)</span></label><input type="text" id="f-exp" maxlength="64" placeholder="Expte. 4521-1968"></div>
           </div>
-          <div class="field"><label>Dirección o ubicación de referencia <span class="optional">(opcional)</span></label><input type="text" id="f-dir" placeholder="Calle 47 N.º 620"></div>
+          <div class="field"><label>Dirección o ubicación de referencia <span class="optional">(opcional)</span></label><input type="text" id="f-dir" maxlength="250" placeholder="Calle 47 N.º 620"></div>
           <button class="primary" id="btn-cargar" type="submit">Guardar y analizar</button>
         </form>
       </div>
@@ -71,10 +71,10 @@
       <p class="lede">Busque por calle, número, expediente, año o nomenclatura catastral. Los resultados se actualizan mientras escribe.</p>
       <form id="form-consultar" class="card">
         <div class="grid2">
-          <div class="field"><label for="c-calle">Calle</label><input type="search" id="c-calle" placeholder="Ej.: San Martín o Calle 47"></div>
-          <div class="field"><label for="c-numero">Número</label><input type="search" id="c-numero" placeholder="Ej.: 620"></div>
-          <div class="field"><label for="c-expediente">Expediente</label><input type="search" id="c-expediente" placeholder="Ej.: EXP-1936"></div>
-          <div class="field"><label for="c-anio">Año</label><input type="search" inputmode="numeric" id="c-anio" placeholder="Ej.: 1936"></div>
+          <div class="field"><label for="c-calle">Calle</label><input type="search" id="c-calle" maxlength="150" placeholder="Ej.: San Martín o Calle 47"></div>
+          <div class="field"><label for="c-numero">Número</label><input type="search" id="c-numero" maxlength="15" placeholder="Ej.: 620" oninput="this.value = this.value.replace(/[^0-9a-zA-Z\s]/g, '');"></div>
+          <div class="field"><label for="c-expediente">Expediente</label><input type="search" id="c-expediente" maxlength="64" placeholder="Ej.: EXP-1936"></div>
+          <div class="field"><label for="c-anio">Año</label><input type="search" inputmode="numeric" id="c-anio" maxlength="4" placeholder="Ej.: 1936" onkeydown="if([\'-\',\'+\',\'e\',\'E\',\'.\',\'/\'].includes(event.key)) event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 4);"></div>
         </div>
         <div id="consultar-nomenclatura"></div>
 
