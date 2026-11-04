@@ -20,7 +20,7 @@ import requests
 
 from src.compartido.preprocessing import crop_cajetin_from_bbox, preprocess_cajetin, preprocess_image
 from src.errors import ExtraccionError
-from src.tareas.schemas import PlanoHistorico
+from src.planos.schemas import PlanoHistorico
 
 logger = logging.getLogger("planos.vision")
 

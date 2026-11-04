@@ -9,18 +9,14 @@ from src.config import settings
 from src.planos.routes import router as planos_router
 from src.planos.worker import planos_worker
 from src.routes import router as health_router
-from src.tareas.routes import router as tareas_router
-from src.tareas.services import task_manager
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    task_manager.start_worker()
     planos_worker.start()
     yield
     await planos_worker.stop()
-    await task_manager.stop_worker()
 
 
 app = FastAPI(
@@ -32,7 +28,6 @@ app = FastAPI(
 
 ROUTERS_POR_RECURSO = [
     planos_router,
-    tareas_router,
 ]
 
 app.include_router(health_router)

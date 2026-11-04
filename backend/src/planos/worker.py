@@ -1,29 +1,26 @@
 """
 Worker en segundo plano que corre la IA sobre los planos creados con POST /planos,
-guarda el resultado en la fila correspondiente de Postgres e inserta cada corrida
-en la colección corridas_ia de MongoDB.
+guarda el resultado en la fila correspondiente de Postgres y registra cada corrida
+en procesamientos_ia (incluida la respuesta cruda del modelo).
 """
 import asyncio
 import json
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from sqlmodel import Session, select
 
-from src.compartido import db_client
-from src.compartido.minio_client import existe_archivo, obtener_archivo, obtener_preview_key
+from src.compartido.storage_client import existe_archivo, obtener_archivo, obtener_preview_key
 from src.compartido.preprocessing import MAX_CAJETIN_DIMENSION, MAX_DIMENSION, pdf_page_to_jpeg_bytes
 from src.compartido.sesion import engine
 from src.compartido.vision_client import (
-    VERSION_PROMPT,
     VERSION_PROMPT_EXTRACCION,
     ExtraccionError,
     extraer_datos_plano,
     limpiar_metadata_corrida,
     obtener_metadata_ultima_corrida,
     obtener_modelo_activo,
-    obtener_modelo_configurado,
 )
 from src.models import DatosPlano, EstadoIA, EstadoPlano, Plano, ProcesamientoIA, ahora
 
@@ -55,60 +52,19 @@ def _extraer(image_bytes: bytes) -> dict:
     raise ExtraccionError(f"No se pudo extraer la información del plano: {ultimo_error}")
 
 
-def _guardar_corrida_mongo(
-    plano_id: int,
-    archivo_id: str,
-    datos: Optional[dict],
-    error: Optional[str],
-    corrida_info: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    info = corrida_info or {}
-    json_crudo = info.get("json_crudo")
-    if json_crudo is None and datos is not None:
-        json_crudo = json.dumps(datos, ensure_ascii=False)
-
-    texto_original = info.get("texto_original")
-    if texto_original is None and datos is not None:
-        texto_original = datos.get("texto_extraido")
-
-    documento: Dict[str, Any] = {
-        "plano_id": plano_id,
-        "archivo_id": archivo_id,
-        "modelo": info.get("modelo") or obtener_modelo_configurado(),
-        "version_prompt": info.get("version_prompt", VERSION_PROMPT),
-        "json_crudo": json_crudo,
-        "texto_original": texto_original,
-        "duracion_segundos": info.get("duracion_segundos", 0.0),
-        "fecha": info.get("fecha") or ahora(),
-        "estado": EstadoIA.completado.value if datos is not None else EstadoIA.error.value,
-        "error": error,
-    }
-
-    coleccion = db_client.coleccion_corridas_ia
-    if coleccion is not None:
-        try:
-            coleccion.insert_one(documento)
-        except Exception as exc:
-            logger.error(f"No se pudo insertar en corridas_ia para el plano {plano_id}: {exc}")
-
-    return documento
-
-
 def _guardar_resultado(
     plano_id: int,
     datos: Optional[dict],
     error: Optional[str],
     duracion_ms: Optional[int] = None,
     modelo_ia: Optional[str] = None,
-    corrida_info: Optional[Dict[str, Any]] = None,
+    json_crudo: Optional[str] = None,
 ) -> None:
-    archivo_id = ""
     with Session(engine) as session:
         plano = session.get(Plano, plano_id)
         if plano is None:
             return
 
-        archivo_id = plano.minio_path
         ultimo_procesamiento = session.exec(
             select(ProcesamientoIA)
             .where(ProcesamientoIA.plano_id == plano_id)
@@ -155,28 +111,11 @@ def _guardar_resultado(
                 proc.duracion_ms = duracion_ms
             if datos is not None:
                 proc.texto_extraido_raw = datos.get("texto_extraido")
-                proc.respuesta_json_raw = json.dumps(datos, ensure_ascii=False)
+            # Respuesta tal cual la devolvió el modelo (también si no se pudo parsear)
+            proc.respuesta_json_raw = json_crudo or (json.dumps(datos, ensure_ascii=False) if datos else None)
             session.add(proc)
 
         session.commit()
-
-    if corrida_info is None and duracion_ms is not None:
-        corrida_info = {
-            "modelo": modelo_ia or obtener_modelo_configurado(),
-            "version_prompt": VERSION_PROMPT,
-            "json_crudo": json.dumps(datos, ensure_ascii=False) if datos else None,
-            "texto_original": datos.get("texto_extraido") if datos else None,
-            "duracion_segundos": round(duracion_ms / 1000.0, 3),
-            "fecha": ahora(),
-        }
-
-    _guardar_corrida_mongo(
-        plano_id=plano_id,
-        archivo_id=archivo_id,
-        datos=datos,
-        error=error,
-        corrida_info=corrida_info,
-    )
 
 
 def _planos_sin_terminar() -> list[tuple[int, bytes]]:
@@ -202,8 +141,7 @@ def _planos_sin_terminar() -> list[tuple[int, bytes]]:
         return resultado
 
 
-def _ejecutar_extraccion(image_bytes: bytes) -> tuple[Optional[dict], Optional[str], Dict[str, Any]]:
-    inicio = time.perf_counter()
+def _ejecutar_extraccion(image_bytes: bytes) -> tuple[Optional[dict], Optional[str], Optional[str]]:
     limpiar_metadata_corrida()
     datos: Optional[dict] = None
     error_str: Optional[str] = None
@@ -212,17 +150,7 @@ def _ejecutar_extraccion(image_bytes: bytes) -> tuple[Optional[dict], Optional[s
     except Exception as exc:
         error_str = str(exc)
 
-    duracion_segundos = round(time.perf_counter() - inicio, 3)
-    meta = obtener_metadata_ultima_corrida()
-    corrida_info: Dict[str, Any] = {
-        "modelo": meta.get("modelo") or obtener_modelo_configurado(),
-        "version_prompt": meta.get("version_prompt", VERSION_PROMPT),
-        "json_crudo": meta.get("json_crudo"),
-        "texto_original": datos.get("texto_extraido") if datos else None,
-        "duracion_segundos": duracion_segundos,
-        "fecha": ahora(),
-    }
-    return datos, error_str, corrida_info
+    return datos, error_str, obtener_metadata_ultima_corrida().get("json_crudo")
 
 
 class PlanosWorker:
@@ -267,10 +195,8 @@ class PlanosWorker:
         logger.info(f"Procesando IA del plano {plano_id}...")
         t0 = time.perf_counter()
         modelo_ia = await asyncio.to_thread(obtener_modelo_activo)
-        datos, error_str, corrida_info = await asyncio.to_thread(_ejecutar_extraccion, image_bytes)
+        datos, error_str, json_crudo = await asyncio.to_thread(_ejecutar_extraccion, image_bytes)
         duracion_ms = int((time.perf_counter() - t0) * 1000)
-        if modelo_ia and corrida_info:
-            corrida_info["modelo"] = modelo_ia
         if datos is None:
             logger.warning(f"IA falló para el plano {plano_id}: {error_str}")
             await asyncio.to_thread(
@@ -280,7 +206,7 @@ class PlanosWorker:
                 error_str,
                 duracion_ms=duracion_ms,
                 modelo_ia=modelo_ia,
-                corrida_info=corrida_info,
+                json_crudo=json_crudo,
             )
             return
         await asyncio.to_thread(
@@ -290,7 +216,7 @@ class PlanosWorker:
             None,
             duracion_ms=duracion_ms,
             modelo_ia=modelo_ia,
-            corrida_info=corrida_info,
+            json_crudo=json_crudo,
         )
         logger.info(f"IA completada para el plano {plano_id} en {duracion_ms} ms.")
 

@@ -12,7 +12,6 @@ y los devuelve en JSON estructurado y normalizado.
 - [1. Puesta en Marcha Rápida (Uso)](#1-puesta-en-marcha-rápida-uso)
   - [1.1 Inicio del Entorno con Docker](#11-inicio-del-entorno-con-docker)
   - [1.2 Acceso a la Aplicación Web](#12-acceso-a-la-aplicación-web)
-  - [1.3 Extracción con MongoDB y Supabase (procesar-plano)](#13-extracción-con-mongodb-y-supabase-procesar-plano)
 - [2. Estructura y Arquitectura del Backend](#2-estructura-y-arquitectura-del-backend)
   - [2.1 Capas dentro de cada recurso](#21-capas-dentro-de-cada-recurso)
   - [2.2 Detalle de carpetas y módulos](#22-detalle-de-carpetas-y-módulos)
@@ -23,7 +22,7 @@ y los devuelve en JSON estructurado y normalizado.
   - [4.3 Recorte en Alta Resolución (Crop y Preprocesamiento)](#43-recorte-en-alta-resolución-crop-y-preprocesamiento)
   - [4.4 Paso 2: Extracción Estructurada de Datos Técnicos en HD](#44-paso-2-extracción-estructurada-de-datos-técnicos-en-hd)
   - [4.5 Resiliencia y Manejo de Errores](#45-resiliencia-y-manejo-de-errores)
-- [5. Catálogo y Base de Datos Relacional (PostgreSQL y MinIO)](#5-catálogo-y-base-de-datos-relacional-postgresql-y-minio)
+- [5. Catálogo y Base de Datos Relacional (PostgreSQL en Supabase)](#5-catálogo-y-base-de-datos-relacional-postgresql-en-supabase)
   - [5.1 Variables de Entorno y Conexión](#51-variables-de-entorno-y-conexión)
   - [5.2 Funcionamiento de la Base de Datos](#52-funcionamiento-de-la-base-de-datos)
   - [5.3 Tablas y Campos](#53-tablas-y-campos)
@@ -32,8 +31,9 @@ y los devuelve en JSON estructurado y normalizado.
     - [Tabla procesamientos_ia](#3-tabla-procesamientos_ia-clase-procesamientoia)
   - [5.4 Diagrama Entidad-Relación](#54-diagrama-entidad-relación)
   - [5.5 Endpoints del Catálogo (planos)](#55-endpoints-del-catálogo-planos)
-- [6. Almacenamiento Secundario (Supabase y MongoDB)](#6-almacenamiento-secundario-supabase-y-mongodb)
+- [6. Configuración de Supabase](#6-configuración-de-supabase)
   - [6.1 Variables de Entorno](#61-variables-de-entorno)
+  - [6.2 Carga inicial del esquema tramitacion](#62-carga-inicial-del-esquema-tramitacion)
 - [7. Reglas de Negocio, Nomenclatura y Pruebas](#7-reglas-de-negocio-nomenclatura-y-pruebas)
   - [7.1 Nomenclatura Catastral y Reglas del Archivo](#71-nomenclatura-catastral-y-reglas-del-archivo)
   - [7.2 Indicador de Conexión a la Base de Datos](#72-indicador-de-conexión-a-la-base-de-datos)
@@ -46,7 +46,7 @@ y los devuelve en JSON estructurado y normalizado.
 
 ### 1.1 Inicio del Entorno con Docker
 
-Para levantar el entorno local completo (PostgreSQL, MinIO, API y Frontend) usando Google Colab como motor de IA:
+La base de datos (PostgreSQL) y los archivos (Storage) están en **Supabase**; localmente solo corren la API y el Frontend, y la IA en Google Colab. Antes del primer arranque, completá el `.env` y cargá el esquema `tramitacion` (ver [Configuración de Supabase](#6-configuración-de-supabase)). Después:
 
 ```bash
 docker compose up -d
@@ -68,50 +68,6 @@ El ingreso a la aplicación web debe realizarse desde [http://localhost:8080](ht
 
 Formatos de archivo admitidos: JPEG, PNG, WEBP, TIFF y PDF (se analiza y previsualiza la primera página del plano).
 
-### 1.3 Extracción con MongoDB y Supabase (procesar-plano)
-
-> **Nota**: Este endpoint procesa planos de manera aislada utilizando Supabase Storage y MongoDB. Para el catálogo completo con PostgreSQL, MinIO y auditoría, consultá la sección [Catálogo y Base de Datos Relacional](#5-catálogo-y-base-de-datos-relacional-postgresql--minio).
-
-```bash
-curl -X POST http://localhost:8000/procesar-plano \
-  -F "archivo=@/ruta/a/tu/plano.jpg"
-```
-
-Respuesta inmediata (HTTP 202 Accepted):
-```json
-{
-  "task_id": "e1c97abb-85b4-4ab3-ba57-86858af023da",
-  "status": "pending",
-  "mensaje": "Plano recibido. El procesamiento con IA se está ejecutando en segundo plano."
-}
-```
-
-Consultar estado y resultado de la tarea:
-```bash
-curl http://localhost:8000/tareas/e1c97abb-85b4-4ab3-ba57-86858af023da
-```
-
-Respuesta cuando finaliza (`status: "completed"`):
-```json
-{
-  "task_id": "e1c97abb-85b4-4ab3-ba57-86858af023da",
-  "status": "completed",
-  "filename": "plano.jpg",
-  "resultado": {
-    "arquitecto": "Francisco Salamone",
-    "anio": 1936,
-    "titulo": "Palacio Municipal de Azul",
-    "ubicacion": "Azul, Buenos Aires",
-    "escala": "1:50",
-    "tipo_de_plano": "fachada principal",
-    "material_soporte": "papel tela",
-    "notas": null
-  },
-  "error": null,
-  "supabase_url": "https://<proyecto>.supabase.co/storage/v1/object/public/planos_escaneados/<uuid>.jpg"
-}
-```
-
 [↑ Volver a la tabla de contenidos](#indice)
 
 ---
@@ -126,6 +82,7 @@ backend/
 ├── requirements.txt
 ├── tests/
 │   ├── test_health.py
+│   ├── test_integracion_tramitacion.py
 │   ├── test_nomenclatura.py
 │   └── test_vision_colab.py
 └── src/
@@ -141,9 +98,7 @@ backend/
     ├── compartido/              # Infraestructura común a los recursos
     │   ├── __init__.py
     │   ├── sesion.py            # Motor y sesión de PostgreSQL
-    │   ├── minio_client.py      # Cliente MinIO
-    │   ├── storage_client.py    # Cliente Supabase Storage
-    │   ├── db_client.py         # Cliente MongoDB
+    │   ├── storage_client.py    # Cliente Supabase Storage (archivos y previsualizaciones)
     │   ├── preprocessing.py     # Preprocesamiento y recorte de imágenes/PDF
     │   └── vision_client.py     # Cliente HTTP hacia Ollama (pipeline en 2 pasos)
     ├── planos/                  # Recurso /planos (CRUD, validación, preview y worker IA)
@@ -154,12 +109,6 @@ backend/
     │   ├── schemas.py
     │   ├── nomenclatura.py
     │   └── worker.py
-    └── tareas/                  # Recurso /tareas y /procesar-plano
-        ├── __init__.py
-        ├── routes.py
-        ├── controllers.py
-        ├── services.py
-        └── schemas.py
 ```
 
 ### 2.1 Capas dentro de cada recurso
@@ -182,23 +131,21 @@ Cada subcarpeta de recurso en `backend/src/` se organiza en las mismas cuatro ca
   - `main.py`: punto de entrada de FastAPI; inicializa la base de datos y los workers en segundo plano durante el ciclo de vida (`lifespan`), configura CORS y registra los routers de cada recurso.
   - `config.py`: centraliza variables de entorno y constantes transversales (orígenes CORS, formatos de imagen y PDF soportados).
   - `models.py`: define las tablas relacionales con SQLModel (`Plano`, `EventoAuditoria`, `ProcesamientoIA`), sus relaciones y la inicialización del esquema en PostgreSQL (`init_db`).
-  - `schemas.py`: punto único de reexportación de los esquemas de `planos` y `tareas`.
+  - `schemas.py`: punto único de reexportación de los esquemas de `planos`.
   - `errors.py`: define las excepciones de dominio (`ExtraccionError`, `ErrorServicio`) y su conversión a respuestas HTTP.
   - `routes.py`, `controllers.py` y `services.py`: implementan los endpoints generales de estado del servicio (`GET /health`) y comprobación de conexión a PostgreSQL (`GET /health/database`).
 - **`backend/src/compartido/` (infraestructura y clientes externos)**:
   - `sesion.py`: provee el `engine` y el generador de sesiones (`get_session`) de PostgreSQL para inyección de dependencias.
-  - `minio_client.py`: subida, descarga, verificación y borrado de planos originales y previsualizaciones en el bucket de MinIO.
-  - `storage_client.py` y `db_client.py`: clientes de Supabase Storage y MongoDB utilizados por el flujo de extracción directa/asíncrona.
+  - `storage_client.py`: subida, descarga, verificación y borrado de planos originales y previsualizaciones en el bucket de Supabase Storage.
   - `preprocessing.py`: rasterización de páginas PDF (`pypdfium2`), recorte de alta resolución del cajetín técnico según coordenadas normalizadas y mejora de contraste/nitidez (`Pillow`).
   - `vision_client.py`: cliente HTTP hacia Ollama (local o Google Colab vía Ngrok) que ejecuta la detección de bounding box del cajetín (Paso 1) y la extracción JSON estructurada (Paso 2), incluyendo detección automática del modelo activo en Colab.
 - **`backend/src/planos/` (catálogo de planos históricos — `/planos`)**:
-  - `routes.py`, `controllers.py`, `services.py` y `schemas.py`: alta de planos con archivo y nomenclatura, listado con filtros, consulta de detalle con historial, descarga de archivo original y vista previa, validación inicial, modificación con auditoría, reintento de IA y baja lógica (*soft delete*).
+  - `routes.py`, `controllers.py`, `services.py` y `schemas.py`: alta de planos con archivo y nomenclatura, listado con filtros, consulta de detalle con historial, descarga de archivo original y vista previa, validación inicial, modificación con auditoría, reintento de IA y baja lógica (*soft delete*). `schemas.py` también define `PlanoHistorico`, el esquema que guía la salida JSON del modelo de visión.
   - `nomenclatura.py`: normalización y validación del formato catastral (`circunscripción-sección-manzana-parcela`) y generación de su clave única.
   - `worker.py`: cola asíncrona (`planos_worker`) que procesa con IA los planos recién creados o reintentados y persiste los metadatos extraídos en PostgreSQL, retomando pendientes tras un reinicio.
-- **`backend/src/tareas/` (procesamiento por cola de tareas — `/procesar-plano` y `/tareas`)**:
-  - `routes.py`, `controllers.py`, `services.py` y `schemas.py`: gestor en memoria (`task_manager`) para procesar archivos de forma asíncrona (`POST /procesar-plano` y consulta en `GET /tareas/{task_id}`) o síncrona (`?sync=true`), definiendo el esquema `PlanoHistorico` que guía la salida JSON del modelo de visión.
 - **`backend/tests/` (pruebas unitarias y de integración)**:
   - `test_health.py`: pruebas del endpoint `/health/database` ante conexión exitosa o fallo de PostgreSQL.
+  - `test_integracion_tramitacion.py`: vinculación de planos con `tramitacion.inmuebles` contra el Postgres real (solo con `PRUEBAS_POSTGRES=1`).
   - `test_nomenclatura.py`: pruebas de normalización catastral, unicidad, ciclo de validación/modificación, preservación de transcripción original y borrado.
   - `test_vision_colab.py`: pruebas del cliente de visión, selección dinámica de modelo en Google Colab (`colab-activo`), recarga de `.env` y pipeline en 2 pasos.
 
@@ -329,7 +276,7 @@ Implementado en `backend/src/compartido/preprocessing.py` con la función `crop_
 
 ### 4.4 Paso 2: Extracción Estructurada de Datos Técnicos en HD
 
-Se envía **únicamente el recorte del cajetín en máxima resolución** a Qwen2.5-VL con el esquema JSON completo de `PlanoHistorico` (`backend/src/tareas/schemas.py`). Al tener solo el rótulo en primer plano, el modelo dispone del 100% de su capacidad atencional y de resolución óptica en el texto que importa.
+Se envía **únicamente el recorte del cajetín en máxima resolución** a Qwen2.5-VL con el esquema JSON completo de `PlanoHistorico` (`backend/src/planos/schemas.py`). Al tener solo el rótulo en primer plano, el modelo dispone del 100% de su capacidad atencional y de resolución óptica en el texto que importa.
 
 - **Prompt utilizado en el Paso 2:**
   ```text
@@ -365,7 +312,7 @@ Se envía **únicamente el recorte del cajetín en máxima resolución** a Qwen2
 
 ### 4.5 Resiliencia y Manejo de Errores
 
-- **Reintentos automáticos:** Tanto el gestor de tareas asíncronas (`backend/src/tareas/services.py`) como el worker del catálogo (`backend/src/planos/worker.py`) ejecutan reintentos automáticos si la llamada al modelo no responde en el primer intento.
+- **Reintentos automáticos:** El worker del catálogo (`backend/src/planos/worker.py`) ejecuta un reintento automático si la llamada al modelo no responde en el primer intento.
 - **Doble Fallback:** Si por algún caso extremo la extracción sobre el recorte del cajetín fallase, el sistema reintenta la extracción sobre el plano completo para no dejar la petición en error.
 - **Concurrencia no bloqueante:** Toda la inferencia pesada corre en hilos separados (`asyncio.to_thread`) para mantener ágil el event loop de FastAPI.
 
@@ -373,42 +320,37 @@ Se envía **únicamente el recorte del cajetín en máxima resolución** a Qwen2
 
 ---
 
-## 5. Catálogo y Base de Datos Relacional (PostgreSQL y MinIO)
+## 5. Catálogo y Base de Datos Relacional (PostgreSQL en Supabase)
 
 El catálogo de planos (datos de origen, estado de validación, auditoría
-e historial) se guarda en **PostgreSQL**, y los archivos originales en
-**MinIO** (bucket `planos`). Ambos corren como servicios del
-`docker-compose.yml`: las tablas se crean e inicializan solas al arrancar la API.
+e historial) se guarda en el **PostgreSQL de Supabase**, esquema `planos`, y los
+archivos originales en **Supabase Storage** (bucket `planos_escaneados`). Las tablas
+se crean e inicializan solas al arrancar la API.
 
 ### 5.1 Variables de Entorno y Conexión
 
-Variables en `.env` (ver `.env.example`; si no están, se usan esos
-mismos valores por defecto):
+La API se conecta con `SUPABASE_DB_URL` (ver [Configuración de Supabase](#6-configuración-de-supabase)).
+Para inspeccionar la base podés usar el editor de tablas del dashboard de Supabase o
+cualquier cliente (DBeaver, pgAdmin, `psql`) con esa misma cadena de conexión.
 
-```env
-POSTGRES_USER=planos
-POSTGRES_PASSWORD=planos
-POSTGRES_DB=planos_db
-```
-
-Postgres queda expuesto en `localhost:5432` para inspeccionarlo con
-cualquier cliente (DBeaver, pgAdmin, `psql`), y la consola de MinIO en
-[http://localhost:9001](http://localhost:9001).
+La base también tiene el esquema `tramitacion` del backend del otro grupo: cada plano
+se vincula (`planos.id_inmueble`) al inmueble de `tramitacion.inmuebles` con la misma
+nomenclatura en la localidad `LOCALIDAD_PLANOS` (La Plata por defecto), si existe.
 
 ### 5.2 Funcionamiento de la Base de Datos
 
-La persistencia del catálogo se apoya en **PostgreSQL** mediante **SQLModel** (integración entre Pydantic y SQLAlchemy en `backend/src/models.py`), complementada por **MinIO** para el almacenamiento de archivos binarios:
+La persistencia del catálogo se apoya en **PostgreSQL** mediante **SQLModel** (integración entre Pydantic y SQLAlchemy en `backend/src/models.py`), complementada por **Supabase Storage** para el almacenamiento de archivos binarios:
 
 1. **Inicialización y Migraciones Automáticas (`init_db`)**:
    - Al arrancar la aplicación (`main.py`), `init_db()` ejecuta `SQLModel.metadata.create_all(engine)`.
    - Adicionalmente, aplica sentencias idempotentes `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` y `CREATE UNIQUE INDEX IF NOT EXISTS`. Esto permite actualizar esquemas existentes sin pérdida de información ni requerir scripts de migración manuales.
 
 2. **Integridad de Archivos y Almacenamiento Híbrido**:
-   - Los archivos originales (JPEG, PNG, WEBP, TIFF, PDF) y sus previsualizaciones JPEG se suben al bucket `planos` de MinIO.
+   - Los archivos originales (JPEG, PNG, WEBP, TIFF, PDF) y sus previsualizaciones JPEG se suben al bucket `planos_escaneados` de Supabase Storage.
    - En PostgreSQL se registra la ruta relativa (`minio_path`), el peso del documento (`tamano_bytes`) y la firma criptográfica **SHA-256** (`hash_sha256`) calculada en memoria antes de la subida para garantizar que el archivo nunca haya sido alterado.
 
 3. **Unicidad de Nomenclatura Catastral**:
-   - Cada plano admite cuatro componentes opcionales: `circunscripcion`, `seccion`, `manzana` y `parcela_catastral`.
+   - Cada plano posee cuatro componentes obligatorios: `circunscripcion`, `seccion`, `manzana` y `parcela_catastral`.
    - La concatenación normalizada (ej. `3-K-12A-5B`) se indexa de forma única con el índice `ux_planos_nomenclatura`, impidiendo duplicados en el catálogo activo.
 
 4. **Trazabilidad y Auditoría de Operaciones (`eventos_auditoria`)**:
@@ -416,11 +358,11 @@ La persistencia del catálogo se apoya en **PostgreSQL** mediante **SQLModel** (
    - Se guardan snapshots en formato JSON (`valores_anteriores` y `valores_nuevos`), el motivo justificado, el operador responsable y la dirección IP de origen (`ip_origen`).
 
 5. **Baja Lógica (*Soft Delete*)**:
-   - Al ejecutar `DELETE /planos/{id}`, el sistema no destruye los datos ni borra los archivos físicos en MinIO: marca `activo = False`, libera la nomenclatura (asignándole `null` para permitir reclasificaciones futuras) y añade un evento de auditoría con la acción `'Caducidad'`.
+   - Al ejecutar `DELETE /planos/{id}`, el sistema no destruye los datos ni borra los archivos físicos en Storage: marca `activo = False`, libera la nomenclatura (asignándole `null` para permitir reclasificaciones futuras) y añade un evento de auditoría con la acción `'Caducidad'`.
 
 6. **Trazabilidad de Inferencia IA (`procesamientos_ia`)**:
    - Cada intento de extracción automática por el modelo de visión (hasta un máximo de 3 intentos) se registra de forma independiente.
-   - Se documenta el modelo utilizado (`modelo_ia`), la versión del prompt (`version_prompt`), los parámetros de preprocesamiento aplicados (`parametros_preprocesamiento`), el texto OCR crudo (`texto_extraido_raw`), la respuesta JSON íntegra (`respuesta_json_raw`) y el tiempo de respuesta (`duracion_ms`).
+   - Se documenta el modelo utilizado (`modelo_ia`), la versión del prompt (`version_prompt`), los parámetros de preprocesamiento aplicados (`parametros_preprocesamiento`), el texto OCR crudo (`texto_extraido_raw`), la respuesta cruda del modelo, aunque no se haya podido parsear (`respuesta_json_raw`) y el tiempo de respuesta (`duracion_ms`).
 
 ---
 
@@ -433,7 +375,7 @@ Representa la ficha del plano histórico dentro del archivo municipal o instituc
 | Campo | Tipo SQL | Restricciones / Default | Descripción |
 |---|---|---|---|
 | `id` | `INTEGER` | Primary Key, Autoincremental | Identificador único del plano. |
-| `minio_path` | `TEXT` | NOT NULL | Clave o ruta del archivo original almacenado en MinIO (ej. `<uuid>.<ext>`). |
+| `minio_path` | `TEXT` | NOT NULL | Clave del archivo original en el bucket de Supabase Storage (ej. `<uuid>.<ext>`). El nombre de la columna quedó de cuando se usaba MinIO. |
 | `hash_sha256` | `VARCHAR(64)` | Nullable | Hash SHA-256 del archivo original para verificar su integridad. |
 | `tamano_bytes` | `INTEGER` | Nullable | Tamaño exacto del archivo original subido, expresado en bytes. |
 | `nombre_original` | `TEXT` | NOT NULL | Nombre original del archivo proporcionado por el usuario al subirlo. |
@@ -502,7 +444,7 @@ Almacena el historial y los resultados de cada intento de inferencia ejecutado p
 | `version_prompt` | `VARCHAR(30)` | Nullable | Versión o etiqueta del prompt utilizado (ej. `v2.0-cajetin-2pasos`). |
 | `parametros_preprocesamiento` | `TEXT` | Nullable | JSON con los parámetros aplicados en `preprocessing.py` (resolución, recorte, contraste, nitidez, rotación). |
 | `texto_extraido_raw` | `TEXT` | Nullable | Transcripción íntegra cruda devuelta por el modelo sin edición posterior. |
-| `respuesta_json_raw` | `TEXT` | Nullable | Payload JSON completo devuelto por el modelo para ese intento. |
+| `respuesta_json_raw` | `TEXT` | Nullable | Respuesta del modelo tal cual la devolvió en ese intento (también si falló el parseo). |
 | `duracion_ms` | `INTEGER` | Nullable | Duración total de la inferencia en milisegundos. |
 | `fecha` | `TIMESTAMPTZ`| NOT NULL, Default `now()` | Fecha y hora en que se registró el intento (UTC). |
 
@@ -562,13 +504,13 @@ erDiagram
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| `POST` | `/planos` | Multipart: `archivo` (obligatorio), `circunscripcion`, `seccion`, `manzana`, `parcela_catastral` (opcionales) + `ubicacion_fisica`, `expediente`, `direccion_referencia` (opcionales). Sube a MinIO, crea el plano como `pendiente` y dispara la IA en segundo plano (`ia_estado=procesando`). Si es PDF, rasteriza la primera página para el análisis y la previsualización. |
+| `POST` | `/planos` | Multipart: `archivo`, `circunscripcion`, `seccion`, `manzana`, `parcela_catastral` (obligatorios) + `ubicacion_fisica`, `expediente`, `direccion_referencia` (opcionales). Sube a Supabase Storage, crea el plano como `pendiente` y dispara la IA en segundo plano (`ia_estado=procesando`). Si es PDF, rasteriza la primera página para el análisis y la previsualización. |
 | `GET` | `/planos` | Lista. Filtros: `estado` (repetible: `?estado=validado&estado=sin_ubicacion`) y `q` (coincidencia exacta de nomenclatura: `3-K-12A-5B`). |
 | `GET` | `/planos/{id}` | Detalle con historial. Sirve para consultar si la IA terminó (`ia_estado`). |
 | `DELETE` | `/planos/{id}` | Baja lógica (*soft delete*): marca `activo=False`, libera la nomenclatura y registra un evento de auditoría `'Caducidad'`. Conserva el documento original y su trazabilidad histórica. Devuelve 404 si el plano no existe o ya fue dado de baja. |
 | `GET` | `/planos/{id}/archivo` | Devuelve el archivo original (imagen o PDF original). |
 | `GET` | `/planos/{id}/preview` | Devuelve una imagen JPEG de previsualización (la imagen original o la primera página rasterizada si es PDF). |
-| `PUT` | `/planos/{id}/validar` | JSON con los metadatos revisados + nomenclatura catastral opcional. Pasa a estado `validado`, registra `validado_en` y añade un evento `'Validación'` al historial de auditoría con snapshot JSON. Devuelve 409 si el plano ya fue validado. |
+| `PUT` | `/planos/{id}/validar` | JSON con los metadatos revisados + nomenclatura catastral obligatoria. Pasa a estado `validado`, registra `validado_en` y añade un evento `'Validación'` al historial de auditoría con snapshot JSON. Devuelve 409 si el plano ya fue validado. |
 | `PUT` | `/planos/{id}/modificar` | JSON con los metadatos + nomenclatura + `motivo` (obligatorio, 400 si falta). Actualiza el plano, limpia `ia_propuesta` y añade un evento `'Modificación'` al historial con snapshot de valores anteriores y nuevos. |
 | `POST` | `/planos/{id}/reintentar_ia` | Query param `usuario_id`. Dispara un reanálisis con IA si el plano no está en procesamiento y no superó el límite de 3 intentos. Si el plano ya estaba validado, la respuesta de la IA se guarda en `ia_propuesta` para revisión sin pisar los datos confirmados. |
 | `POST` | `/planos/{id}/descartar_propuesta` | Descarta la propuesta sugerida por la IA (`ia_propuesta = null`) conservando los datos aprobados por el operador. |
@@ -595,35 +537,44 @@ Detalles de comportamiento:
   resultado de la IA no pisa los datos cargados a mano.
 - Si la API se reinicia con planos en `procesando`, los vuelve a
   encolar al arrancar.
-- Esto convive con `/procesar-plano` y `/tareas` (y su persistencia en
-  Supabase/MongoDB), que siguen funcionando igual.
 
 [↑ Volver a la tabla de contenidos](#indice)
 
 ---
 
-## 6. Almacenamiento Secundario (Supabase y MongoDB)
+## 6. Configuración de Supabase
 
-Cada plano procesado a través de los endpoints `/procesar-plano` y `/tareas` (tanto en modo asíncrono como con `?sync=true`) se persiste de forma aislada en dos servicios externos:
+Todo el almacenamiento del sistema vive en un proyecto de Supabase:
 
-- **Supabase Storage** (bucket `planos_escaneados`): guarda el archivo original subido y expone su URL pública (`supabase_url` en la respuesta de `/tareas/{task_id}`).
-- **MongoDB** (base `planos_db`, colección `extracciones`): guarda el documento completo (fecha de procesamiento, metadatos del archivo y la extracción realizada por el modelo) según el esquema `DocumentoExtraccion` (`backend/src/tareas/schemas.py`).
-
-Esta lógica vive en `backend/src/tareas/services.py` (función `_guardar_extraccion`), utilizando los clientes `backend/src/compartido/storage_client.py` y `backend/src/compartido/db_client.py`.
+- **PostgreSQL**: esquemas `planos` (nuestro catálogo) y `tramitacion` (del otro grupo).
+- **Storage** (bucket `planos_escaneados`): archivos originales y previsualizaciones JPEG.
 
 ### 6.1 Variables de Entorno
 
 Definidas en `.env` (ver `.env.example`):
 
 ```env
-MONGODB_URI=mongodb+srv://usuario:password@cluster.mongodb.net/?appName=...
 SUPABASE_URL=https://<proyecto>.supabase.co
 SUPABASE_KEY=<service_role key>
+SUPABASE_BUCKET=planos_escaneados
+SUPABASE_DB_URL=postgresql://postgres.<proyecto>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+LOCALIDAD_PLANOS=LP
 ```
 
 > **Importante sobre `SUPABASE_KEY`**: Debe ser la **service_role key** (Supabase Dashboard → Settings → API), no la `anon`/`publishable`. El bucket tiene Row Level Security (RLS) activado, por lo que la clave anónima no tiene permiso de `INSERT` y falla con error 403. La service_role key nunca se expone al cliente web.
 >
-> **Importante sobre `MONGODB_URI`**: La IP del servidor debe estar habilitada en la lista blanca de Atlas (Network Access → Add IP Address) para evitar errores `ServerSelectionTimeoutError`.
+> **Importante sobre `SUPABASE_DB_URL`**: Se obtiene en el dashboard con **Connect → Connection string → URI → Session pooler**. La *Direct connection* solo funciona por IPv6, que Docker en Windows normalmente no tiene.
+>
+> **Plan gratuito**: Supabase pausa el proyecto tras 7 días sin uso. Si la API devuelve errores de conexión o Storage responde `DatabaseTimeout`, entrá al dashboard y tocá **Restore project**.
+
+### 6.2 Carga inicial del esquema tramitacion
+
+La API no arranca si falta `tramitacion.inmuebles`. En un proyecto nuevo, cargalo una sola vez (ver `db/tramitacion/README.md`):
+
+```bash
+docker run --rm -v "$PWD/db/tramitacion:/sql:ro" postgres:17-alpine \
+  psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f /sql/01_tramitacion.sql -f /sql/02_extensiones_backend.sql
+```
 
 [↑ Volver a la tabla de contenidos](#indice)
 
@@ -633,11 +584,11 @@ SUPABASE_KEY=<service_role key>
 
 ### 7.1 Nomenclatura Catastral y Reglas del Archivo
 
-La carga exige únicamente el archivo. Circunscripción, sección, manzana, parcela catastral, expediente, dirección de referencia y ubicación física son opcionales. Se pueden conservar nomenclaturas parciales. La clave única se genera solo cuando los cuatro componentes están completos; de lo contrario queda en null y puede haber varios planos sin nomenclatura completa. El ID numérico interno se conserva para las relaciones de base de datos.
+La carga exige archivo, circunscripción, sección, manzana y parcela catastral. Expediente, dirección de referencia y ubicación física son opcionales. La combinación de los cuatro componentes es única para cada plano dentro del archivo. El ID numérico interno se conserva para las relaciones de base de datos.
 
 - **Formato admitido**: Circunscripción numérica positiva, sección con letras A–Z, y manzana/parcela con número positivo y letras opcionales al final. Cada componente tiene un límite técnico de 64 caracteres.
 - **Normalización**: Se normalizan espacios, mayúsculas y ceros iniciales: `03-k-012 a-05 b` se guarda y busca como `3-K-12A-5B`.
-- **Consulta dinámica**: La pestaña Consultar muestra los planos catalogados en páginas de cinco y combina filtros de calle, número, expediente, año y nomenclatura catastral mientras se escribe. Calle y expediente admiten coincidencias parciales sin distinguir mayúsculas ni acentos; año y componentes catastrales coinciden por prefijo; la altura debe coincidir completa. La dirección se toma de `direccion_referencia` o, si falta, de `ubicacion`. La altura se reconoce cuando está indicada con número/N.º/# o como número final de la dirección; `Calle 47` por sí sola no se interpreta como altura 47. La interfaz descarga el catálogo y filtra/pagina localmente. El parámetro `q` de la API conserva la búsqueda exacta por nomenclatura completa. Actualmente expedientes y parcelas son datos del plano, no entidades independientes para realizar un cruce relacional.
+- **Búsqueda exacta**: La consulta en el catálogo es estricta por clave catastral; no realiza búsquedas parciales por expediente o año. Las colas de carga/revisión y las listas de modificación muestran sus registros sin requerir una búsqueda previa.
 - **Migración de planos históricos**: Al iniciar la API, `init_db()` añade las columnas requeridas y el índice único preservando planos anteriores, los cuales quedan con nomenclatura pendiente hasta su revisión o modificación manual.
 
 ### 7.2 Indicador de Conexión a la Base de Datos
@@ -657,6 +608,9 @@ El proyecto cuenta con suites de pruebas unitarias y de integración tanto para 
 # Pruebas de reglas de negocio, endpoints y nomenclatura
 docker compose exec -T api python -m unittest tests.test_nomenclatura -v
 
+# Integración con el esquema tramitacion contra el Postgres de Supabase
+docker compose exec -T -e PRUEBAS_POSTGRES=1 api python -m unittest tests.test_integracion_tramitacion -v
+
 # Pruebas de salud del sistema y conexión a PostgreSQL
 docker compose exec -T api python -m unittest tests.test_health -v
 
@@ -673,7 +627,7 @@ node --test front/tests/errors.test.cjs front/tests/database-status.test.cjs
 
 ## 8. Notas y Parámetros Técnicos
 
-- **Esquema de extracción**: Definido en `backend/src/tareas/schemas.py` (`PlanoHistorico` con Pydantic). Cualquier ajuste o nuevo campo agregado allí se propaga automáticamente a las directivas de extracción estructurada del modelo VLM.
+- **Esquema de extracción**: Definido en `backend/src/planos/schemas.py` (`PlanoHistorico` con Pydantic). Cualquier ajuste o nuevo campo agregado allí se propaga automáticamente a las directivas de extracción estructurada del modelo VLM.
 - **Rendimiento con GPU vs CPU**: Sin GPU, cada plano puede demorar entre 20 y 90 segundos según su resolución óptica. Con aceleración por GPU (Google Colab T4 o GPU NVIDIA local), el tiempo se reduce a unos pocos segundos por lámina.
 - **Ajuste de Preprocesamiento**: La función `backend/src/compartido/preprocessing.py` optimiza la resolución preliminar (`MAX_DIMENSION = 1600`) y la resolución del cajetín técnico (`MAX_CAJETIN_DIMENSION = 1800`) aplicando autocontraste y realce de nitidez con Pillow antes de consultar al modelo.
 

@@ -1,4 +1,4 @@
-"""Cliente de Supabase Storage: sube el archivo original y devuelve su URL pública."""
+"""Cliente de Supabase Storage: guarda y lee los archivos originales de los planos y sus previsualizaciones."""
 import logging
 import os
 import uuid
@@ -10,7 +10,7 @@ logger = logging.getLogger("planos.storage")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
-BUCKET_NAME = "planos_escaneados"
+BUCKET_NAME = os.environ.get("SUPABASE_BUCKET", "planos_escaneados")
 
 _client: Optional[Client] = None
 
@@ -30,16 +30,43 @@ def get_supabase_client() -> Optional[Client]:
         return None
 
 
-def subir_plano(contenido: bytes, nombre_original: str, content_type: str) -> str:
+def _bucket():
     client = get_supabase_client()
     if not client:
         raise RuntimeError("Cliente de Supabase no disponible (verifique SUPABASE_KEY y SUPABASE_URL)")
+    return client.storage.from_(BUCKET_NAME)
 
+
+def subir_archivo(contenido: bytes, nombre_original: str, content_type: str) -> str:
+    """Sube el archivo y devuelve su key dentro del bucket."""
     extension = nombre_original.rsplit(".", 1)[-1] if "." in nombre_original else "bin"
-    nombre_storage = f"{uuid.uuid4()}.{extension}"
+    return subir_archivo_con_key(contenido, f"{uuid.uuid4()}.{extension}", content_type)
 
-    client.storage.from_(BUCKET_NAME).upload(
-        nombre_storage, contenido, {"content-type": content_type}
-    )
-    return client.storage.from_(BUCKET_NAME).get_public_url(nombre_storage)
+
+def subir_archivo_con_key(contenido: bytes, key: str, content_type: str = "image/jpeg") -> str:
+    """Sube un archivo con una key fija (ej. previsualizaciones), pisándolo si ya existe."""
+    _bucket().upload(key, contenido, {"content-type": content_type, "upsert": "true"})
+    return key
+
+
+def obtener_archivo(key: str) -> bytes:
+    return _bucket().download(key)
+
+
+def existe_archivo(key: str) -> bool:
+    """Verifica si un objeto existe en el bucket (las keys no tienen carpetas)."""
+    try:
+        return any(obj.get("name") == key for obj in _bucket().list("", {"search": key}))
+    except Exception:
+        return False
+
+
+def obtener_preview_key(archivo_key: str) -> str:
+    """Calcula la key correspondiente a la miniatura/preview de un archivo."""
+    return f"{archivo_key}.preview.jpg"
+
+
+def eliminar_archivo(key: str) -> None:
+    """Eliminar es idempotente: un objeto ausente también cuenta como eliminado."""
+    _bucket().remove([key])
 

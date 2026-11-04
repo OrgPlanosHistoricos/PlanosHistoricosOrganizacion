@@ -1,4 +1,4 @@
-"""Servicios y reglas de negocio del catálogo de planos (Postgres + MinIO)."""
+"""Servicios y reglas de negocio del catálogo de planos (Postgres + Supabase Storage)."""
 import asyncio
 import hashlib
 import json
@@ -8,7 +8,7 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from src.compartido.minio_client import (
+from src.compartido.storage_client import (
     existe_archivo,
     obtener_archivo,
     obtener_preview_key,
@@ -24,6 +24,8 @@ from src.models import (
     EstadoIA,
     EstadoPlano,
     EventoAuditoria,
+    Inmueble,
+    Localidad,
     Plano,
     ProcesamientoIA,
     ahora,
@@ -112,6 +114,19 @@ def _comprobar_unica(session: Session, clave: str, plano_id: Optional[int] = Non
         raise HTTPException(status_code=409, detail={"codigo": "duplicado"})
 
 
+def _buscar_inmueble(session: Session, clave: str) -> Optional[int]:
+    """Vincula con el inmueble de tramitación solo si ya existe; nunca lo crea."""
+    return session.exec(
+        select(Inmueble.id_inmueble)
+        .join(Localidad)
+        .where(
+            Inmueble.nomenclatura_catastral == clave,
+            Inmueble.activo == True,  # noqa: E712
+            Localidad.codigo == settings.LOCALIDAD_PLANOS,
+        )
+    ).first()
+
+
 def _comprobar_sin_analisis_en_curso(session: Session) -> None:
     en_proceso = session.exec(
         select(Plano).where(Plano.ia_estado == EstadoIA.procesando, Plano.activo == True)  # noqa: E712
@@ -142,6 +157,7 @@ def _aplicar_datos(plano: Plano, datos: Union[PlanoValidar, PlanoModificar], ses
     for campo, valor in nomen.items():
         setattr(plano, campo, valor)
     plano.nomenclatura = clave
+    plano.id_inmueble = _buscar_inmueble(session, clave)
     for campo in DatosPlano.model_fields:
         # La transcripción original pertenece al análisis IA, no a la catalogación.
         if campo == "texto_extraido":
@@ -205,6 +221,7 @@ async def crear_plano(
     nuevo_plano = Plano(
         **nomen,
         nomenclatura=clave,
+        id_inmueble=_buscar_inmueble(session, clave),
         nombre_original=nombre,
         content_type=archivo.content_type,
         hash_sha256=hash_sha256,
@@ -313,7 +330,7 @@ def obtener_preview_plano(plano_id: int, session: Session) -> Tuple[bytes, str]:
         contenido = obtener_archivo(plano.minio_path)
         return contenido, plano.content_type
 
-    # Si es PDF, buscar o generar la vista previa JPEG en MinIO
+    # Si es PDF, buscar o generar la vista previa JPEG en Storage
     preview_key = obtener_preview_key(plano.minio_path)
     if existe_archivo(preview_key):
         contenido = obtener_archivo(preview_key)
