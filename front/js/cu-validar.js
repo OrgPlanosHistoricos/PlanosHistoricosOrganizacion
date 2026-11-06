@@ -139,19 +139,38 @@
         + (esPdf ? '📄 Abrir / Descargar PDF original (' + esc(d.nombre_original) + ')' : '🖼️ Ver / Descargar imagen original')
         + '</a></div>';
 
+      var btnReintentarForm = '';
+      if (d.ia_estado === 'procesando') {
+        btnReintentarForm = '<button type="button" class="ghost" id="v-btn-reintentar" disabled style="opacity:0.7;cursor:wait;">Analizando con IA...</button>';
+      } else if (puedeReintentar) {
+        btnReintentarForm = '<button type="button" class="ghost" id="v-btn-reintentar" onclick="PH.CUValidar.reintentar(' + d.id + ')">Reintentar análisis (' + intentos + '/' + maxIntentos + ')</button>';
+      } else if (intentos >= maxIntentos && d.ia_estado !== 'no_aplica') {
+        btnReintentarForm = '<button type="button" class="btn-limite" disabled aria-disabled="true" title="Se alcanzó el límite máximo de 3 intentos de análisis">'
+          + '<span class="limite-dot" aria-hidden="true"></span>'
+          + 'Límite de 3 intentos alcanzado'
+          + '</button>';
+      }
+
       var opcionesFallaHTML = '';
       if (tieneFalla) {
         var displayOpc = modoCargaManual ? 'none' : 'flex';
+        var btnFallaReintentar = '';
+        if (d.ia_estado === 'procesando') {
+          btnFallaReintentar = '<button type="button" class="ghost" disabled style="opacity:0.7;cursor:wait;">Analizando con IA...</button>';
+        } else if (puedeReintentar) {
+          btnFallaReintentar = '<button class="primary" onclick="PH.CUValidar.reintentar(' + d.id + ')">Reintentar análisis (' + intentos + '/' + maxIntentos + ')</button>';
+        } else if (intentos >= maxIntentos && d.ia_estado !== 'no_aplica') {
+          btnFallaReintentar = '<button type="button" class="btn-limite" disabled aria-disabled="true" title="Se alcanzó el límite máximo de 3 intentos de análisis">'
+            + '<span class="limite-dot" aria-hidden="true"></span>'
+            + 'Límite de 3 intentos alcanzado'
+            + '</button>';
+        }
         opcionesFallaHTML = '<div id="v-opciones-falla" style="display:' + displayOpc + '; gap:8px; flex-wrap:wrap; margin:12px 0 16px 0;">'
-          + (puedeReintentar ? '<button class="primary" onclick="PH.CUValidar.reintentar(' + d.id + ')">Reintentar análisis (' + intentos + '/' + maxIntentos + ')</button>' : '')
+          + btnFallaReintentar
           + '<button class="' + (puedeReintentar ? 'ghost' : 'primary') + '" onclick="PH.CUValidar.cargarAMano()">Cargar datos a mano</button>'
           + '<button class="danger" onclick="PH.CUValidar.eliminar(this)">Eliminar plano</button>'
           + '</div>';
       }
-
-      var btnReintentarForm = puedeReintentar
-        ? '<button type="button" class="ghost" onclick="PH.CUValidar.reintentar(' + d.id + ')">Reintentar análisis (' + intentos + '/' + maxIntentos + ')</button>'
-        : '';
 
       var displayForm = (!tieneFalla || modoCargaManual) ? 'block' : 'none';
       var formHTML = '<div id="v-form-container" style="display:' + displayForm + ';">'
@@ -233,6 +252,11 @@
 
   async function reintentar(id) {
     if (!id) return;
+    var btn = document.getElementById('v-btn-reintentar');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Iniciando análisis...';
+    }
     try {
       await API.reintentarIA(id, "Validador");
       seleccionadoId = null;
