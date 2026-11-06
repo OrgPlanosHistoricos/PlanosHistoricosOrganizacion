@@ -1,29 +1,56 @@
 """Cliente de Supabase Storage: guarda y lee los archivos originales de los planos y sus previsualizaciones."""
 import logging
 import os
+from pathlib import Path
 import uuid
-from typing import Optional
+from typing import Optional, Tuple
 
+from dotenv import dotenv_values
 from supabase import create_client, Client
 
 logger = logging.getLogger("planos.storage")
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
-BUCKET_NAME = os.environ.get("SUPABASE_BUCKET", "planos_escaneados")
+_ENV_CANDIDATES = (
+    Path(__file__).resolve().parents[2] / ".env",  # /app/.env en Docker
+    Path(__file__).resolve().parents[3] / ".env",  # raíz del repo en local
+)
+_ENV_FILE = next((p for p in _ENV_CANDIDATES if p.is_file()), _ENV_CANDIDATES[0])
+
+
+def _leer_env() -> dict:
+    if _ENV_FILE.is_file():
+        try:
+            return {k: v for k, v in dotenv_values(_ENV_FILE).items() if v is not None}
+        except Exception:
+            return {}
+    return {}
+
+
+def _get_config() -> Tuple[str, str, str]:
+    env = _leer_env()
+    url = env.get("SUPABASE_URL") or os.environ.get("SUPABASE_URL", "")
+    key = env.get("SUPABASE_KEY") or os.environ.get("SUPABASE_KEY", "")
+    bucket = env.get("SUPABASE_BUCKET") or os.environ.get("SUPABASE_BUCKET", "planos_escaneados")
+    return url, key, bucket
+
 
 _client: Optional[Client] = None
+_last_key: Optional[str] = None
+_last_url: Optional[str] = None
 
 
 def get_supabase_client() -> Optional[Client]:
-    global _client
-    if _client is not None:
+    global _client, _last_key, _last_url
+    url, key, _ = _get_config()
+    if _client is not None and _last_key == key and _last_url == url:
         return _client
-    if not SUPABASE_URL or not SUPABASE_KEY:
+    if not url or not key:
         logger.warning("SUPABASE_URL o SUPABASE_KEY no están configurados.")
         return None
     try:
-        _client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        _client = create_client(url, key)
+        _last_key = key
+        _last_url = url
         return _client
     except Exception as e:
         logger.error(f"Error al inicializar cliente de Supabase: {e}")
@@ -34,7 +61,8 @@ def _bucket():
     client = get_supabase_client()
     if not client:
         raise RuntimeError("Cliente de Supabase no disponible (verifique SUPABASE_KEY y SUPABASE_URL)")
-    return client.storage.from_(BUCKET_NAME)
+    _, _, bucket_name = _get_config()
+    return client.storage.from_(bucket_name)
 
 
 def subir_archivo(contenido: bytes, nombre_original: str, content_type: str) -> str:
@@ -69,4 +97,3 @@ def obtener_preview_key(archivo_key: str) -> str:
 def eliminar_archivo(key: str) -> None:
     """Eliminar es idempotente: un objeto ausente también cuenta como eliminado."""
     _bucket().remove([key])
-
