@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grupo 3 - Digitalización Documental | Ingeniería de Software II</title>
+  <style>
+    :root {
+      --navy:#0b3a67;
+      --blue:#0f67b1;
+      --light:#eef6fd;
+      --text:#15324f;
+      --muted:#5e7184;
+      --green:#198754;
+      --orange:#e67e22;
+      --purple:#6f42c1;
+      --white:#ffffff;
+      --border:#d7e4ef;
+    }
+
+    * { box-sizing:border-box; }
+
+    body {
+      margin:0;
+      font-family:Arial, Helvetica, sans-serif;
+      background:#f6f9fc;
+      color:var(--text);
+    }
+
+    .page { min-height:100vh; }
+
+    header {
+      background:var(--navy);
+      color:white;
+      padding:14px 4vw;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:24px;
+      flex-wrap:wrap;
+    }
+
+    .brand {
+      display:flex;
+      align-items:center;
+      gap:16px;
+    }
+
+    .logo-ucalp {
+      background:#ffffff;
+      padding:8px;
+      border-radius:50%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex:0 0 auto;
+    }
+
+    .logo-ucalp img {
+      width:58px;
+      height:58px;
+      object-fit:contain;
+      display:block;
+    }
+
+    .brand-title {
+      font-size:1.18rem;
+      font-weight:700;
+      line-height:1.2;
+    }
+
+    .brand-subtitle {
+      font-size:.88rem;
+      opacity:.88;
+      margin-top:4px;
+    }
+
+    nav {
+      display:flex;
+      gap:22px;
+      flex-wrap:wrap;
+      font-size:.95rem;
+    }
+
+    nav a {
+      color:white;
+      text-decoration:none;
+      opacity:.9;
+    }
+
+    nav a:hover { opacity:1; }
+
+    .hero {
+      display:grid;
+      grid-template-columns:1.05fr .95fr;
+      background:linear-gradient(100deg,#0b3a67 0%,#0d4f86 50%,#0c5a95 100%);
+      color:white;
+      min-height:360px;
+    }
+
+    .hero-copy {
+      padding:46px 5vw;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+    }
+
+    .eyebrow {
+      letter-spacing:.28em;
+      text-transform:uppercase;
+      font-size:.9rem;
+      opacity:.8;
+      margin-bottom:12px;
+    }
+
+    h1 {
+      margin:0 0 12px;
+      font-size:clamp(2rem,4vw,3.5rem);
+      line-height:1.02;
+    }
+
+    .hero h2 {
+      margin:0 0 16px;
+      font-size:clamp(1.2rem,2vw,1.8rem);
+      font-weight:600;
+    }
+
+    .hero p {
+      margin:0;
+      line-height:1.6;
+      font-size:1.05rem;
+      max-width:760px;
+    }
+
+    .hero-image {
+      position:relative;
+      overflow:hidden;
+      min-height:320px;
+    }
+
+    .hero-image img {
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+
+    .hero-image::after {
+      content:"";
+      position:absolute;
+      inset:0;
+      background:linear-gradient(90deg,rgba(11,58,103,.58),rgba(11,58,103,0) 35%);
+      pointer-events:none;
+    }
+
+    main {
+      width:min(1500px,94%);
+      margin:0 auto;
+      padding:28px 0 44px;
+    }
+
+    .academic-grid {
+      display:grid;
+      grid-template-columns:repeat(5,1fr);
+      gap:14px;
+      margin-bottom:22px;
+    }
+
+    .academic-card,
+    .panel,
+    .objective-card {
+      background:white;
+      border:1px solid var(--border);
+      border-radius:14px;
+      box-shadow:0 8px 22px rgba(26,74,112,.06);
+    }
+
+    .academic-card {
+      padding:18px;
+      border-left:5px solid var(--blue);
+      min-height:112px;
+    }
+
+    .academic-card:nth-child(3){ border-left-color:var(--green); }
+    .academic-card:nth-child(4){ border-left-color:var(--purple); }
+    .academic-card:nth-child(5){ border-left-color:var(--orange); }
+
+    .academic-card strong {
+      display:block;
+      margin-bottom:7px;
+      color:#0d3258;
+    }
+
+    .academic-card span {
+      color:var(--muted);
+      line-height:1.35;
+    }
+
+    .content-grid {
+      display:grid;
+      grid-template-columns:1.08fr .92fr 1fr;
+      gap:18px;
+      align-items:start;
+    }
+
+    .panel {
+      padding:22px;
+      min-height:100%;
+    }
+
+    .panel h3 {
+      margin:0 0 16px;
+      color:#0b3a67;
+      font-size:1.28rem;
+    }
+
+    .project-text {
+      line-height:1.6;
+      color:#314d68;
+    }
+
+    .teacher {
+      padding:12px 0;
+      border-bottom:1px solid #e4edf4;
+    }
+    .teacher:last-child { border-bottom:none; }
+    .teacher strong { display:block; }
+    .teacher span { color:var(--muted); font-size:.93rem; }
+
+    table {
+      width:100%;
+      border-collapse:collapse;
+      font-size:.95rem;
+    }
+    th {
+      text-align:left;
+      background:#0f5f9f;
+      color:white;
+      padding:10px 12px;
+    }
+    td {
+      padding:10px 12px;
+      border-bottom:1px solid #e4edf4;
+    }
+    tbody tr:nth-child(even){ background:#f3f8fc; }
+
+    .objectives {
+      margin-top:22px;
+      display:grid;
+      grid-template-columns:repeat(4,1fr);
+      gap:16px;
+    }
+
+    .objective-card {
+      overflow:hidden;
+    }
+
+    .objective-card img {
+      width:100%;
+      height:160px;
+      object-fit:cover;
+      display:block;
+    }
+
+    .objective-body {
+      padding:16px;
+    }
+
+    .objective-body h4 {
+      margin:0 0 8px;
+      color:#0b3a67;
+      font-size:1rem;
+    }
+
+    .objective-body p {
+      margin:0;
+      color:var(--muted);
+      font-size:.92rem;
+      line-height:1.4;
+    }
+
+    .objective-card:nth-child(1) { border-top:4px solid var(--blue); }
+    .objective-card:nth-child(2) { border-top:4px solid var(--green); }
+    .objective-card:nth-child(3) { border-top:4px solid var(--orange); }
+    .objective-card:nth-child(4) { border-top:4px solid var(--purple); }
+
+    footer {
+      background:var(--navy);
+      color:white;
+      padding:18px 5vw;
+      display:flex;
+      justify-content:space-between;
+      gap:20px;
+      flex-wrap:wrap;
+      font-size:.9rem;
+    }
+
+    @media (max-width:1050px) {
+      .academic-grid { grid-template-columns:repeat(2,1fr); }
+      .content-grid { grid-template-columns:1fr; }
+      .objectives { grid-template-columns:repeat(2,1fr); }
+      .hero { grid-template-columns:1fr; }
+      .hero-image { max-height:340px; }
+    }
+
+    @media (max-width:650px) {
+      .academic-grid,
+      .objectives { grid-template-columns:1fr; }
+      header { align-items:flex-start; }
+      nav { gap:12px; }
+      .hero-copy { padding:34px 6vw; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div class="brand">
+        <div class="logo-ucalp">
+          <img src="img/logo_ucalp.png" alt="Universidad Católica de La Plata">
+        </div>
+        <div>
+          <div class="brand-title">Universidad Católica de La Plata</div>
+          <div class="brand-subtitle">Facultad de Ciencias Exactas e Ingeniería</div>
+        </div>
+      </div>
+      <nav>
+        <a href="#inicio">Inicio</a>
+        <a href="#proyecto">Proyecto</a>
+        <a href="#docentes">Equipo Docente</a>
+        <a href="#estudiantes">Estudiantes</a>
+      </nav>
+    </header>
+
+    <section class="hero" id="inicio">
+      <div class="hero-copy">
+        <div class="eyebrow">Grupo 3</div>
+        <h1>Plataforma de Gobernanza Inteligente de Urbanismo, Obras y Servicios</h1>
+        <h2>Módulo de Digitalización Documental</h2>
+        <p>
+          Desarrollo del módulo de digitalización documental, orientado a incorporar,
+          organizar y procesar planos y expedientes históricos en soporte papel mediante
+          digitalización, OCR y modelos multimodales, enriqueciendo la información con
+          metadatos, datos estructurados y revisión humana para facilitar su consulta,
+          trazabilidad y reutilización.
+        </p>
+      </div>
+      <div class="hero-image">
+        <img src="img/hero-digitalizacion.png" alt="Digitalización de planos y expedientes históricos">
+      </div>
+    </section>
+
+    <main>
+      <section class="academic-grid">
+        <article class="academic-card">
+          <strong>Universidad</strong>
+          <span>Universidad Católica de La Plata (UCALP)</span>
+        </article>
+        <article class="academic-card">
+          <strong>Facultad</strong>
+          <span>Facultad de Ciencias Exactas e Ingeniería</span>
+        </article>
+        <article class="academic-card">
+          <strong>Carrera</strong>
+          <span>Licenciatura en Sistemas</span>
+        </article>
+        <article class="academic-card">
+          <strong>Materia</strong>
+          <span>Ingeniería de Software II</span>
+        </article>
+        <article class="academic-card">
+          <strong>Año</strong>
+          <span>2026</span>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel" id="proyecto">
+          <h3>Sobre el proyecto</h3>
+          <p class="project-text">
+            Plataforma de Gobernanza Inteligente de Urbanismo, Obras y Servicios:
+            desarrollo del módulo de digitalización documental, orientado a incorporar,
+            organizar y procesar planos y expedientes históricos en soporte papel mediante
+            digitalización, OCR y modelos multimodales, enriqueciendo la información con
+            metadatos, datos estructurados y revisión humana para facilitar su consulta,
+            trazabilidad y reutilización.
+          </p>
+        </article>
+
+        <article class="panel" id="docentes">
+          <h3>Equipo docente</h3>
+          <div class="teacher">
+            <strong>Lic. Prof. Diego Martín Luna</strong>
+            <span>Titular de la Cátedra</span>
+          </div>
+          <div class="teacher">
+            <strong>Ing. Franco Pablo Quintero</strong>
+            <span>Adjunto</span>
+          </div>
+          <div class="teacher">
+            <strong>Lic. Daniel Oscar Torres</strong>
+            <span>Jefe de Trabajos Prácticos</span>
+          </div>
+        </article>
+
+        <article class="panel" id="estudiantes">
+          <h3>Integrantes del Grupo 3</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Apellido(s)</th>
+                <th>Nombre</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>EDUARDO EGEA</td><td>MARIANA</td></tr>
+              <tr><td>JAUREGUI LORDA</td><td>MARÍA LINA</td></tr>
+              <tr><td>LARA</td><td>GONZALO FRANCISCO</td></tr>
+              <tr><td>MARINO</td><td>AGUSTIN EZEQUIEL</td></tr>
+              <tr><td>PIERINI</td><td>JUAN FRANCISCO</td></tr>
+              <tr><td>RAFFO</td><td>AGUSTINA BELEN</td></tr>
+            </tbody>
+          </table>
+        </article>
+      </section>
+
+      <section class="objectives">
+        <article class="objective-card">
+          <img src="img/hero-digitalizacion.png" alt="Digitalización de planos y expedientes">
+          <div class="objective-body">
+            <h4>Digitalización de planos y expedientes</h4>
+            <p>Incorporación, organización y preservación digital de documentación histórica.</p>
+          </div>
+        </article>
+
+        <article class="objective-card">
+          <img src="img/ocr-documentos.png" alt="Procesamiento OCR y multimodal">
+          <div class="objective-body">
+            <h4>Extracción mediante OCR y modelos multimodales</h4>
+            <p>Procesamiento de documentos, planos e imágenes para identificar información relevante.</p>
+          </div>
+        </article>
+
+        <article class="objective-card">
+          <img src="img/ocr-documentos.png" alt="Metadatos y datos estructurados">
+          <div class="objective-body">
+            <h4>Enriquecimiento con metadatos y datos estructurados</h4>
+            <p>Clasificación, indexación y vinculación de la información extraída con datos complementarios.</p>
+          </div>
+        </article>
+
+        <article class="objective-card">
+          <img src="img/revision-documental.png" alt="Revisión humana y trazabilidad documental">
+          <div class="objective-body">
+            <h4>Revisión humana, trazabilidad y consulta</h4>
+            <p>Validación de la información procesada, control de cambios y acceso eficiente a los documentos.</p>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <div>Universidad Católica de La Plata — Facultad de Ciencias Exactas e Ingeniería</div>
+      <div>Ingeniería de Software II · 2026 · Grupo 3</div>
+    </footer>
+  </div>
+</body>
+</html>
