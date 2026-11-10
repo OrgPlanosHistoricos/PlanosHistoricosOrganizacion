@@ -39,9 +39,9 @@ from src.planos.nomenclatura import (
 from src.planos.schemas import PlanoDetalle, PlanoModificar, PlanoRead, PlanoValidar
 from src.planos.worker import planos_worker
 
-FORMATOS_IMAGEN = settings.FORMATOS_IMAGEN
-FORMATOS_PDF = settings.FORMATOS_PDF
-FORMATOS_ACEPTADOS = settings.FORMATOS_ACEPTADOS
+FORMATOS_IMAGEN = settings.get_formatos_imagen()
+FORMATOS_PDF = settings.get_formatos_pdf()
+FORMATOS_ACEPTADOS = settings.get_formatos_aceptados()
 
 CAMPOS_AUDITORIA = (
     "texto_extraido",
@@ -69,7 +69,8 @@ CAMPOS_AUDITORIA = (
 def _snapshot_plano(plano: Plano) -> Dict[str, Any]:
     snap: Dict[str, Any] = {}
     for campo in CAMPOS_AUDITORIA:
-        val = getattr(plano, campo, None)
+        getter = getattr(plano, f"get_{campo}", None)
+        val = getter() if getter else getattr(plano, campo, None)
         if hasattr(val, "value"):
             val = val.value
         snap[campo] = val
@@ -92,7 +93,7 @@ def _parametros_preprocesamiento_json() -> str:
 
 def _obtener_plano(session: Session, plano_id: int) -> Plano:
     plano = session.get(Plano, plano_id)
-    if plano is None or not plano.activo:
+    if plano is None or not plano.get_activo():
         raise HTTPException(status_code=404, detail="Plano no encontrado")
     return plano
 
@@ -110,7 +111,7 @@ def _comprobar_unica(session: Session, clave: str, plano_id: Optional[int] = Non
     existente = session.exec(
         select(Plano).where(Plano.nomenclatura == clave, Plano.activo == True)  # noqa: E712
     ).first()
-    if existente is not None and existente.id != plano_id:
+    if existente is not None and existente.get_id() != plano_id:
         raise HTTPException(status_code=409, detail={"codigo": "duplicado"})
 
 
@@ -122,7 +123,7 @@ def _buscar_inmueble(session: Session, clave: str) -> Optional[int]:
         .where(
             Inmueble.nomenclatura_catastral == clave,
             Inmueble.activo == True,  # noqa: E712
-            Localidad.codigo == settings.LOCALIDAD_PLANOS,
+            Localidad.codigo == settings.get_localidad_planos(),
         )
     ).first()
 
@@ -151,20 +152,20 @@ def _commit_unico(session: Session, clave: str, plano_id: Optional[int] = None):
 
 
 def _aplicar_datos(plano: Plano, datos: Union[PlanoValidar, PlanoModificar], session: Session) -> None:
-    nomen = _datos_nomenclatura(*(getattr(datos, c) for c in CAMPOS_NOMENCLATURA))
+    nomen = _datos_nomenclatura(*(getattr(datos, f"get_{c}")() for c in CAMPOS_NOMENCLATURA))
     clave = clave_nomenclatura(nomen)
-    _comprobar_unica(session, clave, plano.id)
+    _comprobar_unica(session, clave, plano.get_id())
     for campo, valor in nomen.items():
-        setattr(plano, campo, valor)
-    plano.nomenclatura = clave
-    plano.id_inmueble = _buscar_inmueble(session, clave)
+        getattr(plano, f"set_{campo}")(valor)
+    plano.set_nomenclatura(clave)
+    plano.set_id_inmueble(_buscar_inmueble(session, clave))
     for campo in DatosPlano.model_fields:
         # La transcripción original pertenece al análisis IA, no a la catalogación.
         if campo == "texto_extraido":
             continue
-        setattr(plano, campo, getattr(datos, campo))
-    plano.estado = EstadoPlano.validado
-    plano.actualizado_en = ahora()
+        getattr(plano, f"set_{campo}")(getattr(datos, f"get_{campo}")())
+    plano.set_estado(EstadoPlano.validado)
+    plano.set_actualizado_en(ahora())
 
 
 def _insertar_plano(plano: Plano) -> PlanoRead:
@@ -235,7 +236,7 @@ async def crear_plano(
     )
 
     session.add(nuevo_plano)
-    nuevo_plano.eventos.append(
+    nuevo_plano.get_eventos().append(
         EventoAuditoria(
             accion="Carga",
             motivo="Creación de plano",
@@ -245,7 +246,7 @@ async def crear_plano(
             ip_origen=ip_origen,
         )
     )
-    nuevo_plano.procesamientos.append(
+    nuevo_plano.get_procesamientos().append(
         ProcesamientoIA(
             intento=1,
             estado=EstadoIA.procesando,
@@ -259,7 +260,7 @@ async def crear_plano(
     # Si es PDF, encolamos los bytes renderizados de la primera página.
     # Si es imagen, encolamos el contenido original.
     bytes_para_ia = preview_bytes if es_pdf else contenido
-    planos_worker.encolar(nuevo_plano.id, bytes_para_ia)
+    planos_worker.encolar(nuevo_plano.get_id(), bytes_para_ia)
     return PlanoRead.model_validate(nuevo_plano)
 
 
@@ -297,15 +298,15 @@ def eliminar_plano(
         raise HTTPException(status_code=404, detail="Plano no encontrado")
     valores_ant = _snapshot_plano(plano)
     valores_ant["activo"] = True
-    plano.activo = False
-    plano.nomenclatura = None
-    plano.actualizado_en = ahora()
+    plano.set_activo(False)
+    plano.set_nomenclatura(None)
+    plano.set_actualizado_en(ahora())
     valores_nue = _snapshot_plano(plano)
     valores_nue["activo"] = False
     session.add(plano)
     session.add(
         EventoAuditoria(
-            plano_id=plano.id,
+            plano_id=plano.get_id(),
             accion="Caducidad",
             motivo="Baja lógica de plano",
             usuario_id=usuario_id,
@@ -320,22 +321,22 @@ def eliminar_plano(
 
 def obtener_archivo_plano(plano_id: int, session: Session) -> Tuple[bytes, str, str]:
     plano = _obtener_plano(session, plano_id)
-    contenido = obtener_archivo(plano.minio_path)
-    return contenido, plano.content_type, plano.nombre_original
+    contenido = obtener_archivo(plano.get_minio_path())
+    return contenido, plano.get_content_type(), plano.get_nombre_original()
 
 
 def obtener_preview_plano(plano_id: int, session: Session) -> Tuple[bytes, str]:
     plano = _obtener_plano(session, plano_id)
-    if plano.content_type in FORMATOS_IMAGEN:
-        contenido = obtener_archivo(plano.minio_path)
-        return contenido, plano.content_type
+    if plano.get_content_type() in FORMATOS_IMAGEN:
+        contenido = obtener_archivo(plano.get_minio_path())
+        return contenido, plano.get_content_type()
 
     # Si es PDF, buscar o generar la vista previa JPEG en Storage
-    preview_key = obtener_preview_key(plano.minio_path)
+    preview_key = obtener_preview_key(plano.get_minio_path())
     if existe_archivo(preview_key):
         contenido = obtener_archivo(preview_key)
     else:
-        pdf_bytes = obtener_archivo(plano.minio_path)
+        pdf_bytes = obtener_archivo(plano.get_minio_path())
         contenido = pdf_page_to_jpeg_bytes(pdf_bytes, page_index=0)
         subir_archivo_con_key(contenido, preview_key, "image/jpeg")
 
@@ -349,29 +350,29 @@ def validar_plano(
     ip_origen: Optional[str] = None,
 ) -> PlanoDetalle:
     plano = _obtener_plano(session, plano_id)
-    if plano.estado != EstadoPlano.pendiente:
+    if plano.get_estado() != EstadoPlano.pendiente:
         raise HTTPException(
             status_code=409,
             detail="El plano ya fue validado. Usá PUT /planos/{id}/modificar para cambiarlo.",
         )
     valores_ant = _snapshot_plano(plano)
     _aplicar_datos(plano, datos, session)
-    plano.validado_por = datos.usuario_id
-    plano.validado_en = ahora()
+    plano.set_validado_por(datos.get_usuario_id())
+    plano.set_validado_en(ahora())
     valores_nue = _snapshot_plano(plano)
     session.add(plano)
     session.add(
         EventoAuditoria(
-            plano_id=plano.id,
+            plano_id=plano.get_id(),
             accion="Validación",
             motivo="Validación inicial",
-            usuario_id=datos.usuario_id,
+            usuario_id=datos.get_usuario_id(),
             valores_anteriores=json.dumps(valores_ant, ensure_ascii=False),
             valores_nuevos=json.dumps(valores_nue, ensure_ascii=False),
             ip_origen=ip_origen,
         )
     )
-    _commit_unico(session, plano.nomenclatura, plano.id)
+    _commit_unico(session, plano.get_nomenclatura(), plano.get_id())
     session.refresh(plano)
     return PlanoDetalle.model_validate(plano)
 
@@ -382,44 +383,44 @@ def modificar_plano(
     session: Session,
     ip_origen: Optional[str] = None,
 ) -> PlanoDetalle:
-    motivo = datos.motivo.strip()
+    motivo = datos.get_motivo().strip()
     if not motivo:
         raise HTTPException(status_code=400, detail="El motivo de la modificación es obligatorio.")
     plano = _obtener_plano(session, plano_id)
     valores_ant = _snapshot_plano(plano)
     _aplicar_datos(plano, datos, session)
     # La transcripción solo se actualiza aceptando el valor de la propuesta IA.
-    if plano.ia_propuesta and "texto_extraido" in datos.model_fields_set:
+    if plano.get_ia_propuesta() and "texto_extraido" in datos.model_fields_set:
         try:
-            propuesta = json.loads(plano.ia_propuesta)
+            propuesta = json.loads(plano.get_ia_propuesta())
         except (TypeError, ValueError):
             propuesta = {}
         if isinstance(propuesta, dict) and "texto_extraido" in propuesta:
             texto_ia = propuesta["texto_extraido"] or None
-            if datos.texto_extraido == texto_ia:
-                plano.texto_extraido = texto_ia
-    plano.ia_propuesta = None
+            if datos.get_texto_extraido() == texto_ia:
+                plano.set_texto_extraido(texto_ia)
+    plano.set_ia_propuesta(None)
     valores_nue = _snapshot_plano(plano)
     session.add(plano)
     session.add(
         EventoAuditoria(
-            plano_id=plano.id,
+            plano_id=plano.get_id(),
             accion="Modificación",
             motivo=motivo,
-            usuario_id=datos.usuario_id,
+            usuario_id=datos.get_usuario_id(),
             valores_anteriores=json.dumps(valores_ant, ensure_ascii=False),
             valores_nuevos=json.dumps(valores_nue, ensure_ascii=False),
             ip_origen=ip_origen,
         )
     )
-    _commit_unico(session, plano.nomenclatura, plano.id)
+    _commit_unico(session, plano.get_nomenclatura(), plano.get_id())
     session.refresh(plano)
     return PlanoDetalle.model_validate(plano)
 
 
 def descartar_propuesta(plano_id: int, session: Session) -> PlanoDetalle:
     plano = _obtener_plano(session, plano_id)
-    plano.ia_propuesta = None
+    plano.set_ia_propuesta(None)
     session.add(plano)
     session.commit()
     session.refresh(plano)
@@ -433,20 +434,20 @@ def reintentar_ia(
     ip_origen: Optional[str] = None,
 ) -> PlanoDetalle:
     plano = _obtener_plano(session, plano_id)
-    if plano.ia_estado == EstadoIA.no_aplica:
+    if plano.get_ia_estado() == EstadoIA.no_aplica:
         raise HTTPException(
             status_code=400,
             detail="El plano no aplica para análisis automático.",
         )
-    if plano.ia_estado == EstadoIA.procesando:
+    if plano.get_ia_estado() == EstadoIA.procesando:
         raise HTTPException(
             status_code=400,
             detail="El plano ya está siendo procesado por la IA.",
         )
 
-    intentos_previos = session.exec(select(ProcesamientoIA).where(ProcesamientoIA.plano_id == plano.id)).all()
-    max_intento_previo = max([p.intento for p in intentos_previos], default=0)
-    num_intentos = max(max_intento_previo, 1 if plano.ia_estado in (EstadoIA.completado, EstadoIA.error) else 0)
+    intentos_previos = session.exec(select(ProcesamientoIA).where(ProcesamientoIA.plano_id == plano.get_id())).all()
+    max_intento_previo = max([p.get_intento() for p in intentos_previos], default=0)
+    num_intentos = max(max_intento_previo, 1 if plano.get_ia_estado() in (EstadoIA.completado, EstadoIA.error) else 0)
     max_intentos = 3
     if num_intentos >= max_intentos:
         raise HTTPException(
@@ -455,12 +456,12 @@ def reintentar_ia(
         )
 
     nuevo_intento_num = num_intentos + 1
-    plano.ia_estado = EstadoIA.procesando
+    plano.set_ia_estado(EstadoIA.procesando)
     session.add(plano)
 
     session.add(
         EventoAuditoria(
-            plano_id=plano.id,
+            plano_id=plano.get_id(),
             accion="Observación",
             motivo="Reintento de análisis IA",
             usuario_id=usuario_id,
@@ -469,7 +470,7 @@ def reintentar_ia(
     )
     session.add(
         ProcesamientoIA(
-            plano_id=plano.id,
+            plano_id=plano.get_id(),
             intento=nuevo_intento_num,
             estado=EstadoIA.procesando,
             version_prompt=VERSION_PROMPT_EXTRACCION,
@@ -479,12 +480,12 @@ def reintentar_ia(
     session.commit()
     session.refresh(plano)
 
-    contenido = obtener_archivo(plano.minio_path)
-    if plano.content_type in FORMATOS_PDF:
+    contenido = obtener_archivo(plano.get_minio_path())
+    if plano.get_content_type() in FORMATOS_PDF:
         try:
             contenido = pdf_page_to_jpeg_bytes(contenido, 0)
         except Exception:
             pass
 
-    planos_worker.encolar(plano.id, contenido)
+    planos_worker.encolar(plano.get_id(), contenido)
     return PlanoDetalle.model_validate(plano)

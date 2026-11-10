@@ -72,26 +72,30 @@ def _guardar_resultado(
         ).first()
 
         if datos is None:
-            plano.ia_estado = EstadoIA.error
-            plano.ia_error = error
+            plano.set_ia_estado(EstadoIA.error)
+            plano.set_ia_error(error)
             if ultimo_procesamiento:
-                ultimo_procesamiento.estado = EstadoIA.error
-                ultimo_procesamiento.error = error
+                ultimo_procesamiento.set_estado(EstadoIA.error)
+                ultimo_procesamiento.set_error(error)
                 session.add(ultimo_procesamiento)
         else:
-            if plano.estado != EstadoPlano.pendiente:
-                plano.ia_propuesta = json.dumps(datos, ensure_ascii=False)
+            if plano.get_estado() != EstadoPlano.pendiente:
+                plano.set_ia_propuesta(json.dumps(datos, ensure_ascii=False))
             else:
                 for campo in DatosPlano.model_fields:
-                    setattr(plano, campo, datos.get(campo))
-            plano.ia_estado = EstadoIA.completado
-            plano.ia_error = None
+                    setter = getattr(plano, f"set_{campo}", None)
+                    if setter:
+                        setter(datos.get(campo))
+                    else:
+                        setattr(plano, campo, datos.get(campo))
+            plano.set_ia_estado(EstadoIA.completado)
+            plano.set_ia_error(None)
             if ultimo_procesamiento:
-                ultimo_procesamiento.estado = EstadoIA.completado
-                ultimo_procesamiento.error = None
+                ultimo_procesamiento.set_estado(EstadoIA.completado)
+                ultimo_procesamiento.set_error(None)
                 session.add(ultimo_procesamiento)
 
-        plano.actualizado_en = ahora()
+        plano.set_actualizado_en(ahora())
         session.add(plano)
 
         # Actualizar el registro de ProcesamientoIA correspondiente al último intento
@@ -101,18 +105,18 @@ def _guardar_resultado(
             .order_by(ProcesamientoIA.intento.desc(), ProcesamientoIA.id.desc())
         ).first()
         if proc is not None:
-            proc.estado = EstadoIA.error if datos is None else EstadoIA.completado
-            proc.error = error
+            proc.set_estado(EstadoIA.error if datos is None else EstadoIA.completado)
+            proc.set_error(error)
             if modelo_ia:
-                proc.modelo_ia = modelo_ia
-            proc.version_prompt = VERSION_PROMPT_EXTRACCION
-            proc.parametros_preprocesamiento = _parametros_preprocesamiento_default()
+                proc.set_modelo_ia(modelo_ia)
+            proc.set_version_prompt(VERSION_PROMPT_EXTRACCION)
+            proc.set_parametros_preprocesamiento(_parametros_preprocesamiento_default())
             if duracion_ms is not None:
-                proc.duracion_ms = duracion_ms
+                proc.set_duracion_ms(duracion_ms)
             if datos is not None:
-                proc.texto_extraido_raw = datos.get("texto_extraido")
+                proc.set_texto_extraido_raw(datos.get("texto_extraido"))
             # Respuesta tal cual la devolvió el modelo (también si no se pudo parsear)
-            proc.respuesta_json_raw = json_crudo or (json.dumps(datos, ensure_ascii=False) if datos else None)
+            proc.set_respuesta_json_raw(json_crudo or (json.dumps(datos, ensure_ascii=False) if datos else None))
             session.add(proc)
 
         session.commit()
@@ -126,18 +130,18 @@ def _planos_sin_terminar() -> list[tuple[int, bytes]]:
         resultado = []
         for p in planos:
             try:
-                if p.content_type == "application/pdf":
-                    preview_key = obtener_preview_key(p.minio_path)
+                if p.get_content_type() == "application/pdf":
+                    preview_key = obtener_preview_key(p.get_minio_path())
                     if existe_archivo(preview_key):
                         bytes_img = obtener_archivo(preview_key)
                     else:
-                        pdf_bytes = obtener_archivo(p.minio_path)
+                        pdf_bytes = obtener_archivo(p.get_minio_path())
                         bytes_img = pdf_page_to_jpeg_bytes(pdf_bytes, page_index=0)
                 else:
-                    bytes_img = obtener_archivo(p.minio_path)
-                resultado.append((p.id, bytes_img))
+                    bytes_img = obtener_archivo(p.get_minio_path())
+                resultado.append((p.get_id(), bytes_img))
             except Exception as exc:
-                logger.error(f"No se pudo recuperar archivo del plano pendiente {p.id}: {exc}")
+                logger.error(f"No se pudo recuperar archivo del plano pendiente {p.get_id()}: {exc}")
         return resultado
 
 
@@ -155,24 +159,39 @@ def _ejecutar_extraccion(image_bytes: bytes) -> tuple[Optional[dict], Optional[s
 
 class PlanosWorker:
     def __init__(self):
-        self.queue: asyncio.Queue = asyncio.Queue()
+        self._queue: asyncio.Queue = asyncio.Queue()
         self._task: Optional[asyncio.Task] = None
 
+    def get_queue(self) -> asyncio.Queue:
+        return self._queue
+
+    def set_queue(self, valor: asyncio.Queue) -> None:
+        self._queue = valor
+
+    def get_task(self) -> Optional[asyncio.Task]:
+        return self._task
+
+    def set_task(self, valor: Optional[asyncio.Task]) -> None:
+        self._task = valor
+
+    queue = property(get_queue, set_queue)
+
     def start(self) -> None:
-        if self._task is None or self._task.done():
-            self._task = asyncio.create_task(self._loop())
+        if self.get_task() is None or self.get_task().done():
+            self.set_task(asyncio.create_task(self._loop()))
 
     async def stop(self) -> None:
-        if self._task:
-            self._task.cancel()
+        tarea = self.get_task()
+        if tarea:
+            tarea.cancel()
             try:
-                await self._task
+                await tarea
             except asyncio.CancelledError:
                 pass
-            self._task = None
+            self.set_task(None)
 
     def encolar(self, plano_id: int, image_bytes: bytes) -> None:
-        self.queue.put_nowait((plano_id, image_bytes))
+        self.get_queue().put_nowait((plano_id, image_bytes))
 
     async def _loop(self) -> None:
         # La cola vive en memoria: lo que quedó a medias antes de un reinicio se retoma acá
@@ -183,13 +202,13 @@ class PlanosWorker:
             logger.exception("No se pudieron recuperar los planos pendientes de IA")
 
         while True:
-            plano_id, image_bytes = await self.queue.get()
+            plano_id, image_bytes = await self.get_queue().get()
             try:
                 await self._procesar(plano_id, image_bytes)
             except Exception:
                 logger.exception(f"Error guardando el resultado de IA del plano {plano_id}")
             finally:
-                self.queue.task_done()
+                self.get_queue().task_done()
 
     async def _procesar(self, plano_id: int, image_bytes: bytes) -> None:
         logger.info(f"Procesando IA del plano {plano_id}...")

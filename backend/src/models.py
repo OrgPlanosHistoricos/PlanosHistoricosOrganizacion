@@ -51,6 +51,60 @@ class DatosPlano(SQLModel):
     def _anio_vacio_es_null(cls, valor):
         return None if valor == "" else valor
 
+    def get_texto_extraido(self) -> Optional[str]:
+        return self.texto_extraido
+
+    def set_texto_extraido(self, valor: Optional[str]) -> None:
+        self.texto_extraido = valor
+
+    def get_arquitecto(self) -> Optional[str]:
+        return self.arquitecto
+
+    def set_arquitecto(self, valor: Optional[str]) -> None:
+        self.arquitecto = valor
+
+    def get_anio(self) -> Optional[int]:
+        return self.anio
+
+    def set_anio(self, valor: Optional[int]) -> None:
+        self.anio = valor
+
+    def get_titulo(self) -> Optional[str]:
+        return self.titulo
+
+    def set_titulo(self, valor: Optional[str]) -> None:
+        self.titulo = valor
+
+    def get_ubicacion(self) -> Optional[str]:
+        return self.ubicacion
+
+    def set_ubicacion(self, valor: Optional[str]) -> None:
+        self.ubicacion = valor
+
+    def get_escala(self) -> Optional[str]:
+        return self.escala
+
+    def set_escala(self, valor: Optional[str]) -> None:
+        self.escala = valor
+
+    def get_tipo_de_plano(self) -> Optional[str]:
+        return self.tipo_de_plano
+
+    def set_tipo_de_plano(self, valor: Optional[str]) -> None:
+        self.tipo_de_plano = valor
+
+    def get_material_soporte(self) -> Optional[str]:
+        return self.material_soporte
+
+    def set_material_soporte(self, valor: Optional[str]) -> None:
+        self.material_soporte = valor
+
+    def get_notas(self) -> Optional[str]:
+        return self.notas
+
+    def set_notas(self, valor: Optional[str]) -> None:
+        self.notas = valor
+
 
 class PlanoBase(DatosPlano):
     nombre_original: str
@@ -75,6 +129,132 @@ class PlanoBase(DatosPlano):
     validado_en: Optional[datetime] = Field(default=None, sa_type=DateTime(timezone=True))
     activo: bool = Field(default=True)
 
+    def get_nombre_original(self) -> str:
+        return self.nombre_original
+
+    def set_nombre_original(self, valor: str) -> None:
+        self.nombre_original = valor
+
+    def get_content_type(self) -> str:
+        return self.content_type
+
+    def set_content_type(self, valor: str) -> None:
+        self.content_type = valor
+
+    def get_hash_sha256(self) -> Optional[str]:
+        return self.hash_sha256
+
+    def set_hash_sha256(self, valor: Optional[str]) -> None:
+        self.hash_sha256 = valor
+
+    def get_tamano_bytes(self) -> Optional[int]:
+        return self.tamano_bytes
+
+    def set_tamano_bytes(self, valor: Optional[int]) -> None:
+        self.tamano_bytes = valor
+
+    def get_ubicacion_fisica(self) -> str:
+        return self.ubicacion_fisica
+
+    def set_ubicacion_fisica(self, valor: str) -> None:
+        self.ubicacion_fisica = valor
+
+    def get_expediente(self) -> str:
+        return self.expediente
+
+    def set_expediente(self, valor: str) -> None:
+        self.expediente = valor
+
+    def get_direccion_referencia(self) -> str:
+        return self.direccion_referencia
+
+    def set_direccion_referencia(self, valor: str) -> None:
+        self.direccion_referencia = valor
+
+    def get_parcela(self) -> str:
+        return self.parcela
+
+    def set_parcela(self, valor: str) -> None:
+        self.parcela = valor
+
+    def get_circunscripcion(self) -> str:
+        return self.circunscripcion
+
+    def set_circunscripcion(self, valor: str) -> None:
+        self.circunscripcion = valor
+
+    def get_seccion(self) -> str:
+        return self.seccion
+
+    def set_seccion(self, valor: str) -> None:
+        self.seccion = valor
+
+    def get_manzana(self) -> str:
+        return self.manzana
+
+    def set_manzana(self, valor: str) -> None:
+        self.manzana = valor
+
+    def get_parcela_catastral(self) -> str:
+        return self.parcela_catastral
+
+    def set_parcela_catastral(self, valor: str) -> None:
+        self.parcela_catastral = valor
+
+    def get_nomenclatura(self) -> Optional[str]:
+        return self.nomenclatura
+
+    def set_nomenclatura(self, valor: Optional[str]) -> None:
+        self.nomenclatura = valor
+
+    def get_estado(self) -> EstadoPlano:
+        return self.estado
+
+    def set_estado(self, valor: EstadoPlano) -> None:
+        self.estado = valor
+
+    def get_ia_estado(self) -> EstadoIA:
+        return self.ia_estado
+
+    def set_ia_estado(self, valor: EstadoIA) -> None:
+        self.ia_estado = valor
+
+    def get_ia_error(self) -> Optional[str]:
+        return self.ia_error
+
+    def set_ia_error(self, valor: Optional[str]) -> None:
+        self.ia_error = valor
+
+    def get_ia_propuesta(self) -> Optional[str]:
+        return self.ia_propuesta
+
+    def set_ia_propuesta(self, valor: Optional[str]) -> None:
+        self.ia_propuesta = valor
+
+    def get_creado_por(self) -> Optional[str]:
+        return self.creado_por
+
+    def set_creado_por(self, valor: Optional[str]) -> None:
+        self.creado_por = valor
+
+    def get_validado_por(self) -> Optional[str]:
+        return self.validado_por
+
+    def set_validado_por(self, valor: Optional[str]) -> None:
+        self.validado_por = valor
+
+    def get_validado_en(self) -> Optional[datetime]:
+        return self.validado_en
+
+    def set_validado_en(self, valor: Optional[datetime]) -> None:
+        self.validado_en = valor
+
+    def get_activo(self) -> bool:
+        return self.activo
+
+    def set_activo(self, valor: bool) -> None:
+        self.activo = valor
+
 
 class Localidad(SQLModel, table=True):
     """Solo lectura: catálogo de localidades de tramitación."""
@@ -87,6 +267,30 @@ class Localidad(SQLModel, table=True):
     codigo: str
     activo: bool = True
 
+    def get_id_localidad(self) -> Optional[int]:
+        return self.id_localidad
+
+    def set_id_localidad(self, valor: Optional[int]) -> None:
+        self.id_localidad = valor
+
+    def get_nombre(self) -> str:
+        return self.nombre
+
+    def set_nombre(self, valor: str) -> None:
+        self.nombre = valor
+
+    def get_codigo(self) -> str:
+        return self.codigo
+
+    def set_codigo(self, valor: str) -> None:
+        self.codigo = valor
+
+    def get_activo(self) -> bool:
+        return self.activo
+
+    def set_activo(self, valor: bool) -> None:
+        self.activo = valor
+
 
 class Inmueble(SQLModel, table=True):
     """Solo lectura: inmuebles de tramitación, nexo entre planos y expedientes."""
@@ -98,6 +302,30 @@ class Inmueble(SQLModel, table=True):
     nomenclatura_catastral: str
     id_localidad: int = Field(foreign_key=f"{ESQUEMA_TRAMITACION}.localidades.id_localidad")
     activo: bool = True
+
+    def get_id_inmueble(self) -> Optional[int]:
+        return self.id_inmueble
+
+    def set_id_inmueble(self, valor: Optional[int]) -> None:
+        self.id_inmueble = valor
+
+    def get_nomenclatura_catastral(self) -> str:
+        return self.nomenclatura_catastral
+
+    def set_nomenclatura_catastral(self, valor: str) -> None:
+        self.nomenclatura_catastral = valor
+
+    def get_id_localidad(self) -> int:
+        return self.id_localidad
+
+    def set_id_localidad(self, valor: int) -> None:
+        self.id_localidad = valor
+
+    def get_activo(self) -> bool:
+        return self.activo
+
+    def set_activo(self, valor: bool) -> None:
+        self.activo = valor
 
 
 class Plano(PlanoBase, table=True):
@@ -124,6 +352,48 @@ class Plano(PlanoBase, table=True):
         sa_relationship_kwargs={"order_by": "ProcesamientoIA.fecha"},
     )
 
+    def get_id(self) -> Optional[int]:
+        return self.id
+
+    def set_id(self, valor: Optional[int]) -> None:
+        self.id = valor
+
+    def get_id_inmueble(self) -> Optional[int]:
+        return self.id_inmueble
+
+    def set_id_inmueble(self, valor: Optional[int]) -> None:
+        self.id_inmueble = valor
+
+    def get_minio_path(self) -> str:
+        return self.minio_path
+
+    def set_minio_path(self, valor: str) -> None:
+        self.minio_path = valor
+
+    def get_creado_en(self) -> datetime:
+        return self.creado_en
+
+    def set_creado_en(self, valor: datetime) -> None:
+        self.creado_en = valor
+
+    def get_actualizado_en(self) -> datetime:
+        return self.actualizado_en
+
+    def set_actualizado_en(self, valor: datetime) -> None:
+        self.actualizado_en = valor
+
+    def get_eventos(self) -> List["EventoAuditoria"]:
+        return self.eventos
+
+    def set_eventos(self, valor: List["EventoAuditoria"]) -> None:
+        self.eventos = valor
+
+    def get_procesamientos(self) -> List["ProcesamientoIA"]:
+        return self.procesamientos
+
+    def set_procesamientos(self, valor: List["ProcesamientoIA"]) -> None:
+        self.procesamientos = valor
+
 
 class EventoAuditoria(SQLModel, table=True):
     __tablename__ = "eventos_auditoria"
@@ -140,6 +410,66 @@ class EventoAuditoria(SQLModel, table=True):
     ip_origen: Optional[str] = Field(default=None, max_length=45, sa_type=String(45))
 
     plano: Optional[Plano] = Relationship(back_populates="eventos")
+
+    def get_id(self) -> Optional[int]:
+        return self.id
+
+    def set_id(self, valor: Optional[int]) -> None:
+        self.id = valor
+
+    def get_plano_id(self) -> int:
+        return self.plano_id
+
+    def set_plano_id(self, valor: int) -> None:
+        self.plano_id = valor
+
+    def get_usuario_id(self) -> str:
+        return self.usuario_id
+
+    def set_usuario_id(self, valor: str) -> None:
+        self.usuario_id = valor
+
+    def get_fecha(self) -> datetime:
+        return self.fecha
+
+    def set_fecha(self, valor: datetime) -> None:
+        self.fecha = valor
+
+    def get_accion(self) -> str:
+        return self.accion
+
+    def set_accion(self, valor: str) -> None:
+        self.accion = valor
+
+    def get_motivo(self) -> str:
+        return self.motivo
+
+    def set_motivo(self, valor: str) -> None:
+        self.motivo = valor
+
+    def get_valores_anteriores(self) -> Optional[str]:
+        return self.valores_anteriores
+
+    def set_valores_anteriores(self, valor: Optional[str]) -> None:
+        self.valores_anteriores = valor
+
+    def get_valores_nuevos(self) -> Optional[str]:
+        return self.valores_nuevos
+
+    def set_valores_nuevos(self, valor: Optional[str]) -> None:
+        self.valores_nuevos = valor
+
+    def get_ip_origen(self) -> Optional[str]:
+        return self.ip_origen
+
+    def set_ip_origen(self, valor: Optional[str]) -> None:
+        self.ip_origen = valor
+
+    def get_plano(self) -> Optional[Plano]:
+        return self.plano
+
+    def set_plano(self, valor: Optional[Plano]) -> None:
+        self.plano = valor
 
 
 class ProcesamientoIA(SQLModel, table=True):
@@ -160,6 +490,84 @@ class ProcesamientoIA(SQLModel, table=True):
     fecha: datetime = Field(default_factory=ahora, sa_type=DateTime(timezone=True))
 
     plano: Optional[Plano] = Relationship(back_populates="procesamientos")
+
+    def get_id(self) -> Optional[int]:
+        return self.id
+
+    def set_id(self, valor: Optional[int]) -> None:
+        self.id = valor
+
+    def get_plano_id(self) -> int:
+        return self.plano_id
+
+    def set_plano_id(self, valor: int) -> None:
+        self.plano_id = valor
+
+    def get_intento(self) -> int:
+        return self.intento
+
+    def set_intento(self, valor: int) -> None:
+        self.intento = valor
+
+    def get_estado(self) -> EstadoIA:
+        return self.estado
+
+    def set_estado(self, valor: EstadoIA) -> None:
+        self.estado = valor
+
+    def get_error(self) -> Optional[str]:
+        return self.error
+
+    def set_error(self, valor: Optional[str]) -> None:
+        self.error = valor
+
+    def get_modelo_ia(self) -> str:
+        return self.modelo_ia
+
+    def set_modelo_ia(self, valor: str) -> None:
+        self.modelo_ia = valor
+
+    def get_version_prompt(self) -> Optional[str]:
+        return self.version_prompt
+
+    def set_version_prompt(self, valor: Optional[str]) -> None:
+        self.version_prompt = valor
+
+    def get_parametros_preprocesamiento(self) -> Optional[str]:
+        return self.parametros_preprocesamiento
+
+    def set_parametros_preprocesamiento(self, valor: Optional[str]) -> None:
+        self.parametros_preprocesamiento = valor
+
+    def get_texto_extraido_raw(self) -> Optional[str]:
+        return self.texto_extraido_raw
+
+    def set_texto_extraido_raw(self, valor: Optional[str]) -> None:
+        self.texto_extraido_raw = valor
+
+    def get_respuesta_json_raw(self) -> Optional[str]:
+        return self.respuesta_json_raw
+
+    def set_respuesta_json_raw(self, valor: Optional[str]) -> None:
+        self.respuesta_json_raw = valor
+
+    def get_duracion_ms(self) -> Optional[int]:
+        return self.duracion_ms
+
+    def set_duracion_ms(self, valor: Optional[int]) -> None:
+        self.duracion_ms = valor
+
+    def get_fecha(self) -> datetime:
+        return self.fecha
+
+    def set_fecha(self, valor: datetime) -> None:
+        self.fecha = valor
+
+    def get_plano(self) -> Optional[Plano]:
+        return self.plano
+
+    def set_plano(self, valor: Optional[Plano]) -> None:
+        self.plano = valor
 
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://planos:planos@localhost:5432/planos_db")

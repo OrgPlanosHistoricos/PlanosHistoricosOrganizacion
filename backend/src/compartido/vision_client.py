@@ -224,6 +224,12 @@ class CajetinBBoxSchema(BaseModel):
         description="Bounding box del cajetín [ymin, xmin, ymax, xmax] normalizado de 0 a 1000."
     )
 
+    def get_bbox_2d(self) -> List[int]:
+        return self.bbox_2d
+
+    def set_bbox_2d(self, valor: List[int]) -> None:
+        self.bbox_2d = valor
+
 
 def _verificar_respuesta_ollama(response: requests.Response, host: str, modelo: str) -> None:
     """Valida el estado HTTP de Ollama / Ngrok y lanza errores descriptivos en caso de fallo."""

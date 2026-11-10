@@ -9,7 +9,7 @@ from src.planos.worker import planos_worker
 def estado_servicio() -> dict:
     return {
         "status": "ok",
-        "tareas_en_cola": planos_worker.queue.qsize(),
+        "tareas_en_cola": planos_worker.get_queue().qsize(),
     }
 
 

@@ -38,7 +38,7 @@ for _router in ROUTERS_POR_RECURSO:
 # así que el navegador bloquea las llamadas sin estos headers.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.get_cors_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )

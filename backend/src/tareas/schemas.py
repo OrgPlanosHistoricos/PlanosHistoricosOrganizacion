@@ -71,6 +71,60 @@ class PlanoHistorico(BaseModel):
         ),
     )
 
+    def get_texto_extraido(self) -> Optional[str]:
+        return self.texto_extraido
+
+    def set_texto_extraido(self, valor: Optional[str]) -> None:
+        self.texto_extraido = valor
+
+    def get_arquitecto(self) -> Optional[str]:
+        return self.arquitecto
+
+    def set_arquitecto(self, valor: Optional[str]) -> None:
+        self.arquitecto = valor
+
+    def get_anio(self) -> Optional[int]:
+        return self.anio
+
+    def set_anio(self, valor: Optional[int]) -> None:
+        self.anio = valor
+
+    def get_titulo(self) -> Optional[str]:
+        return self.titulo
+
+    def set_titulo(self, valor: Optional[str]) -> None:
+        self.titulo = valor
+
+    def get_ubicacion(self) -> Optional[str]:
+        return self.ubicacion
+
+    def set_ubicacion(self, valor: Optional[str]) -> None:
+        self.ubicacion = valor
+
+    def get_escala(self) -> Optional[str]:
+        return self.escala
+
+    def set_escala(self, valor: Optional[str]) -> None:
+        self.escala = valor
+
+    def get_tipo_de_plano(self) -> Optional[str]:
+        return self.tipo_de_plano
+
+    def set_tipo_de_plano(self, valor: Optional[str]) -> None:
+        self.tipo_de_plano = valor
+
+    def get_material_soporte(self) -> Optional[str]:
+        return self.material_soporte
+
+    def set_material_soporte(self, valor: Optional[str]) -> None:
+        self.material_soporte = valor
+
+    def get_notas(self) -> Optional[str]:
+        return self.notas
+
+    def set_notas(self, valor: Optional[str]) -> None:
+        self.notas = valor
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -91,6 +145,18 @@ class ArchivoInfo(BaseModel):
     nombre_original: str
     supabase_url: str
 
+    def get_nombre_original(self) -> str:
+        return self.nombre_original
+
+    def set_nombre_original(self, valor: str) -> None:
+        self.nombre_original = valor
+
+    def get_supabase_url(self) -> str:
+        return self.supabase_url
+
+    def set_supabase_url(self, valor: str) -> None:
+        self.supabase_url = valor
+
 
 class DocumentoExtraccion(BaseModel):
     fecha_procesamiento: datetime = Field(
@@ -98,6 +164,24 @@ class DocumentoExtraccion(BaseModel):
     )
     archivo: ArchivoInfo
     extraccion_qwen: PlanoHistorico
+
+    def get_fecha_procesamiento(self) -> datetime:
+        return self.fecha_procesamiento
+
+    def set_fecha_procesamiento(self, valor: datetime) -> None:
+        self.fecha_procesamiento = valor
+
+    def get_archivo(self) -> ArchivoInfo:
+        return self.archivo
+
+    def set_archivo(self, valor: ArchivoInfo) -> None:
+        self.archivo = valor
+
+    def get_extraccion_qwen(self) -> PlanoHistorico:
+        return self.extraccion_qwen
+
+    def set_extraccion_qwen(self, valor: PlanoHistorico) -> None:
+        self.extraccion_qwen = valor
 
 
 class TaskStatus(str, Enum):
@@ -119,24 +203,72 @@ class TareaInfo:
         error: Optional[str] = None,
         supabase_url: Optional[str] = None,
     ):
-        self.task_id = task_id
-        self.status = status
-        self.filename = filename
-        self.created_at = created_at or datetime.utcnow().isoformat()
-        self.updated_at = updated_at or datetime.utcnow().isoformat()
-        self.resultado = resultado
-        self.error = error
-        self.supabase_url = supabase_url
+        self._task_id = task_id
+        self._status = status
+        self._filename = filename
+        self._created_at = created_at or datetime.utcnow().isoformat()
+        self._updated_at = updated_at or datetime.utcnow().isoformat()
+        self._resultado = resultado
+        self._error = error
+        self._supabase_url = supabase_url
+
+    def get_task_id(self) -> str:
+        return self._task_id
+
+    def set_task_id(self, valor: str) -> None:
+        self._task_id = valor
+
+    def get_status(self) -> TaskStatus:
+        return self._status
+
+    def set_status(self, valor: TaskStatus) -> None:
+        self._status = valor
+
+    def get_filename(self) -> Optional[str]:
+        return self._filename
+
+    def set_filename(self, valor: Optional[str]) -> None:
+        self._filename = valor
+
+    def get_created_at(self) -> str:
+        return self._created_at
+
+    def set_created_at(self, valor: str) -> None:
+        self._created_at = valor
+
+    def get_updated_at(self) -> str:
+        return self._updated_at
+
+    def set_updated_at(self, valor: str) -> None:
+        self._updated_at = valor
+
+    def get_resultado(self) -> Optional[Dict[str, Any]]:
+        return self._resultado
+
+    def set_resultado(self, valor: Optional[Dict[str, Any]]) -> None:
+        self._resultado = valor
+
+    def get_error(self) -> Optional[str]:
+        return self._error
+
+    def set_error(self, valor: Optional[str]) -> None:
+        self._error = valor
+
+    def get_supabase_url(self) -> Optional[str]:
+        return self._supabase_url
+
+    def set_supabase_url(self, valor: Optional[str]) -> None:
+        self._supabase_url = valor
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "task_id": self.task_id,
-            "status": self.status.value,
-            "filename": self.filename,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-            "resultado": self.resultado,
-            "error": self.error,
-            "supabase_url": self.supabase_url,
+            "task_id": self.get_task_id(),
+            "status": self.get_status().value,
+            "filename": self.get_filename(),
+            "created_at": self.get_created_at(),
+            "updated_at": self.get_updated_at(),
+            "resultado": self.get_resultado(),
+            "error": self.get_error(),
+            "supabase_url": self.get_supabase_url(),
         }
 
