@@ -2,8 +2,6 @@
 
 **Proyecto:** Sistema de Digitalización y Gestión del Patrimonio Cartográfico e Histórico  
 **Referencia Metodológica:** Alistair Cockburn (*Writing Effective Use Cases*)  
-**Versión:** 3.0 (Definitiva \- Alineada con código fuente e implementación real)  
-**Estado:** Formal / Aprobado
 
 ---
 
@@ -42,28 +40,6 @@ Se adopta la iconografía y categorización de Cockburn:
 
 ---
 
-## 3\. Análisis de Alternativas y Decisiones de Estructuración
-
-En estricta observancia de los lineamientos de Cockburn sobre cohesión, independencia y tratamiento de operaciones CRUD, se analizaron y resolvieron las siguientes disyuntivas de diseño:
-
-### Decisión A: Unificación de Validación y Catalogación (DH-CU-03)
-
-* **Alternativa 1 (Separada en dos CU):** Modelar *DH-CU-03: Validar datos documentales* y *DH-CU-04: Catalogar plano territorialmente* por separado.  
-  * *Ventaja aparente:* Menor cantidad de campos por pantalla.  
-  * *Desventaja metodológica:* Fragmentación artificial. Para el Validador, dejar un plano validado a nivel de texto pero sin parcela o con catalogación trunca no constituye un objetivo de negocio autosuficiente. Dejaba un estado intermedio ambiguo y generaba fricción innecesaria.  
-* **Alternativa 2 (Unificada \- Seleccionada):** Modelar un único caso de uso a nivel del mar: **Validar y catalogar plano histórico**.  
-  * *Justificación Cockburn:* Representa la meta indivisible del actor: *"Tomar un documento extraído y dejarlo formalmente incorporado al catálogo oficial"*. Coincide con la implementación de pantalla dividida en `cu-validar.js` y el endpoint atómico `PUT /planos/{id}/validar`.
-
-### Decisión B: Tratamiento de "Modificar" vs. CRUD Genérico (DH-CU-04)
-
-* **Análisis de CRUD:** Cockburn desaconseja crear casos aislados para "Modificar X" salvo que posean disparadores propios, reglas estrictas y valor diferenciado.  
-* **Justificación de Independencia:** Modificar un plano previamente catalogado **no** es una simple edición de formulario. Implica un cambio sobre un documento ya publicado, exigiendo obligatoriamente un **motivo de justificación**, captura de IP, generación de snapshots diferenciales en JSON y persistencia inmutable en la tabla `eventos_auditoria`. Posee disparador diferenciado, actor con responsabilidad de auditoría y reglas de negocio propias.
-
-### Decisión C: Tratamiento de la Extracción por IA / Visión (DH-CU-02)
-
-* Se clasifica formalmente como un **Caso de Uso de Nivel Subfunción / Tarea de Sistema Asíncrona (🐟)**. No es ejecutado directamente por un humano en sesión interactiva; es orquestado por el Worker en segundo plano a partir del evento emitido por la carga.
-
----
 
 ## 4\. Modelo de Estados Ortogonal del Sistema
 
@@ -181,7 +157,7 @@ $$\text{Estado Integral} = \big( \text{EstadoPlano}, \, \text{EstadoIA} \big)$$
 
 ---
 
-### DH-CU-03: Validar y catalogar plano histórico
+### DH-CU-03: Validar plano histórico
 
 * **Alcance:** Sistema de Digitalización y Gestión de Planos Históricos  
 * **Nivel:** Objetivo de Usuario (Nivel Mar 🌊)  
