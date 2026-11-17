@@ -236,7 +236,7 @@
     }
     try { Object.assign(nuevosDatos, window.PH.Nomenclatura.leer('v-')); }
     catch (e) { document.getElementById('v-msg').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>'; return; }
-    nuevosDatos.usuario_id = "Validador"; // Hardcoded for now as there's no login
+    nuevosDatos.usuario_id = (window.PH.Auth && typeof window.PH.Auth.getUsuarioId === 'function' && window.PH.Auth.getUsuarioId()) || 'Validador';
 
     try {
       await API.validar(seleccionadoId, nuevosDatos);
@@ -258,7 +258,8 @@
       btn.textContent = 'Iniciando análisis...';
     }
     try {
-      await API.reintentarIA(id, "Validador");
+      var usuario = (window.PH.Auth && typeof window.PH.Auth.getUsuarioId === 'function' && window.PH.Auth.getUsuarioId()) || 'Validador';
+      await API.reintentarIA(id, usuario);
       seleccionadoId = null;
       modoCargaManual = false;
       await renderLista();

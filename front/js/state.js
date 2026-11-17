@@ -89,8 +89,14 @@
     return await fetchJSON('/planos/' + id);
   }
 
+  function usuarioActivo(defecto) {
+    return (window.PH && window.PH.Auth && typeof window.PH.Auth.getUsuarioId === 'function' && window.PH.Auth.getUsuarioId()) || defecto;
+  }
+
   async function eliminar(id) {
-    return await fetchJSON('/planos/' + id, { method: 'DELETE' });
+    var usuario = usuarioActivo(null);
+    var qs = usuario ? '?usuario_id=' + encodeURIComponent(usuario) : '';
+    return await fetchJSON('/planos/' + id + qs, { method: 'DELETE' });
   }
 
   async function create(file, ubicacion_fisica, expediente, direccion_referencia, nomenclatura) {
@@ -99,7 +105,7 @@
     formData.append('ubicacion_fisica', ubicacion_fisica || '');
     formData.append('expediente', expediente || '');
     formData.append('direccion_referencia', direccion_referencia || '');
-    formData.append('usuario_id', 'Operador'); // Hardcoded for now
+    formData.append('usuario_id', usuarioActivo('Operador'));
     Object.keys(nomenclatura || {}).forEach(function(campo) { formData.append(campo, nomenclatura[campo]); });
     
     return await fetchJSON('/planos', {
@@ -125,7 +131,7 @@
   }
 
   async function reintentarIA(id, usuario_id) {
-    var qs = '?usuario_id=' + encodeURIComponent(usuario_id || 'Validador');
+    var qs = '?usuario_id=' + encodeURIComponent(usuario_id || usuarioActivo('Validador'));
     return await fetchJSON('/planos/' + id + '/reintentar_ia' + qs, {
       method: 'POST'
     });

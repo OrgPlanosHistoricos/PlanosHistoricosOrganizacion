@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title> Plataforma de Gobernanza Inteligente de Urbanismo, Obras y Servicios</title>
+<title>GIUOS — Archivo de Planos Históricos | Iniciar sesión</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
@@ -12,33 +12,59 @@
 
 <div class="landing">
   <div class="landing-inner">
-    <div class="landing-brand">GIUOS</div>
-    <div class="landing-brand-sub">Plataforma de Gobernanza Inteligente de Urbanismo, Obras y Servicios</div>
+    <div class="landing-brand">🗺️ GIUOS</div>
+    <div class="landing-brand-sub">Plataforma de Gobernanza Inteligente de Urbanismo, Obras y Servicios · Dirección de Catastro</div>
 
-    <h1>¿A qué sección querés ingresar?</h1>
-    <p class="lede" style="text-align:center;">Elegí el módulo con el que vas a trabajar.</p>
+    <h1>Archivo de Planos Históricos</h1>
+    <p class="lede">Iniciá sesión con tu usuario institucional o de consulta para acceder al sistema.</p>
 
-    <div class="module-grid">
+    <div class="login-grid">
+      <section class="card login-card" aria-labelledby="login-heading">
+        <div class="login-card-head">
+          <h2 id="login-heading">Iniciar sesión</h2>
+          <span class="badge-mockup">Mockup</span>
+        </div>
+        <p class="login-sub">Ingresá tus credenciales para continuar.</p>
 
-      <a class="module-card" href="planos-historicos.html">
-        <div class="icon">🗺️</div>
-        <h2>Planos Históricos</h2>
-        <p>Digitalización, validación y consulta del acervo documental histórico de planos y expedientes de obra.</p>
-        <div class="enter">Ingresar →</div>
-      </a>
+        <div id="login-msgs" role="alert" aria-live="polite"></div>
 
-      <!-- TODO: reemplazar por el link del repo del otro grupo cuando lo tengan desplegado -->
-      <a class="module-card pending" href="#">
-        <span class="tag-soon">Próximamente</span>
-        <div class="icon">🏗️</div>
-        <h2>Tramitar Nueva Obra</h2>
-        <p>Presentación y seguimiento de trámites de obras públicas y privadas.</p>
-        <div class="enter">Ingresar →</div>
-      </a>
+        <form id="form-login" novalidate>
+          <div class="field">
+            <label for="login-usuario">Usuario o correo electrónico</label>
+            <input type="text" id="login-usuario" autocomplete="username" placeholder="Ej.: operador o operador@giuos.gob.ar" required>
+          </div>
+          <div class="field">
+            <label for="login-clave">Contraseña</label>
+            <div class="password-wrap">
+              <input type="password" id="login-clave" autocomplete="current-password" placeholder="Ingresá tu contraseña" required>
+              <button type="button" id="toggle-clave" class="password-toggle" aria-pressed="false" aria-label="Mostrar u ocultar contraseña">Mostrar</button>
+            </div>
+          </div>
+          <label class="login-remember">
+            <input type="checkbox" id="login-recordar" checked>
+            <span>Mantener sesión iniciada en este navegador</span>
+          </label>
+          <button type="submit" id="btn-login-submit" class="primary login-submit">Ingresar a Planos Históricos →</button>
+          <p class="login-mockup-note">Entorno de demostración · Autenticación simulada sin servidor externo.</p>
+        </form>
 
+        <div id="login-sesion-activa" hidden></div>
+      </section>
+
+      <aside class="card demo-users-card" aria-labelledby="demo-users-heading">
+        <h2 id="demo-users-heading">Usuarios del sistema</h2>
+        <p class="login-sub">Seleccioná un perfil para completar las credenciales automáticamente y probar los permisos de cada rol:</p>
+        <div id="demo-users-list" class="demo-users-list"></div>
+      </aside>
     </div>
   </div>
 </div>
 
+<script src="js/auth.js"></script>
+<script>
+  if (window.PH && window.PH.Auth) {
+    window.PH.Auth.initLoginPage();
+  }
+</script>
 </body>
 </html>

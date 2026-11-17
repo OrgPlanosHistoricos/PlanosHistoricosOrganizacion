@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="auth-pending">
 <div class="app">
   <aside class="nav">
     <div class="brand">🗺️<span>Archivo de<br>Planos Históricos<small>Dirección de Catastro</small></span></div>
@@ -18,9 +18,12 @@
       <button class="tab" data-tab="modificar">Modificar catalogación</button>
       <button class="tab" data-tab="consultar">Consultar</button>
     </nav>
-    <div id="database-status" class="database-status" data-state="checking" role="status" aria-live="polite" aria-atomic="true">
-      <span class="database-status-dot" aria-hidden="true"></span>
-      <span id="database-status-text">Verificando base de datos…</span>
+    <div class="nav-footer">
+      <div id="user-session" class="user-session" aria-live="polite"></div>
+      <div id="database-status" class="database-status" data-state="checking" role="status" aria-live="polite" aria-atomic="true">
+        <span class="database-status-dot" aria-hidden="true"></span>
+        <span id="database-status-text">Verificando base de datos…</span>
+      </div>
     </div>
   </aside>
   <main>
@@ -89,6 +92,7 @@
 </div>
 
   <!-- Módulos de lógica por caso de uso -->
+  <script src="js/auth.js"></script>
   <script src="js/state.js"></script>
   <script src="js/nomenclatura.js"></script>
   <script src="js/cu-cargar.js"></script>

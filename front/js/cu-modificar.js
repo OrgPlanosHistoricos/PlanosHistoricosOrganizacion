@@ -409,6 +409,8 @@
     try { Object.assign(datos, window.PH.Nomenclatura.leer('m-')); }
     catch (e) { document.getElementById('m-msg').innerHTML = '<div class="error">' + window.PH.Errores.mensaje(e) + '</div>'; return; }
     datos.motivo = motivo;
+    var usuario = window.PH.Auth && typeof window.PH.Auth.getUsuarioId === 'function' && window.PH.Auth.getUsuarioId();
+    if (usuario) datos.usuario_id = usuario;
 
     try {
       await API.modificar(seleccionadoId, datos);
@@ -436,7 +438,8 @@
     }
 
     try {
-      await API.reintentarIA(id, "Operador");
+      var usuario = (window.PH.Auth && typeof window.PH.Auth.getUsuarioId === 'function' && window.PH.Auth.getUsuarioId()) || 'Operador';
+      await API.reintentarIA(id, usuario);
       if (msg) {
         msg.innerHTML = '<div class="info">Procesando plano con IA... Esto puede demorar unos segundos.</div>';
       }
