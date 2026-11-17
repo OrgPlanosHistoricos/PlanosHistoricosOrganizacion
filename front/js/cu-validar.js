@@ -6,6 +6,7 @@
 
   var API = window.PH.API;
   var CAMPOS = [
+    { key: 'modelo_ia', label: 'Modelo de IA utilizado (solo lectura)', readonly: true },
     { key: 'texto_extraido', label: 'Texto extraído (solo lectura)', type: 'textarea', readonly: true },
     { key: 'titulo', label: 'Título', maxlength: 200 },
     { key: 'arquitecto', label: 'Arquitecto', maxlength: 150 },
@@ -177,11 +178,17 @@
         + (tieneFalla && modoCargaManual ? '<div class="confirm" style="margin-bottom:12px">Modo de carga manual: completá los datos leyendo la imagen.</div>' : '')
         + window.PH.Nomenclatura.formulario('v-', d)
         + CAMPOS.map(function(c) {
-            var val = (tieneFalla && modoCargaManual) ? '' : (d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : '');
+            var val = c.key === 'modelo_ia'
+              ? ((window.PH.obtenerModeloIA && window.PH.obtenerModeloIA(d)) || '—')
+              : ((tieneFalla && modoCargaManual) ? '' : (d[c.key] !== undefined && d[c.key] !== null ? d[c.key] : ''));
             if (c.key === 'escala') val = window.PH.normalizarEscala(val) || '';
             if (c.type === 'textarea') {
               return '<div class="field"><label for="v-' + c.key + '">' + c.label + '</label>' +
                 '<textarea id="v-' + c.key + '" rows="4" readonly>' + esc(val) + '</textarea></div>';
+            }
+            if (c.readonly) {
+              return '<div class="field"><label for="v-' + c.key + '">' + c.label + '</label>' +
+                '<input type="text" id="v-' + c.key + '" value="' + attr(val) + '" readonly></div>';
             }
             var type = c.type === 'number' ? 'number' : 'text';
             var attrs = '';

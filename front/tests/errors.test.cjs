@@ -452,3 +452,64 @@ test('consulta: filtros de calle, altura, expediente, año y parcela se combinan
   PH.CUConsultar.buscar();
   assert.deepEqual(ids(), []);
 });
+
+test('validar y consultar: muestran el modelo de IA utilizado como solo lectura y no se envía al validar', async () => {
+  const calls = [];
+  const docPendiente = {
+    id: 1,
+    estado: 'pendiente',
+    ia_estado: 'completado',
+    nombre_original: 'plano.jpg',
+    procesamientos: [
+      { id: 1, intento: 1, estado: 'error', modelo_ia: 'qwen2.5vl:3b' },
+      { id: 2, intento: 2, estado: 'completado', modelo_ia: 'qwen2.5vl:7b' }
+    ]
+  };
+  const docValidado = {
+    id: 2,
+    estado: 'validado',
+    ia_estado: 'completado',
+    nombre_original: 'plano2.jpg',
+    procesamientos: [
+      { id: 3, intento: 1, estado: 'completado', modelo_ia: 'gemma3:12b' },
+      { id: 4, intento: 2, estado: 'error', modelo_ia: 'qwen2.5vl:3b' }
+    ]
+  };
+  const docSinModelo = {
+    id: 3,
+    estado: 'validado',
+    ia_estado: 'no_aplica',
+    nombre_original: 'plano3.jpg',
+    procesamientos: []
+  };
+  const docs = { 1: docPendiente, 2: docValidado, 3: docSinModelo };
+  const { PH, context, elements } = setup(async (url, options) => {
+    calls.push({ url, options });
+    const m = /^\/api\/planos\/(\d+)$/.exec(url);
+    return { ok: true, json: async () => m ? docs[Number(m[1])] : Object.values(docs) };
+  });
+
+  PH.CUValidar.seleccionar(1);
+  await PH.CUValidar.renderDetalle();
+  const validarHtml = elements['validar-detalle'].innerHTML;
+  assert.match(validarHtml, /<input type="text" id="v-modelo_ia" value="qwen2\.5vl:7b" readonly>/);
+
+  for (const key of ['texto_extraido', 'titulo', 'arquitecto', 'ubicacion', 'anio', 'escala', 'tipo_de_plano', 'material_soporte', 'notas']) {
+    context.document.getElementById('v-' + key);
+  }
+  context.document.getElementById('v-modelo_ia').value = 'modelo-editado';
+  completar(context, 'v-');
+  await PH.CUValidar.confirmar();
+  const putValidar = calls.find(c => c.options && c.options.method === 'PUT');
+  assert.ok(putValidar);
+  assert.equal(Object.hasOwn(JSON.parse(putValidar.options.body), 'modelo_ia'), false);
+
+  await PH.CUConsultar.renderLista();
+  await PH.CUConsultar.seleccionar(2);
+  const consultarHtml = elements['consultar-detalle'].innerHTML;
+  assert.ok(consultarHtml.includes('<div class="field"><label>Modelo de IA utilizado</label><div>gemma3:12b</div></div>'));
+  assert.equal(/<input[^>]*modelo_ia/i.test(consultarHtml), false);
+
+  await PH.CUConsultar.seleccionar(3);
+  assert.ok(elements['consultar-detalle'].innerHTML.includes('<div class="field"><label>Modelo de IA utilizado</label><div>-</div></div>'));
+});

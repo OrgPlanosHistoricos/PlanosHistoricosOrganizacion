@@ -156,6 +156,7 @@
         : '';
 
       var esPdf = d.content_type === 'application/pdf' || (d.nombre_original && d.nombre_original.toLowerCase().endsWith('.pdf'));
+      var modeloIA = window.PH.obtenerModeloIA ? window.PH.obtenerModeloIA(d) : d.modelo_ia;
       cont.innerHTML = ''
         + '<img class="thumb" src="' + API.getPreviewUrl(d.id) + '" alt="Plano ' + esc(d.id) + '">'
         + '<a class="doclink" href="' + API.getArchivoUrl(d.id) + '" download="' + esc(d.nombre_original) + '" target="_blank" rel="noopener">'
@@ -169,6 +170,7 @@
         + '<div class="field"><label>Escala</label><div>' + esc(d.escala) + '</div></div>'
         + '<div class="field"><label>Tipo de plano</label><div>' + esc(d.tipo_de_plano) + '</div></div>'
         + '<div class="field"><label>Material / Soporte</label><div>' + esc(d.material_soporte) + '</div></div>'
+        + '<div class="field"><label>Modelo de IA utilizado</label><div>' + esc(modeloIA) + '</div></div>'
         + '<div class="field"><label>Texto extraído</label><div style="white-space: pre-wrap;">' + esc(d.texto_extraido) + '</div></div>'
         + '<div class="field"><label>Notas</label><div>' + esc(d.notas) + '</div></div>'
         + '<div class="field"><label>Expediente de origen</label><div>' + esc(d.expediente) + '</div></div>'

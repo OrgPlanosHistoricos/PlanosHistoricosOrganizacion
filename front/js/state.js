@@ -152,6 +152,27 @@
   }
 
   window.PH = window.PH || {};
+  window.PH.obtenerModeloIA = function(d) {
+    if (!d) return null;
+    if (typeof d.modelo_ia === 'string' && d.modelo_ia.trim()) {
+      return d.modelo_ia.trim();
+    }
+    if (Array.isArray(d.procesamientos) && d.procesamientos.length) {
+      var ordenados = d.procesamientos.slice().sort(function(a, b) {
+        return (Number(b && b.intento) || 0) - (Number(a && a.intento) || 0) ||
+          (Number(b && b.id) || 0) - (Number(a && a.id) || 0);
+      });
+      var completado = ordenados.find(function(p) {
+        return p && p.estado === 'completado' && typeof p.modelo_ia === 'string' && p.modelo_ia.trim();
+      });
+      if (completado) return completado.modelo_ia.trim();
+      var ultimo = ordenados.find(function(p) {
+        return p && typeof p.modelo_ia === 'string' && p.modelo_ia.trim();
+      });
+      if (ultimo) return ultimo.modelo_ia.trim();
+    }
+    return null;
+  };
   window.PH.normalizarEscala = function(valor) {
     if (valor === null || valor === undefined) return null;
     var texto = String(valor).trim();

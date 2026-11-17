@@ -553,9 +553,13 @@ button.ghost:hover {
   text-decoration: underline;
 }
 
+input[readonly],
 textarea[readonly] {
   background: var(--paper-2);
   color: var(--ink-soft);
+}
+
+textarea[readonly] {
   resize: vertical;
 }
 

@@ -588,8 +588,15 @@ def init_db() -> None:
             )
         conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {ESQUEMA};"))
         # Las tablas vivían en public: se mueven con sus datos, secuencias e índices.
-        for tabla in ("planos", "eventos_auditoria", "procesamientos_ia"):
-            conn.execute(text(f"ALTER TABLE IF EXISTS public.{tabla} SET SCHEMA {ESQUEMA};"))
+        # Si ya existen en el esquema destino y quedó una copia vacía en public, se descarta.
+        for tabla in ("procesamientos_ia", "eventos_auditoria", "planos"):
+            existe_en_esquema = conn.execute(text(f"SELECT to_regclass('{ESQUEMA}.{tabla}')")).scalar() is not None
+            if not existe_en_esquema:
+                conn.execute(text(f"ALTER TABLE IF EXISTS public.{tabla} SET SCHEMA {ESQUEMA};"))
+            elif conn.execute(text(f"SELECT to_regclass('public.{tabla}')")).scalar() is not None:
+                cantidad = conn.execute(text(f"SELECT count(*) FROM public.{tabla}")).scalar()
+                if cantidad == 0:
+                    conn.execute(text(f"DROP TABLE public.{tabla};"))
 
     # Las tablas de tramitación son del otro grupo: solo creamos las nuestras.
     SQLModel.metadata.create_all(

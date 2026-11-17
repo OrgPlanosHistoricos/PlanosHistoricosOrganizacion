@@ -75,7 +75,7 @@
 
   var ETIQUETAS_TAB = {
     cargar: 'Cargar plano',
-    validar: 'Validar y catalogar',
+    validar: 'Validar',
     modificar: 'Modificar catalogación',
     consultar: 'Consultar'
   };

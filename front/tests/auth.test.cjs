@@ -314,6 +314,8 @@ test('login page: renderiza perfiles demo, completa credenciales y valida envío
   assert.ok(elements['login-msgs'].innerHTML.includes('Iniciá sesión para acceder'));
   assert.ok(demoList.innerHTML.includes('Lucía Fernández'));
   assert.ok(demoList.innerHTML.includes('Martín Sosa'));
+  assert.ok(demoList.innerHTML.includes('Validar · Modificar catalogación · Consultar'));
+  assert.ok(!demoList.innerHTML.includes('Validar y catalogar'));
   assert.ok(demoList.innerHTML.includes('Carolina Martínez'));
   assert.ok(demoList.innerHTML.includes('Victoria Prieto'));
 
@@ -344,6 +346,7 @@ test('HTML: index.html no enlaza a Tramitar Nueva Obra y las páginas principale
   const planosHtml = fs.readFileSync(path.join(__dirname, '../planos-historicos.html'), 'utf8');
   const archivoHtml = fs.readFileSync(path.join(__dirname, '../Archivo_de_Planos_Históricos.html'), 'utf8');
   assert.equal(planosHtml, archivoHtml);
+  assert.ok(planosHtml.includes('<button class="tab" data-tab="validar">Validar</button>'));
   assert.ok(planosHtml.includes('id="user-session"'));
   assert.ok(planosHtml.includes('src="js/auth.js"'));
 });
